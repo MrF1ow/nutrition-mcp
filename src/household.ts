@@ -600,3 +600,124 @@ export function mergeHouseholdConfig(
         },
     };
 }
+
+export type LoginIdentifier =
+    { kind: "email"; email: string } | { kind: "username"; username: string };
+
+export type MemberDraft = {
+    displayName: string;
+    login: LoginIdentifier;
+    password: string;
+};
+
+export type AuthUserAdmin = {
+    createUser(input: {
+        email: string;
+        password: string;
+    }): Promise<
+        | { ok: true; userId: string }
+        | { ok: false; alreadyRegistered: boolean; error: string }
+    >;
+    deleteUser(userId: string): Promise<void>;
+};
+
+export type AddMemberRpc = {
+    insertMember(input: {
+        householdId: string;
+        userId: string;
+        displayName: string;
+    }): Promise<{ ok: true; userId: string } | { ok: false; error: string }>;
+};
+
+export type AddMemberResult =
+    { ok: true; userId: string } | { ok: false; error: string };
+
+const USERNAME_RE = /^[a-z0-9][a-z0-9._-]{1,30}$/;
+
+export function authEmailForLogin(login: LoginIdentifier): string {
+    if (login.kind === "email") return login.email;
+    return `${login.username}@household.invalid`;
+}
+
+function parseEmailLogin(raw: string): ParseResult<LoginIdentifier> {
+    const email = raw.trim().toLowerCase();
+    if (!email.includes("@") || email.length < 3) {
+        return { ok: false, error: "Enter a valid email address." };
+    }
+    return { ok: true, value: { kind: "email", email } };
+}
+
+function parseUsernameLogin(raw: string): ParseResult<LoginIdentifier> {
+    const username = raw.trim().toLowerCase();
+    if (!USERNAME_RE.test(username)) {
+        return { ok: false, error: "Enter a valid username." };
+    }
+    return { ok: true, value: { kind: "username", username } };
+}
+
+export function parseMemberInput(raw: unknown): ParseResult<MemberDraft> {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+        return { ok: false, error: "Enter a name." };
+    }
+    const record = raw as {
+        display_name?: unknown;
+        password?: unknown;
+        email?: unknown;
+        username?: unknown;
+    };
+    if (
+        typeof record.display_name !== "string" ||
+        !record.display_name.trim()
+    ) {
+        return { ok: false, error: "Enter a name." };
+    }
+    const hasEmail =
+        typeof record.email === "string" && record.email.trim() !== "";
+    const hasUsername =
+        typeof record.username === "string" && record.username.trim() !== "";
+    if (hasEmail === hasUsername) {
+        return { ok: false, error: "Enter an email or username." };
+    }
+    if (typeof record.password !== "string" || record.password.length < 8) {
+        return { ok: false, error: "Password must be at least 8 characters." };
+    }
+    const login = hasEmail
+        ? parseEmailLogin(record.email as string)
+        : parseUsernameLogin(record.username as string);
+    if (!login.ok) return login;
+    return {
+        ok: true,
+        value: {
+            displayName: record.display_name.trim(),
+            login: login.value,
+            password: record.password,
+        },
+    };
+}
+
+export async function addHouseholdMember(
+    deps: { auth: AuthUserAdmin; rpc: AddMemberRpc },
+    householdId: string,
+    draft: MemberDraft,
+): Promise<AddMemberResult> {
+    const created = await deps.auth.createUser({
+        email: authEmailForLogin(draft.login),
+        password: draft.password,
+    });
+    if (!created.ok) {
+        if (created.alreadyRegistered) {
+            return { ok: false, error: "That login is already in use." };
+        }
+        return { ok: false, error: created.error };
+    }
+    const added = await deps.rpc.insertMember({
+        householdId,
+        userId: created.userId,
+        displayName: draft.displayName,
+    });
+    if (!added.ok) {
+        await deps.auth.deleteUser(created.userId);
+        return { ok: false, error: added.error };
+    }
+    return { ok: true, userId: added.userId };
+}

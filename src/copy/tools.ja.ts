@@ -20,17 +20,17 @@ import type { ToolsDoc } from "./tools.js";
 
 export const TOOLS_JA: ToolsDoc = {
     meta: {
-        title: "ツールリファレンス：41個の全ツール",
+        title: "ツールリファレンス：42個の全ツール",
         description:
-            "Nutrition MCPサーバーがあなたのAIに提供する41個すべてのツール — 食事の記録、バーコードのスキャン、他のアプリからの履歴インポート、水分と体重の記録、目標の設定、トレンドの確認。説明と例文つきの完全なリファレンスです。",
+            "Nutrition MCPサーバーがあなたのAIに提供する42個すべてのツール — 食事の記録、バーコードのスキャン、他のアプリからの履歴インポート、水分と体重の記録、目標の設定、トレンドの確認。説明と例文つきの完全なリファレンスです。",
         ogDescription:
-            "Nutrition MCPサーバーがあなたのAIに提供する41個のツール。他のアプリからの履歴用CSVインポーターを含み、説明と例文つき。",
+            "Nutrition MCPサーバーがあなたのAIに提供する42個のツール。他のアプリからの履歴用CSVインポーターを含み、説明と例文つき。",
     },
     hero: {
         eyebrow: "リファレンス",
         title: "あなたのAIができること、すべて",
         lead: "これらのツールを直接呼び出すことはありません — ただ話しかけるだけで、アシスタントが適切なツールを選びます。Nutrition MCPサーバーが公開する全ツールと、それぞれの機能、呼び出すきっかけとなるフレーズをまとめました。",
-        countBold: "41個のツール",
+        countBold: "42個のツール",
         countTail: "7つの分野にわたる",
     },
     categories: {
@@ -413,6 +413,18 @@ export const TOOLS_JA: ToolsDoc = {
                 "世帯メンバーを user_id、display_name、role として一覧する。世帯ボットトークンと世帯メンバーが呼べる。世帯トークン上の個人ツールは、これらの id のいずれかを user_id に指定する必要がある。",
             params: {},
             example: "この世帯には誰がいますか？",
+        },
+        add_household_member: {
+            description:
+                "世帯メンバーを本物のAuthユーザーとして追加します。display_name、password、そして email か username のどちらかを渡します。username は {username}@household.invalid になります。新しい行の役割は常に member で、owner にはしません。新しい user_id を返すので、世帯ボットがその人として記録できます。招待メールは送りません。サーバーがすでに必要としている SUPABASE_SECRET_KEY を使います。",
+            params: {
+                display_name: "household_members に保存する名前",
+                password: "8文字以上",
+                email: "本物のメールログイン。username とどちらか一方。",
+                username:
+                    "<code>{username}@household.invalid</code> として保存するログイン。email とどちらか一方。",
+            },
+            example: "Sam を username sam、パスワード password1 で追加して",
         },
         rotate_household_token: {
             description:

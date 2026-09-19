@@ -2,17 +2,17 @@ import type { ToolsDoc } from "./tools.js";
 
 export const TOOLS_PL: ToolsDoc = {
     meta: {
-        title: "Katalog narzędzi: wszystkie 41 narzędzi",
+        title: "Katalog narzędzi: wszystkie 42 narzędzi",
         description:
-            "Wszystkie 41 narzędzi, które serwer Nutrition MCP daje Twojemu AI — zapisuj posiłki, skanuj kody kreskowe, importuj historię z innej aplikacji, śledź wodę i wagę, ustawiaj cele i przeglądaj trendy. Pełny opis wraz z przykładowymi poleceniami.",
+            "Wszystkie 42 narzędzi, które serwer Nutrition MCP daje Twojemu AI — zapisuj posiłki, skanuj kody kreskowe, importuj historię z innej aplikacji, śledź wodę i wagę, ustawiaj cele i przeglądaj trendy. Pełny opis wraz z przykładowymi poleceniami.",
         ogDescription:
-            "Wszystkie 41 narzędzi, które serwer Nutrition MCP daje Twojemu AI, w tym importer CSV do przenoszenia historii z innej aplikacji — z opisami i przykładowymi poleceniami.",
+            "Wszystkie 42 narzędzi, które serwer Nutrition MCP daje Twojemu AI, w tym importer CSV do przenoszenia historii z innej aplikacji — z opisami i przykładowymi poleceniami.",
     },
     hero: {
         eyebrow: "Dokumentacja",
         title: "Wszystko, co potrafi Twój AI",
         lead: "Nigdy nie wywołujesz tych narzędzi bezpośrednio — po prostu mówisz, a asystent sam wybiera właściwe. Oto pełny zestaw udostępniany przez serwer Nutrition MCP, wraz z opisem działania i przykładowym poleceniem, które je uruchamia.",
-        countBold: "41 narzędzi",
+        countBold: "42 narzędzi",
         countTail: "w 7 obszarach",
     },
     categories: {
@@ -405,6 +405,18 @@ export const TOOLS_PL: ToolsDoc = {
                 "Wypisz członków gospodarstwa jako user_id, display_name i role. Token bota gospodarstwa i każdy członek mogą to wywołać. Narzędzia osobowe na tokenie gospodarstwa wymagają user_id jednego z tych id.",
             params: {},
             example: "Kto jest w tym gospodarstwie?",
+        },
+        add_household_member: {
+            description:
+                "Dodaj członka gospodarstwa jako prawdziwego użytkownika Auth. Podaj display_name, password oraz email albo username. Username staje się {username}@household.invalid. Nowy wiersz ma zawsze rolę member, nie owner. Zwraca nowe user_id, żeby bot gospodarstwa mógł logować za tę osobę. Nie wysyła maila zaproszenia. Używa tego samego SUPABASE_SECRET_KEY, którego serwer już wymaga.",
+            params: {
+                display_name: "Imię zapisane w household_members",
+                password: "Co najmniej 8 znaków",
+                email: "Prawdziwy login e-mail. Użyj tego albo username, nie obu.",
+                username:
+                    "Login zapisany jako <code>{username}@household.invalid</code>. Użyj tego albo email, nie obu.",
+            },
+            example: "Dodaj Sama jako username sam z hasłem password1",
         },
         rotate_household_token: {
             description:
