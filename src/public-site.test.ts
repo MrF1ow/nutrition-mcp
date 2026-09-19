@@ -141,6 +141,10 @@ describe("cannot republish the marketing site", () => {
         for (const path of MARKETING_GENERATORS) {
             expect(await Bun.file(path).exists(), path).toBe(false);
         }
+        const genLogin = await Bun.file("./scripts/gen-login.ts").text();
+        expect(genLogin).toContain("removeStaleMarketingHtml");
+        expect(genLogin).toContain("public/index.html");
+        expect(genLogin).toContain("public/llms.txt");
     });
 
     test("login templates are present (CI/dev run gen:all before tests)", async () => {
@@ -151,6 +155,10 @@ describe("cannot republish the marketing site", () => {
     });
 
     test("bun run gen:all does not write marketing HTML", async () => {
+        await Bun.write(
+            "public/index.html",
+            "<!doctype html><title>stale marketing</title>",
+        );
         const proc = Bun.spawn(["bun", "run", "gen:all"], {
             stdout: "pipe",
             stderr: "pipe",

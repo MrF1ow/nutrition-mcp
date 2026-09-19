@@ -138,22 +138,17 @@ Requires Bun 1.x (matches the Dockerfile's `oven/bun:1` base image; no exact min
 
 ### 2. Environment variables
 
-| Variable                | Description                                                                                                                                                    |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SUPABASE_URL`          | Your Supabase project URL                                                                                                                                      |
-| `SUPABASE_SECRET_KEY`   | Supabase service role key (bypasses RLS). Also used for Auth admin `createUser` when adding a household member                                                 |
-| `OAUTH_CLIENT_ID`       | Random string for OAuth client identification                                                                                                                  |
-| `OAUTH_CLIENT_SECRET`   | Random string for OAuth client authentication                                                                                                                  |
-| `ALLOWED_ORIGINS`       | _(optional)_ Comma-separated list of extra browser origins allowed to call `/mcp` via CORS — `localhost`/`127.0.0.1` on any port are always allowed regardless |
-| `GOOGLE_CLIENT_ID`      | _(optional)_ Google OAuth client ID for "Sign in with Google"                                                                                                  |
-| `GOOGLE_CLIENT_SECRET`  | _(optional)_ Google OAuth client secret                                                                                                                        |
-| `OFF_USER_AGENT`        | Open Food Facts User-Agent for barcode lookups, in the form `AppName (email)`                                                                                  |
-| `PATREON_CLIENT_ID`     | _(optional)_ Patreon OAuth client ID                                                                                                                           |
-| `PATREON_CLIENT_SECRET` | _(optional)_ Patreon OAuth client secret                                                                                                                       |
-| `PATREON_CAMPAIGN_ID`   | _(optional)_ Patreon campaign ID to fetch posts from                                                                                                           |
-| `PATREON_ACCESS_TOKEN`  | _(optional)_ Creator's Access Token from Patreon's client management page — one-time bootstrap seed, see below                                                 |
-| `PATREON_REFRESH_TOKEN` | _(optional)_ Creator's Refresh Token from the same page — one-time bootstrap seed, see below                                                                   |
-| `PORT`                  | Server port (default: `8080`)                                                                                                                                  |
+| Variable               | Description                                                                                                                                                    |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SUPABASE_URL`         | Your Supabase project URL                                                                                                                                      |
+| `SUPABASE_SECRET_KEY`  | Supabase service role key (bypasses RLS). Also used for Auth admin `createUser` when adding a household member                                                 |
+| `OAUTH_CLIENT_ID`      | Random string for OAuth client identification                                                                                                                  |
+| `OAUTH_CLIENT_SECRET`  | Random string for OAuth client authentication                                                                                                                  |
+| `ALLOWED_ORIGINS`      | _(optional)_ Comma-separated list of extra browser origins allowed to call `/mcp` via CORS — `localhost`/`127.0.0.1` on any port are always allowed regardless |
+| `GOOGLE_CLIENT_ID`     | _(optional)_ Google OAuth client ID for "Sign in with Google"                                                                                                  |
+| `GOOGLE_CLIENT_SECRET` | _(optional)_ Google OAuth client secret                                                                                                                        |
+| `OFF_USER_AGENT`       | Open Food Facts User-Agent for barcode lookups, in the form `AppName (email)`                                                                                  |
+| `PORT`                 | Server port (default: `8080`)                                                                                                                                  |
 
 Generate OAuth credentials:
 
@@ -167,8 +162,6 @@ or manually:
 openssl rand -hex 16   # use as OAUTH_CLIENT_ID
 openssl rand -hex 32   # use as OAUTH_CLIENT_SECRET
 ```
-
-> **Patreon tokens:** `PATREON_ACCESS_TOKEN` / `PATREON_REFRESH_TOKEN` seed the `patreon_tokens` table when `seedPatreonTokensFromEnv` runs. The HTTP server no longer calls that at boot.
 
 ### 3. Google sign-in (optional)
 
