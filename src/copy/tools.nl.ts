@@ -2,17 +2,17 @@ import type { ToolsDoc } from "./tools.js";
 
 export const TOOLS_NL: ToolsDoc = {
     meta: {
-        title: "Toolreferentie: alle 41 tools",
+        title: "Toolreferentie: alle 42 tools",
         description:
-            "Alle 41 tools die de Nutrition MCP-server aan je AI geeft — maaltijden loggen, barcodes scannen, je geschiedenis uit een andere app importeren, water en gewicht bijhouden, doelen instellen en trends bekijken. Volledige referentie met beschrijvingen en voorbeeldzinnen.",
+            "Alle 42 tools die de Nutrition MCP-server aan je AI geeft — maaltijden loggen, barcodes scannen, je geschiedenis uit een andere app importeren, water en gewicht bijhouden, doelen instellen en trends bekijken. Volledige referentie met beschrijvingen en voorbeeldzinnen.",
         ogDescription:
-            "Alle 41 tools die de Nutrition MCP-server aan je AI geeft, inclusief een CSV-importer voor je geschiedenis uit een andere app — met beschrijvingen en voorbeeldzinnen.",
+            "Alle 42 tools die de Nutrition MCP-server aan je AI geeft, inclusief een CSV-importer voor je geschiedenis uit een andere app — met beschrijvingen en voorbeeldzinnen.",
     },
     hero: {
         eyebrow: "Referentie",
         title: "Alles wat je AI kan doen",
         lead: "Je roept deze tools nooit rechtstreeks aan — je praat gewoon, en de assistent kiest de juiste tool. Hier is de volledige set die de Nutrition MCP-server aanbiedt, met wat elke tool doet en een zin die hem activeert.",
-        countBold: "41 tools",
+        countBold: "42 tools",
         countTail: "verdeeld over 7 categorieën",
     },
     categories: {
@@ -410,6 +410,18 @@ export const TOOLS_NL: ToolsDoc = {
                 "Toon de huishoudleden als user_id, display_name en role. Een household-bottoken en elk lid mogen dit aanroepen. Persoonstools op een household-token vereisen user_id van een van deze ids.",
             params: {},
             example: "Wie zit er in dit huishouden?",
+        },
+        add_household_member: {
+            description:
+                "Voeg een huishoudlid toe als echte Auth-gebruiker. Geef display_name, password, en ofwel email of username. Een username wordt {username}@household.invalid. De nieuwe rij is altijd member, geen owner. Geeft de nieuwe user_id terug zodat de household-bot voor die persoon kan loggen. Stuurt geen uitnodigingsmail. Gebruikt dezelfde SUPABASE_SECRET_KEY die de server al nodig heeft.",
+            params: {
+                display_name: "Naam opgeslagen op household_members",
+                password: "Minstens 8 tekens",
+                email: "Echte e-maillogin. Gebruik dit of username, niet beide.",
+                username:
+                    "Login opgeslagen als <code>{username}@household.invalid</code>. Gebruik dit of email, niet beide.",
+            },
+            example: "Voeg Sam toe als username sam met wachtwoord password1",
         },
         rotate_household_token: {
             description:

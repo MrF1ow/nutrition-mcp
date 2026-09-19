@@ -11,17 +11,17 @@ import type { ToolsDoc } from "./tools.js";
 
 export const TOOLS_ES: ToolsDoc = {
     meta: {
-        title: "Referencia de herramientas: las 41 herramientas",
+        title: "Referencia de herramientas: las 42 herramientas",
         description:
-            "Las 41 herramientas que el servidor Nutrition MCP le da a tu IA: registra comidas, escanea códigos de barras, importa tu historial desde otra app, controla el agua y el peso, define objetivos y revisa tendencias. Referencia completa con descripciones y frases de ejemplo.",
+            "Las 42 herramientas que el servidor Nutrition MCP le da a tu IA: registra comidas, escanea códigos de barras, importa tu historial desde otra app, controla el agua y el peso, define objetivos y revisa tendencias. Referencia completa con descripciones y frases de ejemplo.",
         ogDescription:
-            "Las 41 herramientas que el servidor Nutrition MCP le da a tu IA, incluido un importador CSV para tu historial desde otra app, con descripciones y frases de ejemplo.",
+            "Las 42 herramientas que el servidor Nutrition MCP le da a tu IA, incluido un importador CSV para tu historial desde otra app, con descripciones y frases de ejemplo.",
     },
     hero: {
         eyebrow: "Referencia",
         title: "Todo lo que tu IA puede hacer",
         lead: "Nunca llamas a estas herramientas directamente: tú solo hablas, y el asistente elige la herramienta correcta. Aquí tienes el conjunto completo que expone el servidor Nutrition MCP, con lo que hace cada una y una frase que la activa.",
-        countBold: "41 herramientas",
+        countBold: "42 herramientas",
         countTail: "en 7 áreas",
     },
     categories: {
@@ -415,6 +415,18 @@ export const TOOLS_ES: ToolsDoc = {
                 "Lista los miembros del hogar como user_id, display_name y role. Un token de bot del hogar y cualquier miembro pueden llamarlo. Las herramientas de persona en un token de hogar exigen user_id igual a uno de estos ids.",
             params: {},
             example: "¿Quién está en este hogar?",
+        },
+        add_household_member: {
+            description:
+                "Añade un miembro del hogar como usuario real de Auth. Pasa display_name, password y o bien email o username. Un username se convierte en {username}@household.invalid. La fila nueva es siempre member, no owner. Devuelve el user_id nuevo para que el bot del hogar pueda registrar por esa persona. No envía correo de invitación. Usa el mismo SUPABASE_SECRET_KEY que el servidor ya necesita.",
+            params: {
+                display_name: "Nombre guardado en household_members",
+                password: "Al menos 8 caracteres",
+                email: "Inicio de sesión con email real. Usa esto o username, no ambos.",
+                username:
+                    "Login guardado como <code>{username}@household.invalid</code>. Usa esto o email, no ambos.",
+            },
+            example: "Añade a Sam con username sam y contraseña password1",
         },
         rotate_household_token: {
             description:

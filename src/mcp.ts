@@ -24,6 +24,7 @@ import {
     mergeHouseholdConfig,
     parseFridgeLocationsInput,
     parseHouseholdConfigPatch,
+    parseMemberInput,
 } from "./household.js";
 import {
     generateHouseholdToken,
@@ -63,6 +64,7 @@ import {
     getProfile,
     getHouseholdMembership,
     listHouseholdMembers,
+    addHouseholdMemberForHousehold,
     getHouseholdConfig,
     updateHouseholdConfig,
     rotateHouseholdMcpToken,
@@ -4549,6 +4551,64 @@ export function registerTools(
                             },
                         ],
                         structuredContent: { members: payload },
+                    };
+                },
+                analytics,
+            );
+        },
+    );
+
+    const ADD_HOUSEHOLD_MEMBER_OUTPUT_SCHEMA = z.object({
+        user_id: z.string(),
+        display_name: z.string(),
+        role: z.literal("member"),
+    });
+
+    server.registerTool(
+        "add_household_member",
+        {
+            title: "Add Household Member",
+            description:
+                "Create an Auth login and household_members row. Pass display_name, password, and either email or username. Username becomes {username}@household.invalid. Any current member or the household bot may call this. The new row is always role member. Returns user_id for later person tools. Does not send invite email.",
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                display_name: z.string(),
+                password: z.string(),
+                email: z.string().optional(),
+                username: z.string().optional(),
+            }),
+            outputSchema: ADD_HOUSEHOLD_MEMBER_OUTPUT_SCHEMA,
+        },
+        async (args) => {
+            return withAnalytics(
+                "add_household_member",
+                async () => {
+                    const parsed = parseMemberInput(args);
+                    if (!parsed.ok) throw new Error(parsed.error);
+                    const householdId = await callerHouseholdId();
+                    const added = await addHouseholdMemberForHousehold(
+                        householdId,
+                        parsed.value,
+                    );
+                    if (!added.ok) throw new Error(added.error);
+                    const payload = {
+                        user_id: added.userId,
+                        display_name: parsed.value.displayName,
+                        role: "member" as const,
+                    };
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Added ${payload.display_name} (${payload.role}) ${payload.user_id}`,
+                            },
+                        ],
+                        structuredContent: payload,
                     };
                 },
                 analytics,

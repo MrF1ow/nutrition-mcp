@@ -2,17 +2,17 @@ import type { ToolsDoc } from "./tools.js";
 
 export const TOOLS_DE: ToolsDoc = {
     meta: {
-        title: "Werkzeug-Referenz: Alle 41 Werkzeuge",
+        title: "Werkzeug-Referenz: Alle 42 Werkzeuge",
         description:
-            "Alle 41 Werkzeuge, die der Nutrition-MCP-Server deiner KI gibt — Mahlzeiten erfassen, Barcodes scannen, deine Historie aus einer anderen App importieren, Wasser und Gewicht verfolgen, Ziele festlegen und Trends auswerten. Vollständige Referenz mit Beschreibungen und Beispielsätzen.",
+            "Alle 42 Werkzeuge, die der Nutrition-MCP-Server deiner KI gibt — Mahlzeiten erfassen, Barcodes scannen, deine Historie aus einer anderen App importieren, Wasser und Gewicht verfolgen, Ziele festlegen und Trends auswerten. Vollständige Referenz mit Beschreibungen und Beispielsätzen.",
         ogDescription:
-            "Alle 41 Werkzeuge, die der Nutrition-MCP-Server deiner KI gibt, inklusive eines CSV-Importers für deine Historie aus einer anderen App — mit Beschreibungen und Beispielsätzen.",
+            "Alle 42 Werkzeuge, die der Nutrition-MCP-Server deiner KI gibt, inklusive eines CSV-Importers für deine Historie aus einer anderen App — mit Beschreibungen und Beispielsätzen.",
     },
     hero: {
         eyebrow: "Referenz",
         title: "Alles, was deine KI kann",
         lead: "Du rufst diese Werkzeuge nie selbst auf — du sprichst einfach, und der Assistent wählt das richtige Werkzeug. Hier ist die vollständige Liste, die der Nutrition-MCP-Server bereitstellt, mit dem, was jedes tut, und einem Satz, der es auslöst.",
-        countBold: "41 Werkzeuge",
+        countBold: "42 Werkzeuge",
         countTail: "in 7 Bereichen",
     },
     categories: {
@@ -412,6 +412,18 @@ export const TOOLS_DE: ToolsDoc = {
                 "Listet die Haushaltsmitglieder als user_id, display_name und Rolle. Ein Household-Bot-Token und jedes Mitglied dürfen das aufrufen. Personen-Tools auf einem Household-Token brauchen user_id als eine dieser IDs.",
             params: {},
             example: "Wer ist in diesem Haushalt?",
+        },
+        add_household_member: {
+            description:
+                "Fügt ein Haushaltsmitglied als echten Auth-User hinzu. Übergib display_name, password und entweder email oder username. Ein Username wird zu {username}@household.invalid. Die neue Zeile ist immer member, nicht owner. Gibt die neue user_id zurück, damit der Household-Bot für die Person loggen kann. Sendet keine Einladungsmail. Nutzt denselben SUPABASE_SECRET_KEY, den der Server schon braucht.",
+            params: {
+                display_name: "Name, der in household_members gespeichert wird",
+                password: "Mindestens 8 Zeichen",
+                email: "Echte E-Mail-Anmeldung. Entweder das oder username, nicht beides.",
+                username:
+                    "Login als <code>{username}@household.invalid</code>. Entweder das oder email, nicht beides.",
+            },
+            example: "Füg Sam als Username sam mit Passwort password1 hinzu",
         },
         rotate_household_token: {
             description:

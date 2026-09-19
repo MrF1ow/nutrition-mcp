@@ -6,9 +6,14 @@ import { isDrinkUnit, type DrinkUnit } from "./alcohol.js";
 import { escapeLikePattern, tokenizeQuery } from "./search.js";
 import type { PatreonTokens, PatreonTokenStore } from "./patreon.js";
 import {
+    addHouseholdMember,
     householdConfigFromRow,
     householdConfigToColumns,
+    type AddMemberResult,
+    type AddMemberRpc,
+    type AuthUserAdmin,
     type HouseholdConfig,
+    type MemberDraft,
     type MemberRole,
 } from "./household.js";
 import {
@@ -1562,6 +1567,92 @@ export async function listHouseholdMembers(
         throw new Error(`Failed to list household members: ${error.message}`);
     }
     return (data ?? []).map((row) => membershipFromRow(row));
+}
+
+function alreadyRegistered(message: string): boolean {
+    const lower = message.toLowerCase();
+    return (
+        lower.includes("already been registered") ||
+        lower.includes("already registered")
+    );
+}
+
+function friendlyMemberError(message: string): string {
+    const lower = message.toLowerCase();
+    if (lower.includes("already in use")) {
+        return "That login is already in use.";
+    }
+    if (lower.includes("not a household member")) {
+        return "You must be a household member to add people.";
+    }
+    return message;
+}
+
+function liveAuthAdmin(): AuthUserAdmin {
+    return {
+        async createUser({ email, password }) {
+            const created = await getSupabase().auth.admin.createUser({
+                email,
+                password,
+                email_confirm: true,
+            });
+            if (created.error) {
+                return {
+                    ok: false,
+                    alreadyRegistered: alreadyRegistered(created.error.message),
+                    error: created.error.message,
+                };
+            }
+            const userId = created.data.user?.id;
+            if (!userId) {
+                return {
+                    ok: false,
+                    alreadyRegistered: false,
+                    error: "Could not create the login.",
+                };
+            }
+            return { ok: true, userId };
+        },
+        async deleteUser(userId) {
+            const { error } = await getSupabase().auth.admin.deleteUser(userId);
+            if (error) throw new Error(error.message);
+        },
+    };
+}
+
+function liveAddMemberRpc(): AddMemberRpc {
+    return {
+        async insertMember({ householdId, userId, displayName }) {
+            const { data, error } = await getSupabase().rpc(
+                "add_household_member",
+                {
+                    p_household_id: householdId,
+                    p_auth_user_id: userId,
+                    p_display_name: displayName,
+                },
+            );
+            if (error || typeof data !== "string" || data.length === 0) {
+                return {
+                    ok: false,
+                    error: error
+                        ? friendlyMemberError(error.message)
+                        : "Could not add the household member.",
+                };
+            }
+            return { ok: true, userId: data };
+        },
+    };
+}
+
+export async function addHouseholdMemberForHousehold(
+    householdId: string,
+    draft: MemberDraft,
+): Promise<AddMemberResult> {
+    return addHouseholdMember(
+        { auth: liveAuthAdmin(), rpc: liveAddMemberRpc() },
+        householdId,
+        draft,
+    );
 }
 
 export async function getHouseholdConfig(

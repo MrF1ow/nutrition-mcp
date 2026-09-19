@@ -1454,6 +1454,7 @@ const db = {
     profileReads: [] as string[],
     membershipReads: [] as string[],
     members: [] as actualSupabase.HouseholdMembership[],
+    addedLogins: [] as string[],
     tokenRotations: [] as {
         householdId: string;
         tokenHashHex: string;
@@ -1586,6 +1587,32 @@ mock.module("./supabase.js", () => ({
             .filter((member) => member.householdId === householdId)
             .slice()
             .sort((a, b) => a.displayName.localeCompare(b.displayName)),
+    addHouseholdMemberForHousehold: async (
+        householdId: string,
+        draft: {
+            displayName: string;
+            login:
+                | { kind: "email"; email: string }
+                | { kind: "username"; username: string };
+        },
+    ) => {
+        const email =
+            draft.login.kind === "email"
+                ? draft.login.email
+                : `${draft.login.username}@household.invalid`;
+        if (db.addedLogins.includes(email)) {
+            return { ok: false, error: "That login is already in use." };
+        }
+        const userId = "55555555-5555-4555-8555-555555555555";
+        db.addedLogins.push(email);
+        db.members.push({
+            householdId,
+            userId,
+            role: "member",
+            displayName: draft.displayName,
+        });
+        return { ok: true, userId };
+    },
     getHouseholdConfig: async () => {
         if (db.household == null) {
             throw new Error("Failed to load household config");
@@ -1646,6 +1673,7 @@ beforeEach(() => {
     db.accountWipes = 0;
     db.profileReads = [];
     db.membershipReads = [];
+    db.addedLogins = [];
     db.tokenRotations = [];
     db.household = {
         name: "Home",
@@ -3880,6 +3908,7 @@ describe("household PAT has no default user", () => {
             expect(names).toContain("get_profile");
             expect(names).toContain("rotate_household_token");
             expect(names).toContain("list_members");
+            expect(names).toContain("add_household_member");
             expect(names).toContain("get_household_config");
             expect(names).toContain("update_household_config");
             expect(names).toContain("update_fridge_locations");
@@ -4156,6 +4185,63 @@ describe("household person targeting", () => {
             const r = await call("list_members");
             expect(r.isError).toBe(true);
             expect(textOf(r)).toContain("not a household member");
+        });
+    });
+
+    test("PAT add_household_member for username sam returns a member uuid", async () => {
+        await withHousehold(async (call) => {
+            const r = await call("add_household_member", {
+                display_name: "Sam",
+                username: "sam",
+                password: "password1",
+            });
+            expect(r.isError).toBeFalsy();
+            expect(r.structuredContent).toEqual({
+                user_id: "55555555-5555-4555-8555-555555555555",
+                display_name: "Sam",
+                role: "member",
+            });
+            const listed = await call("list_members");
+            expect(listed.structuredContent?.members).toEqual(
+                expect.arrayContaining([
+                    {
+                        user_id: "55555555-5555-4555-8555-555555555555",
+                        display_name: "Sam",
+                        role: "member",
+                    },
+                ]),
+            );
+            const meal = await call("log_meal", {
+                description: "toast",
+                meal_type: "breakfast",
+                calories: 100,
+                protein_g: 4,
+                carbs_g: 18,
+                fat_g: 1,
+                user_id: "55555555-5555-4555-8555-555555555555",
+            });
+            expect(meal.isError).toBeFalsy();
+            expect(db.inserted[0]!.user_id).toBe(
+                "55555555-5555-4555-8555-555555555555",
+            );
+        });
+    });
+
+    test("PAT add_household_member duplicate username is an error", async () => {
+        await withHousehold(async (call) => {
+            const first = await call("add_household_member", {
+                display_name: "Sam",
+                username: "sam",
+                password: "password1",
+            });
+            expect(first.isError).toBeFalsy();
+            const second = await call("add_household_member", {
+                display_name: "Sam Two",
+                username: "sam",
+                password: "password1",
+            });
+            expect(second.isError).toBe(true);
+            expect(textOf(second)).toContain("already in use");
         });
     });
 });

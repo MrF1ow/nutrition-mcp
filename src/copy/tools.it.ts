@@ -13,17 +13,17 @@ import type { ToolsDoc } from "./tools.js";
 
 export const TOOLS_IT: ToolsDoc = {
     meta: {
-        title: "Guida agli strumenti: tutti i 41 strumenti",
+        title: "Guida agli strumenti: tutti i 42 strumenti",
         description:
-            "Tutti i 41 strumenti che il server Nutrition MCP mette a disposizione della tua IA — registra i pasti, scansiona codici a barre, importa il tuo storico da un'altra app, monitora acqua e peso, imposta obiettivi e rivedi gli andamenti. Guida completa con descrizioni ed esempi di richieste.",
+            "Tutti i 42 strumenti che il server Nutrition MCP mette a disposizione della tua IA — registra i pasti, scansiona codici a barre, importa il tuo storico da un'altra app, monitora acqua e peso, imposta obiettivi e rivedi gli andamenti. Guida completa con descrizioni ed esempi di richieste.",
         ogDescription:
-            "Tutti i 41 strumenti che il server Nutrition MCP mette a disposizione della tua IA, incluso un importatore CSV per il tuo storico da un'altra app — con descrizioni ed esempi di richieste.",
+            "Tutti i 42 strumenti che il server Nutrition MCP mette a disposizione della tua IA, incluso un importatore CSV per il tuo storico da un'altra app — con descrizioni ed esempi di richieste.",
     },
     hero: {
         eyebrow: "Guida di riferimento",
         title: "Tutto quello che la tua IA può fare",
         lead: "Non li chiami mai direttamente — parli e basta, e l'assistente sceglie lo strumento giusto. Ecco l'elenco completo che il server Nutrition MCP mette a disposizione, con cosa fa ciascuno e una frase che lo attiva.",
-        countBold: "41 strumenti",
+        countBold: "42 strumenti",
         countTail: "in 7 aree",
     },
     categories: {
@@ -419,6 +419,18 @@ export const TOOLS_IT: ToolsDoc = {
                 "Elenca i membri della famiglia come user_id, display_name e role. Un token bot della famiglia e qualsiasi membro possono chiamarlo. Gli strumenti persona su un token famiglia richiedono user_id uguale a uno di questi id.",
             params: {},
             example: "Chi c'è in questa famiglia?",
+        },
+        add_household_member: {
+            description:
+                "Aggiunge un membro della famiglia come vero utente Auth. Passa display_name, password e email oppure username. Uno username diventa {username}@household.invalid. La nuova riga è sempre member, non owner. Restituisce il nuovo user_id così il bot familiare può registrare per quella persona. Non invia email di invito. Usa lo stesso SUPABASE_SECRET_KEY che il server già richiede.",
+            params: {
+                display_name: "Nome salvato su household_members",
+                password: "Almeno 8 caratteri",
+                email: "Login con email reale. Usa questo o username, non entrambi.",
+                username:
+                    "Login salvato come <code>{username}@household.invalid</code>. Usa questo o email, non entrambi.",
+            },
+            example: "Aggiungi Sam come username sam con password password1",
         },
         rotate_household_token: {
             description:

@@ -16,17 +16,17 @@ import type { ToolsDoc } from "./tools.js";
 
 export const TOOLS_FR: ToolsDoc = {
     meta: {
-        title: "Référence des outils : les 41 outils",
+        title: "Référence des outils : les 42 outils",
         description:
-            "Les 41 outils que le serveur Nutrition MCP donne à ton IA — enregistrer des repas, scanner des codes-barres, importer ton historique depuis une autre app, suivre l'eau et le poids, définir des objectifs et consulter les tendances. Référence complète avec descriptions et exemples de formulations.",
+            "Les 42 outils que le serveur Nutrition MCP donne à ton IA — enregistrer des repas, scanner des codes-barres, importer ton historique depuis une autre app, suivre l'eau et le poids, définir des objectifs et consulter les tendances. Référence complète avec descriptions et exemples de formulations.",
         ogDescription:
-            "Les 41 outils que le serveur Nutrition MCP donne à ton IA, dont un importateur CSV pour ton historique venu d'une autre app — avec descriptions et exemples de formulations.",
+            "Les 42 outils que le serveur Nutrition MCP donne à ton IA, dont un importateur CSV pour ton historique venu d'une autre app — avec descriptions et exemples de formulations.",
     },
     hero: {
         eyebrow: "Référence",
         title: "Tout ce que ton IA peut faire",
         lead: "Tu n'appelles jamais ces outils directement — tu parles simplement, et l'assistant choisit le bon outil. Voici l'ensemble complet exposé par le serveur Nutrition MCP, avec ce que fait chacun et une phrase qui le déclenche.",
-        countBold: "41 outils",
+        countBold: "42 outils",
         countTail: "répartis en 7 catégories",
     },
     categories: {
@@ -422,6 +422,19 @@ export const TOOLS_FR: ToolsDoc = {
                 "Liste les membres du foyer comme user_id, display_name et role. Un jeton bot du foyer et n'importe quel membre peuvent l'appeler. Les outils personne sur un jeton foyer exigent user_id égal à l'un de ces ids.",
             params: {},
             example: "Qui est dans ce foyer ?",
+        },
+        add_household_member: {
+            description:
+                "Ajoute un membre du foyer comme vrai utilisateur Auth. Passe display_name, password, et soit email soit username. Un username devient {username}@household.invalid. La nouvelle ligne est toujours member, pas owner. Renvoie le nouveau user_id pour que le bot du foyer puisse journaliser pour cette personne. N'envoie pas d'e-mail d'invitation. Utilise le même SUPABASE_SECRET_KEY que le serveur exige déjà.",
+            params: {
+                display_name: "Nom enregistré sur household_members",
+                password: "Au moins 8 caractères",
+                email: "Connexion par e-mail réel. Utilise ceci ou username, pas les deux.",
+                username:
+                    "Identifiant stocké comme <code>{username}@household.invalid</code>. Utilise ceci ou email, pas les deux.",
+            },
+            example:
+                "Ajoute Sam avec le username sam et le mot de passe password1",
         },
         rotate_household_token: {
             description:

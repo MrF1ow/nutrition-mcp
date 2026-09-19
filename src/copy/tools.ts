@@ -418,6 +418,18 @@ const TOOLS_BASE: ToolIdentity[] = [
         hasPhotoHint: false,
     },
     {
+        name: "add_household_member",
+        category: "settings-account",
+        badges: ["setting"],
+        params: [
+            { name: "display_name", required: true },
+            { name: "password", required: true },
+            { name: "email", required: false },
+            { name: "username", required: false },
+        ],
+        hasPhotoHint: false,
+    },
+    {
         name: "rotate_household_token",
         category: "settings-account",
         badges: ["setting"],
@@ -461,6 +473,7 @@ const TOOLS_BASE: ToolIdentity[] = [
 
 export const HOUSEHOLD_SCOPED_TOOL_NAMES = [
     "list_members",
+    "add_household_member",
     "rotate_household_token",
     "get_household_config",
     "update_household_config",
@@ -564,17 +577,17 @@ export interface ToolsDoc {
 
 const TOOLS_EN: ToolsDoc = {
     meta: {
-        title: "Tools Reference: All 41 Tools",
+        title: "Tools Reference: All 42 Tools",
         description:
-            "All 41 tools the Nutrition MCP server gives your AI — log meals, scan barcodes, import your history from another app, track water and weight, set goals, and review trends. Full reference with descriptions and example prompts.",
+            "All 42 tools the Nutrition MCP server gives your AI — log meals, scan barcodes, import your history from another app, track water and weight, set goals, and review trends. Full reference with descriptions and example prompts.",
         ogDescription:
-            "All 41 tools the Nutrition MCP server gives your AI, including a CSV importer for your history from another app — with descriptions and example prompts.",
+            "All 42 tools the Nutrition MCP server gives your AI, including a CSV importer for your history from another app — with descriptions and example prompts.",
     },
     hero: {
         eyebrow: "Reference",
         title: "Everything your AI can do",
         lead: "You never call these directly — you just talk, and the assistant picks the right tool. Here's the full set the Nutrition MCP server exposes, with what each one does and a phrase that triggers it.",
-        countBold: "41 tools",
+        countBold: "42 tools",
         countTail: "across 7 areas",
     },
     categories: {
@@ -957,6 +970,18 @@ const TOOLS_EN: ToolsDoc = {
                 "List household members as user_id, display_name, and role. A household bot token and any household member may call this. Person tools on a household token require user_id set to one of these ids.",
             params: {},
             example: "Who is in this household?",
+        },
+        add_household_member: {
+            description:
+                "Add a household member as a real Auth user. Pass display_name, password, and either email or username. A username becomes {username}@household.invalid. The new row is always member, not owner. Returns the new user_id so the household bot can log for them. Does not send invite email. Uses the same SUPABASE_SECRET_KEY the server already needs.",
+            params: {
+                display_name: "Name stored on household_members",
+                password: "At least 8 characters",
+                email: "Real email login. Use this or username, not both.",
+                username:
+                    "Login stored as <code>{username}@household.invalid</code>. Use this or email, not both.",
+            },
+            example: "Add Sam as username sam with password password1",
         },
         rotate_household_token: {
             description:
