@@ -46,7 +46,10 @@ import * as actualSupabase from "./supabase.js";
 // the next file the mock again. Restore from this copy.
 const realSupabase = { ...actualSupabase };
 import { DELETED_ACCOUNT_ANALYTICS_ID } from "./analytics.js";
-import { HOUSEHOLD_HAS_NO_DEFAULT_USER } from "./auth-context.js";
+import {
+    HOUSEHOLD_CANNOT_DELETE_ACCOUNT,
+    OAUTH_USER_MISMATCH,
+} from "./auth-context.js";
 import { HOUSEHOLD_TOKEN_PREFIX } from "./household-token.js";
 import { formatFoodResult, type FoodResult } from "./foods.js";
 import {
@@ -1063,6 +1066,7 @@ describe("start_meal_import payload", () => {
         tzConfigured: true,
         widgetsEnabled: true,
         locale: "en",
+        userId: "u1",
     };
 
     // drink_unit is the whole alcohol gate for this flow: non-null means the
@@ -1092,6 +1096,7 @@ describe("start_meal_import payload", () => {
             );
             expect(parsed.import_tool_name).toBe("bulk_import_meals");
             expect(parsed.tz).toBe("Europe/Kyiv");
+            expect(parsed.user_id).toBe("u1");
             expect(parsed.max_rows_per_call).toBeGreaterThan(0);
         }
     });
@@ -1439,17 +1444,12 @@ const db = {
     accountWipes: 0,
     profileReads: [] as string[],
     membershipReads: [] as string[],
+    members: [] as actualSupabase.HouseholdMembership[],
     tokenRotations: [] as {
         householdId: string;
         tokenHashHex: string;
         issuedBy: string | null;
     }[],
-    membership: {
-        householdId: "hh-1",
-        userId: "u1",
-        role: "owner" as const,
-        displayName: "U1",
-    } as actualSupabase.HouseholdMembership | null,
 };
 
 mock.module("./supabase.js", () => ({
@@ -1482,9 +1482,9 @@ mock.module("./supabase.js", () => ({
     // query under test.
     getMealsInRange: async () => db.meals,
     getWaterInRange: async () => db.water,
-    insertMeal: async (_userId: string, input: Record<string, unknown>) => {
-        db.inserted.push(input);
-        const saved = storedMeal(input);
+    insertMeal: async (userId: string, input: Record<string, unknown>) => {
+        db.inserted.push({ ...input, user_id: userId });
+        const saved = storedMeal({ ...input, user_id: userId });
         db.meals = [saved];
         return { meal: saved, deduplicated: false };
     },
@@ -1561,10 +1561,21 @@ mock.module("./supabase.js", () => ({
     existingIdempotencyKeys: async () => new Set<string>(),
     existingMealIds: async (_userId: string, ids: string[]) =>
         new Set(ids.filter((id) => db.meals.some((m) => m.id === id))),
-    getHouseholdMembership: async (userId: string) => {
+    getHouseholdMembership: async (userId: string, householdId?: string) => {
         db.membershipReads.push(userId);
-        return db.membership;
+        return (
+            db.members.find(
+                (member) =>
+                    member.userId === userId &&
+                    (householdId == null || member.householdId === householdId),
+            ) ?? null
+        );
     },
+    listHouseholdMembers: async (householdId: string) =>
+        db.members
+            .filter((member) => member.householdId === householdId)
+            .slice()
+            .sort((a, b) => a.displayName.localeCompare(b.displayName)),
     rotateHouseholdMcpToken: async (args: {
         householdId: string;
         tokenHashHex: string;
@@ -1576,10 +1587,10 @@ mock.module("./supabase.js", () => ({
     getPreferredWeightUnit: async () =>
         db.profile?.preferred_weight_unit ?? null,
     upsertNutritionGoals: async (
-        _userId: string,
+        userId: string,
         patch: Record<string, unknown>,
     ) => {
-        db.goals = { ...goals(), ...patch } as NutritionGoals;
+        db.goals = { ...goals(), user_id: userId, ...patch } as NutritionGoals;
         return db.goals;
     },
     upsertProfile: async (userId: string, patch: Record<string, unknown>) => {
@@ -1613,12 +1624,14 @@ beforeEach(() => {
     db.profileReads = [];
     db.membershipReads = [];
     db.tokenRotations = [];
-    db.membership = {
-        householdId: "hh-1",
-        userId: "u1",
-        role: "owner",
-        displayName: "U1",
-    };
+    db.members = [
+        {
+            householdId: "hh-1",
+            userId: "u1",
+            role: "owner",
+            displayName: "U1",
+        },
+    ];
 });
 
 interface ToolResult {
@@ -3837,6 +3850,7 @@ describe("household PAT has no default user", () => {
             expect(names).toContain("log_meal");
             expect(names).toContain("get_profile");
             expect(names).toContain("rotate_household_token");
+            expect(names).toContain("list_members");
         });
     });
 
@@ -3851,7 +3865,7 @@ describe("household PAT has no default user", () => {
                 fat_g: 1,
             });
             expect(r.isError).toBe(true);
-            expect(textOf(r)).toContain(HOUSEHOLD_HAS_NO_DEFAULT_USER);
+            expect(textOf(r).toLowerCase()).toContain("user_id");
             expect(db.inserted).toHaveLength(0);
         });
     });
@@ -3860,7 +3874,7 @@ describe("household PAT has no default user", () => {
         await withHousehold(async (call) => {
             const r = await call("get_profile");
             expect(r.isError).toBe(true);
-            expect(textOf(r)).toContain(HOUSEHOLD_HAS_NO_DEFAULT_USER);
+            expect(textOf(r).toLowerCase()).toContain("user_id");
             expect(db.profileReads).toHaveLength(0);
         });
     });
@@ -3876,6 +3890,240 @@ describe("household PAT has no default user", () => {
             expect(db.tokenRotations[0]!.householdId).toBe("hh-1");
             expect(db.tokenRotations[0]!.issuedBy).toBeNull();
             expect(db.tokenRotations[0]!.tokenHashHex).toHaveLength(64);
+        });
+    });
+});
+
+describe("household person targeting", () => {
+    const alice = "11111111-1111-4111-8111-111111111111";
+    const bob = "22222222-2222-4222-8222-222222222222";
+    const stranger = "33333333-3333-4333-8333-333333333333";
+
+    async function withHousehold(
+        run: (call: CallTool) => Promise<void>,
+    ): Promise<void> {
+        db.members = [
+            {
+                householdId: "hh-1",
+                userId: alice,
+                role: "owner",
+                displayName: "Alice",
+            },
+            {
+                householdId: "hh-1",
+                userId: bob,
+                role: "member",
+                displayName: "Bob",
+            },
+        ];
+        const server = new McpServer(
+            { name: "nutrition-mcp-test", version: "0.0.0" },
+            { capabilities: { tools: {}, resources: {} } },
+        );
+        registerTools(
+            server,
+            { kind: "household", householdId: "hh-1" },
+            true,
+            null,
+        );
+        const [clientTransport, serverTransport] =
+            InMemoryTransport.createLinkedPair();
+        const client = new Client({ name: "test-client", version: "0.0.0" });
+        await Promise.all([
+            server.connect(serverTransport),
+            client.connect(clientTransport),
+        ]);
+        try {
+            await run(
+                (name, args = {}) =>
+                    client.callTool({
+                        name,
+                        arguments: args,
+                    }) as Promise<ToolResult>,
+            );
+        } finally {
+            await client.close();
+            await server.close();
+        }
+    }
+
+    test("list_members returns every household member", async () => {
+        await withHousehold(async (call) => {
+            const r = await call("list_members");
+            expect(r.isError).toBeFalsy();
+            expect(r.structuredContent?.members).toEqual([
+                {
+                    user_id: alice,
+                    display_name: "Alice",
+                    role: "owner",
+                },
+                {
+                    user_id: bob,
+                    display_name: "Bob",
+                    role: "member",
+                },
+            ]);
+        });
+    });
+
+    test("PAT log_meal for a member writes that user_id", async () => {
+        await withHousehold(async (call) => {
+            const r = await call("log_meal", {
+                description: "toast",
+                meal_type: "breakfast",
+                calories: 100,
+                protein_g: 4,
+                carbs_g: 18,
+                fat_g: 1,
+                user_id: alice,
+            });
+            expect(r.isError).toBeFalsy();
+            expect(db.inserted[0]!.user_id).toBe(alice);
+        });
+    });
+
+    test("PAT log_meal for a stranger writes nothing", async () => {
+        await withHousehold(async (call) => {
+            const r = await call("log_meal", {
+                description: "toast",
+                meal_type: "breakfast",
+                calories: 100,
+                protein_g: 4,
+                carbs_g: 18,
+                fat_g: 1,
+                user_id: stranger,
+            });
+            expect(r.isError).toBe(true);
+            expect(textOf(r)).toContain("not a household member");
+            expect(db.inserted).toHaveLength(0);
+        });
+    });
+
+    test("OAuth log_meal without user_id still writes the token user", async () => {
+        await withTools(null, async (call) => {
+            const r = await call("log_meal", {
+                description: "toast",
+                meal_type: "breakfast",
+                calories: 100,
+                protein_g: 4,
+                carbs_g: 18,
+                fat_g: 1,
+            });
+            expect(r.isError).toBeFalsy();
+            expect(db.inserted[0]!.user_id).toBe("u1");
+        });
+    });
+
+    test("OAuth log_meal with someone else's user_id is not sudo", async () => {
+        await withTools(null, async (call) => {
+            const r = await call("log_meal", {
+                description: "toast",
+                meal_type: "breakfast",
+                calories: 100,
+                protein_g: 4,
+                carbs_g: 18,
+                fat_g: 1,
+                user_id: bob,
+            });
+            expect(r.isError).toBe(true);
+            expect(textOf(r)).toContain(OAUTH_USER_MISMATCH);
+            expect(db.inserted).toHaveLength(0);
+        });
+    });
+
+    test("member OAuth list_members returns the caller's household", async () => {
+        db.members = [
+            {
+                householdId: "hh-1",
+                userId: "u1",
+                role: "owner",
+                displayName: "U1",
+            },
+            {
+                householdId: "hh-1",
+                userId: bob,
+                role: "member",
+                displayName: "Bob",
+            },
+        ];
+        await withTools(null, async (call) => {
+            const r = await call("list_members");
+            expect(r.isError).toBeFalsy();
+            expect(r.structuredContent?.members).toEqual([
+                {
+                    user_id: bob,
+                    display_name: "Bob",
+                    role: "member",
+                },
+                {
+                    user_id: "u1",
+                    display_name: "U1",
+                    role: "owner",
+                },
+            ]);
+        });
+    });
+
+    test("PAT set_nutrition_goals for a member writes that user", async () => {
+        await withHousehold(async (call) => {
+            const r = await call("set_nutrition_goals", {
+                daily_calories: 1800,
+                user_id: bob,
+            });
+            expect(r.isError).toBeFalsy();
+            expect(db.goals?.user_id).toBe(bob);
+            expect(db.goals?.daily_calories).toBe(1800);
+        });
+    });
+
+    test("PAT log_meal for a member of another household writes nothing", async () => {
+        const other = "44444444-4444-4444-8444-444444444444";
+        await withHousehold(async (call) => {
+            db.members.push({
+                householdId: "hh-other",
+                userId: other,
+                role: "member",
+                displayName: "Other",
+            });
+            const r = await call("log_meal", {
+                description: "toast",
+                meal_type: "breakfast",
+                calories: 100,
+                protein_g: 4,
+                carbs_g: 18,
+                fat_g: 1,
+                user_id: other,
+            });
+            expect(r.isError).toBe(true);
+            expect(textOf(r)).toContain("not a household member");
+            expect(db.inserted).toHaveLength(0);
+        });
+    });
+
+    test("PAT start_meal_import names the member for the widget", async () => {
+        await withHousehold(async (call) => {
+            const r = await call("start_meal_import", { user_id: alice });
+            expect(r.isError).toBeFalsy();
+            const sc = START_IMPORT_OUTPUT_SCHEMA.parse(r.structuredContent);
+            expect(sc.user_id).toBe(alice);
+            expect(sc.import_tool_name).toBe("bulk_import_meals");
+        });
+    });
+
+    test("PAT delete_account is refused and deletes nothing", async () => {
+        await withHousehold(async (call) => {
+            const r = await call("delete_account", { confirm: true });
+            expect(r.isError).toBe(true);
+            expect(textOf(r)).toContain(HOUSEHOLD_CANNOT_DELETE_ACCOUNT);
+        });
+    });
+
+    test("non-member OAuth list_members is refused", async () => {
+        db.members = [];
+        await withTools(null, async (call) => {
+            const r = await call("list_members");
+            expect(r.isError).toBe(true);
+            expect(textOf(r)).toContain("not a household member");
         });
     });
 });
@@ -3896,7 +4144,7 @@ describe("rotate_household_token from member OAuth", () => {
     });
 
     test("a non-member is refused", async () => {
-        db.membership = null;
+        db.members = [];
         await withTools(null, async (call) => {
             const r = await call("rotate_household_token");
             expect(r.isError).toBe(true);
@@ -4035,6 +4283,7 @@ describe("household PAT over HTTP has no default userId", () => {
                 expect(
                     tools.some((t) => t.name === "rotate_household_token"),
                 ).toBe(true);
+                expect(tools.some((t) => t.name === "list_members")).toBe(true);
                 expect(tools.some((t) => t.name === "log_meal")).toBe(true);
             });
         },
@@ -4050,8 +4299,9 @@ describe("household PAT over HTTP has no default userId", () => {
             expect(
                 (r.content as { type: string; text?: string }[])
                     .map((c) => c.text ?? "")
-                    .join("\n"),
-            ).toContain(HOUSEHOLD_HAS_NO_DEFAULT_USER);
+                    .join("\n")
+                    .toLowerCase(),
+            ).toContain("user_id");
         });
     });
 
@@ -4224,6 +4474,7 @@ describe("/mcp serves one tool surface on both protocol eras", () => {
                 expect(sc.tz).toBe("Europe/Kyiv");
                 expect(sc.tz_configured).toBe(true);
                 expect(sc.import_tool_name).toBe("bulk_import_meals");
+                expect(sc.user_id).toBe("u1");
             });
         },
     );

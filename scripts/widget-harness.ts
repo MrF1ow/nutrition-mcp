@@ -292,6 +292,7 @@ function hostPage(widget: string, params: URLSearchParams): string {
             ],
             widgets_enabled: true,
             drink_unit: drinkUnit,
+            user_id: "u1",
         },
         "weight-trends": {
             range_days: 7,

@@ -6,6 +6,8 @@ import {
     HouseholdAlreadyExistsError,
     listMembers,
     requireMember,
+    requireMemberOfHousehold,
+    resolveActorUserId,
     type Household,
     type HouseholdMember,
 } from "./household.js";
@@ -161,4 +163,73 @@ test("deleting a user removes only that membership", () => {
         error: "not_a_member",
     });
     expect(store.getHousehold()?.id).toBe(householdId);
+});
+
+test("OAuth without user_id acts as the token user", () => {
+    expect(
+        resolveActorUserId({ kind: "user", userId: alice }, undefined),
+    ).toEqual({
+        ok: true,
+        userId: alice,
+        membership: "not_required",
+    });
+});
+
+test("OAuth with matching user_id still acts as self", () => {
+    expect(resolveActorUserId({ kind: "user", userId: alice }, alice)).toEqual({
+        ok: true,
+        userId: alice,
+        membership: "not_required",
+    });
+});
+
+test("OAuth with a different user_id is a mismatch, not sudo", () => {
+    expect(resolveActorUserId({ kind: "user", userId: alice }, bob)).toEqual({
+        ok: false,
+        error: "oauth_mismatch",
+    });
+});
+
+test("household PAT without user_id is missing a target", () => {
+    expect(
+        resolveActorUserId(
+            { kind: "household", householdId: "hh-1" },
+            undefined,
+        ),
+    ).toEqual({
+        ok: false,
+        error: "missing_target",
+    });
+});
+
+test("household PAT with user_id requires membership on that household", () => {
+    expect(
+        resolveActorUserId({ kind: "household", householdId: "hh-1" }, alice),
+    ).toEqual({
+        ok: true,
+        userId: alice,
+        membership: "required",
+        householdId: "hh-1",
+    });
+});
+
+test("requireMemberOfHousehold rejects a member of a different household", () => {
+    const aliceHome: HouseholdMember = {
+        householdId: "hh-1",
+        userId: alice,
+        role: "owner",
+        displayName: "Alice",
+    };
+    expect(requireMemberOfHousehold(aliceHome, "hh-1")).toEqual({
+        ok: true,
+        member: aliceHome,
+    });
+    expect(requireMemberOfHousehold(aliceHome, "hh-other")).toEqual({
+        ok: false,
+        error: "not_a_member",
+    });
+    expect(requireMemberOfHousehold(null, "hh-1")).toEqual({
+        ok: false,
+        error: "not_a_member",
+    });
 });

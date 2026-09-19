@@ -1,29 +1,3 @@
-// Typed content for /tools (the "all 37 tools" reference page), rendered
-// by scripts/gen-tools.ts. Extracted verbatim from the previously
-// hand-authored public/tools.html — see CLAUDE.md's "Public site" section
-// for the generator family this belongs to, and gen-tools.ts's own header
-// for how it plugs into that family.
-//
-// The split below matters for the translation pass that follows this one:
-// a tool's IDENTITY — its literal MCP tool name, each param's literal API
-// field name, which category it lives in, and which badge chips it shows
-// — is structural and shared by every locale untranslated (TOOLS, plus
-// BADGE_META's CSS/icon wiring). Only PROSE — descriptions, param
-// descriptions, "try saying" examples, category copy, hero copy, and the
-// badge label text itself — lives inside ToolsDoc, one entry per locale in
-// TOOLS_COPY. A future translation pass reads ToolsDoc's shape and fills
-// in a new locale; it should never need to touch TOOLS or BADGE_META.
-//
-// Nearly every prose field here is plain text, escaped by the generator
-// via esc() — same as a LegalDoc section heading. The one exception is
-// ToolProse.params: a handful of parameter descriptions carry inline
-// <b>/<code> markup (e.g. "<b>Total</b> sugars...", listing sibling
-// `<code>param_name</code>` identifiers inline in a sentence), so every
-// param description is a trusted HTML string instead — same trust model
-// as src/copy/legal.ts: developer-authored constants, not escaped
-// further. A markup-free description (most of them) is simply written as
-// plain characters with nothing that needs escaping.
-
 import type { SiteLocale } from "../routes.js";
 import { TOOLS_DE } from "./tools.de.js";
 import { TOOLS_ES } from "./tools.es.js";
@@ -33,8 +7,6 @@ import { TOOLS_PL } from "./tools.pl.js";
 import { TOOLS_IT } from "./tools.it.js";
 import { TOOLS_UK } from "./tools.uk.js";
 import { TOOLS_JA } from "./tools.ja.js";
-
-// ------------------------------------------------------------- identity
 
 /** The 7 tool categories, in page order — matches both the category
  * jump-bar and the order the tool-group sections appear in below it. */
@@ -127,14 +99,6 @@ export interface ToolIdentity {
     hasPhotoHint: boolean;
 }
 
-/**
- * All 37 tools, in the exact document order of public/tools.html (grouped
- * by category — see CategoryId — for the reader). Cross-checked against
- * the 37 `server.registerTool()` calls in src/mcp.ts: the two orders
- * differ (mcp.ts registers in its own order, unrelated to this page's
- * reader-facing grouping) but the *set* of 37 tool names is identical —
- * nothing here was dropped or invented.
- */
 export const TOOLS: ToolIdentity[] = [
     {
         name: "log_meal",
@@ -447,6 +411,13 @@ export const TOOLS: ToolIdentity[] = [
         hasPhotoHint: false,
     },
     {
+        name: "list_members",
+        category: "settings-account",
+        badges: ["lookup"],
+        params: [],
+        hasPhotoHint: false,
+    },
+    {
         name: "rotate_household_token",
         category: "settings-account",
         badges: ["setting"],
@@ -462,8 +433,6 @@ export const TOOLS: ToolIdentity[] = [
     },
 ];
 
-// ----------------------------------------------------------------- prose
-
 /** One category's translatable copy — the jump-bar pill's short label,
  * and the section head's longer title + one-line description. */
 export interface CategoryProse {
@@ -475,11 +444,9 @@ export interface CategoryProse {
 /**
  * A tool's translatable prose. `params` is keyed by ToolParamIdentity.name
  * — only for params this tool actually has (see ToolIdentity.params) —
- * and every value is a trusted HTML string (see this file's header for
- * why every param description shares that trust level, even the markup-
- * free majority). An empty string means the parameter row shows only its
- * name and required/optional badge, with no trailing description — true
- * of several params on update_meal, update_weight, and
+ * and every value is a trusted HTML string. An empty string means the
+ * parameter row shows only its name and required/optional badge, with no
+ * trailing description — true of several params on update_meal, update_weight, and
  * set_nutrition_goals in the English source (the field is self-
  * explanatory, or already described by a sibling like `calories` in
  * log_meal).
@@ -487,7 +454,7 @@ export interface CategoryProse {
 export interface ToolProse {
     /** Plain text, escaped by the generator. */
     description: string;
-    /** Keyed by ToolParamIdentity.name. Trusted HTML — see file header. */
+    /** Keyed by ToolParamIdentity.name. Trusted HTML. */
     params: Record<string, string>;
     /** The "Try saying" example phrase. Plain text, escaped by the
      * generator. */
@@ -539,21 +506,19 @@ export interface ToolsDoc {
     tools: Record<string, ToolProse>;
 }
 
-// ---------------------------------------------------------------- English
-
 const TOOLS_EN: ToolsDoc = {
     meta: {
-        title: "Tools Reference: All 37 Tools",
+        title: "Tools Reference: All 38 Tools",
         description:
-            "All 37 tools the Nutrition MCP server gives your AI — log meals, scan barcodes, import your history from another app, track water and weight, set goals, and review trends. Full reference with descriptions and example prompts.",
+            "All 38 tools the Nutrition MCP server gives your AI — log meals, scan barcodes, import your history from another app, track water and weight, set goals, and review trends. Full reference with descriptions and example prompts.",
         ogDescription:
-            "All 37 tools the Nutrition MCP server gives your AI, including a CSV importer for your history from another app — with descriptions and example prompts.",
+            "All 38 tools the Nutrition MCP server gives your AI, including a CSV importer for your history from another app — with descriptions and example prompts.",
     },
     hero: {
         eyebrow: "Reference",
         title: "Everything your AI can do",
         lead: "You never call these directly — you just talk, and the assistant picks the right tool. Here's the full set the Nutrition MCP server exposes, with what each one does and a phrase that triggers it.",
-        countBold: "37 tools",
+        countBold: "38 tools",
         countTail: "across 7 areas",
     },
     categories: {
@@ -930,6 +895,12 @@ const TOOLS_EN: ToolsDoc = {
                     "Which standard drink to show alongside the grams: <code>us</code> (14 g per drink) or <code>uk</code> (7.9 g per unit). Defaults to <code>us</code>; grams of pure ethanol are what's actually stored.",
             },
             example: "Start tracking my drinking, in UK units",
+        },
+        list_members: {
+            description:
+                "List household members as user_id, display_name, and role. A household bot token and any household member may call this. Person tools on a household token require user_id set to one of these ids.",
+            params: {},
+            example: "Who is in this household?",
         },
         rotate_household_token: {
             description:

@@ -20,17 +20,17 @@ import type { ToolsDoc } from "./tools.js";
 
 export const TOOLS_JA: ToolsDoc = {
     meta: {
-        title: "ツールリファレンス：37個の全ツール",
+        title: "ツールリファレンス：38個の全ツール",
         description:
-            "Nutrition MCPサーバーがあなたのAIに提供する37個すべてのツール — 食事の記録、バーコードのスキャン、他のアプリからの履歴インポート、水分と体重の記録、目標の設定、トレンドの確認。説明と例文つきの完全なリファレンスです。",
+            "Nutrition MCPサーバーがあなたのAIに提供する38個すべてのツール — 食事の記録、バーコードのスキャン、他のアプリからの履歴インポート、水分と体重の記録、目標の設定、トレンドの確認。説明と例文つきの完全なリファレンスです。",
         ogDescription:
-            "Nutrition MCPサーバーがあなたのAIに提供する37個のツール。他のアプリからの履歴用CSVインポーターを含み、説明と例文つき。",
+            "Nutrition MCPサーバーがあなたのAIに提供する38個のツール。他のアプリからの履歴用CSVインポーターを含み、説明と例文つき。",
     },
     hero: {
         eyebrow: "リファレンス",
         title: "あなたのAIができること、すべて",
         lead: "これらのツールを直接呼び出すことはありません — ただ話しかけるだけで、アシスタントが適切なツールを選びます。Nutrition MCPサーバーが公開する全ツールと、それぞれの機能、呼び出すきっかけとなるフレーズをまとめました。",
-        countBold: "37個のツール",
+        countBold: "38個のツール",
         countTail: "7つの分野にわたる",
     },
     categories: {
@@ -407,6 +407,12 @@ export const TOOLS_JA: ToolsDoc = {
                     "グラム数と併せて表示する標準ドリンクの単位：<code>us</code>（1杯14g）または<code>uk</code>（1ユニット7.9g）。デフォルトは<code>us</code>。実際に保存されるのは純アルコールのグラム数です。",
             },
             example: "飲酒の記録を英国ユニットで始めて",
+        },
+        list_members: {
+            description:
+                "世帯メンバーを user_id、display_name、role として一覧する。世帯ボットトークンと世帯メンバーが呼べる。世帯トークン上の個人ツールは、これらの id のいずれかを user_id に指定する必要がある。",
+            params: {},
+            example: "この世帯には誰がいますか？",
         },
         rotate_household_token: {
             description:

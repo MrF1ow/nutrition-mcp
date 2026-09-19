@@ -842,6 +842,7 @@
                         dry_run: i === 0,
                     };
                     if (everyHasKcal) args.expected_total_kcal = kcal;
+                    if (CFG.user_id) args.user_id = CFG.user_id;
 
                     S.progress.label = tpl(
                         i === 0
@@ -1705,6 +1706,7 @@
                     // the standalone preview shows.
                     drink_unit: null,
                     locale: "en",
+                    user_id: "u1",
                 },
                 onReady: (api) => {
                     API = api;

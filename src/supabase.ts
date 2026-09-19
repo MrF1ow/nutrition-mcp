@@ -1510,12 +1510,16 @@ export type HouseholdMembership = {
 
 export async function getHouseholdMembership(
     userId: string,
+    householdId?: string,
 ): Promise<HouseholdMembership | null> {
-    const { data, error } = await getSupabase()
+    let query = getSupabase()
         .from("household_members")
         .select("household_id, user_id, role, display_name")
-        .eq("user_id", userId)
-        .maybeSingle();
+        .eq("user_id", userId);
+    if (householdId != null) {
+        query = query.eq("household_id", householdId);
+    }
+    const { data, error } = await query.maybeSingle();
 
     if (error) {
         throw new Error(
@@ -1523,12 +1527,36 @@ export async function getHouseholdMembership(
         );
     }
     if (!data) return null;
+    return membershipFromRow(data);
+}
+
+function membershipFromRow(data: {
+    household_id: unknown;
+    user_id: unknown;
+    role: unknown;
+    display_name: unknown;
+}): HouseholdMembership {
     return {
         householdId: data.household_id as string,
         userId: data.user_id as string,
         role: data.role as MemberRole,
         displayName: data.display_name as string,
     };
+}
+
+export async function listHouseholdMembers(
+    householdId: string,
+): Promise<HouseholdMembership[]> {
+    const { data, error } = await getSupabase()
+        .from("household_members")
+        .select("household_id, user_id, role, display_name")
+        .eq("household_id", householdId)
+        .order("display_name", { ascending: true });
+
+    if (error) {
+        throw new Error(`Failed to list household members: ${error.message}`);
+    }
+    return (data ?? []).map((row) => membershipFromRow(row));
 }
 
 export async function rotateHouseholdMcpToken(args: {

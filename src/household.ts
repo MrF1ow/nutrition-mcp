@@ -1,3 +1,5 @@
+import type { AuthContext } from "./auth-context.js";
+
 export type MemberRole = "owner" | "member";
 
 export type HouseholdMember = {
@@ -122,9 +124,55 @@ export function requireMember(
     store: HouseholdStore,
     userId: string,
 ): RequireMemberResult {
-    const member = store.getMember(userId);
+    return requireMemberOfHousehold(store.getMember(userId), null);
+}
+
+export function requireMemberOfHousehold(
+    member: HouseholdMember | null | undefined,
+    householdId: string | null,
+): RequireMemberResult {
     if (member == null) return { ok: false, error: "not_a_member" };
+    if (householdId != null && member.householdId !== householdId) {
+        return { ok: false, error: "not_a_member" };
+    }
     return { ok: true, member };
+}
+
+export type ResolveActorError = "missing_target" | "oauth_mismatch";
+
+export type ResolveActorResult =
+    | { ok: true; userId: string; membership: "not_required" }
+    | {
+          ok: true;
+          userId: string;
+          membership: "required";
+          householdId: string;
+      }
+    | { ok: false; error: ResolveActorError };
+
+export function resolveActorUserId(
+    auth: AuthContext,
+    requestedUserId: string | undefined,
+): ResolveActorResult {
+    if (auth.kind === "user") {
+        if (requestedUserId != null && requestedUserId !== auth.userId) {
+            return { ok: false, error: "oauth_mismatch" };
+        }
+        return {
+            ok: true,
+            userId: auth.userId,
+            membership: "not_required",
+        };
+    }
+    if (requestedUserId == null) {
+        return { ok: false, error: "missing_target" };
+    }
+    return {
+        ok: true,
+        userId: requestedUserId,
+        membership: "required",
+        householdId: auth.householdId,
+    };
 }
 
 export function bootstrapHousehold(

@@ -39,7 +39,7 @@ export const CHROME_JA: ChromeCopy = {
     menu: {
         howSmall: "3ステップ",
         installSmall: "1分足らず",
-        toolsSmall: "37個のツール",
+        toolsSmall: "38個のツール",
         examplesSmall: "ライブデモ",
         liveStatsSmall: "開いてから",
         alternatives: "代替アプリ",

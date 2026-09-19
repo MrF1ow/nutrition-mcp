@@ -2,17 +2,17 @@ import type { ToolsDoc } from "./tools.js";
 
 export const TOOLS_PL: ToolsDoc = {
     meta: {
-        title: "Katalog narzędzi: wszystkie 37 narzędzi",
+        title: "Katalog narzędzi: wszystkie 38 narzędzi",
         description:
-            "Wszystkie 37 narzędzi, które serwer Nutrition MCP daje Twojemu AI — zapisuj posiłki, skanuj kody kreskowe, importuj historię z innej aplikacji, śledź wodę i wagę, ustawiaj cele i przeglądaj trendy. Pełny opis wraz z przykładowymi poleceniami.",
+            "Wszystkie 38 narzędzi, które serwer Nutrition MCP daje Twojemu AI — zapisuj posiłki, skanuj kody kreskowe, importuj historię z innej aplikacji, śledź wodę i wagę, ustawiaj cele i przeglądaj trendy. Pełny opis wraz z przykładowymi poleceniami.",
         ogDescription:
-            "Wszystkie 37 narzędzi, które serwer Nutrition MCP daje Twojemu AI, w tym importer CSV do przenoszenia historii z innej aplikacji — z opisami i przykładowymi poleceniami.",
+            "Wszystkie 38 narzędzi, które serwer Nutrition MCP daje Twojemu AI, w tym importer CSV do przenoszenia historii z innej aplikacji — z opisami i przykładowymi poleceniami.",
     },
     hero: {
         eyebrow: "Dokumentacja",
         title: "Wszystko, co potrafi Twój AI",
         lead: "Nigdy nie wywołujesz tych narzędzi bezpośrednio — po prostu mówisz, a asystent sam wybiera właściwe. Oto pełny zestaw udostępniany przez serwer Nutrition MCP, wraz z opisem działania i przykładowym poleceniem, które je uruchamia.",
-        countBold: "37 narzędzi",
+        countBold: "38 narzędzi",
         countTail: "w 7 obszarach",
     },
     categories: {
@@ -399,6 +399,12 @@ export const TOOLS_PL: ToolsDoc = {
                     "Który standardowy drink pokazywać obok gramów: <code>us</code> (14 g na drinka) lub <code>uk</code> (7,9 g na jednostkę). Domyślnie <code>us</code>; faktycznie przechowywane są gramy czystego etanolu.",
             },
             example: "Zacznij śledzić moje picie, w jednostkach brytyjskich",
+        },
+        list_members: {
+            description:
+                "Wypisz członków gospodarstwa jako user_id, display_name i role. Token bota gospodarstwa i każdy członek mogą to wywołać. Narzędzia osobowe na tokenie gospodarstwa wymagają user_id jednego z tych id.",
+            params: {},
+            example: "Kto jest w tym gospodarstwie?",
         },
         rotate_household_token: {
             description:
