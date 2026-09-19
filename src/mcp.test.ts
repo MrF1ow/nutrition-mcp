@@ -4211,6 +4211,19 @@ describe("household person targeting", () => {
                     },
                 ]),
             );
+            const meal = await call("log_meal", {
+                description: "toast",
+                meal_type: "breakfast",
+                calories: 100,
+                protein_g: 4,
+                carbs_g: 18,
+                fat_g: 1,
+                user_id: "55555555-5555-4555-8555-555555555555",
+            });
+            expect(meal.isError).toBeFalsy();
+            expect(db.inserted[0]!.user_id).toBe(
+                "55555555-5555-4555-8555-555555555555",
+            );
         });
     });
 
