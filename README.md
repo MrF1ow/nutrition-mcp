@@ -94,6 +94,9 @@ Read the story behind it: [How I Replaced MyFitnessPal and Other Apps with a Sin
 | `set_alcohol_tracking`     | Turn alcohol tracking on or off (off by default) and choose US standard drinks or UK units; turning it off hides alcohol rather than deleting it |
 | `rotate_household_token`   | Issue a household bot token (`nt_hh_…`). Shown once; stored as a hash. Any member may rotate. A PAT may rotate and then stops working            |
 | `list_members`             | List household members (`user_id`, `display_name`, `role`). A household PAT and any member may call this                                         |
+| `get_household_config`     | Read household name, fridge locations, recipe search places, and shared preferences                                                              |
+| `update_household_config`  | Merge household name, fridge locations, recipe places, or preferences. Places are labels, not a recipe table                                     |
+| `update_fridge_locations`  | Replace the household fridge and freezer location list                                                                                           |
 | `delete_account`           | Permanently delete account and all associated data                                                                                               |
 
 ## MCP Resources

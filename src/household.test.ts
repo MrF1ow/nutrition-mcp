@@ -22,7 +22,11 @@ function extraHousehold(id: string): Household {
         name: "Second kitchen",
         fridgeLocations: [],
         recipeSearchPlaces: [],
-        preferences: {},
+        preferences: {
+            constraints: [],
+            budget: null,
+            shoppingCadence: null,
+        },
     };
 }
 
@@ -40,7 +44,11 @@ test("first bootstrap creates one household and an owner", () => {
         name: "Home",
         fridgeLocations: [],
         recipeSearchPlaces: [],
-        preferences: {},
+        preferences: {
+            constraints: [],
+            budget: null,
+            shoppingCadence: null,
+        },
     } satisfies Household);
     expect(listMembers(store, householdId)).toEqual([
         {

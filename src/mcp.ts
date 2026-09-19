@@ -17,7 +17,14 @@ import {
     requireActorUserId,
     type AuthContext,
 } from "./auth-context.js";
-import { requireMemberOfHousehold, resolveActorUserId } from "./household.js";
+import {
+    requireMemberOfHousehold,
+    resolveActorUserId,
+    householdConfigToWire,
+    mergeHouseholdConfig,
+    parseFridgeLocationsInput,
+    parseHouseholdConfigPatch,
+} from "./household.js";
 import {
     generateHouseholdToken,
     hashHouseholdToken,
@@ -56,6 +63,8 @@ import {
     getProfile,
     getHouseholdMembership,
     listHouseholdMembers,
+    getHouseholdConfig,
+    updateHouseholdConfig,
     rotateHouseholdMcpToken,
     countMeals,
     existingIdempotencyKeys,
@@ -4540,6 +4549,184 @@ export function registerTools(
                             },
                         ],
                         structuredContent: { members: payload },
+                    };
+                },
+                analytics,
+            );
+        },
+    );
+
+    const RECIPE_PLACE_KIND_SCHEMA = z.enum([
+        "grocery",
+        "recipe_site",
+        "meal_kit",
+        "other",
+    ]);
+    const HOUSEHOLD_CONFIG_OUTPUT_SCHEMA = z.object({
+        name: z.string(),
+        fridge_locations: z.array(z.string()),
+        recipe_search_places: z.array(
+            z.object({
+                name: z.string(),
+                kind: RECIPE_PLACE_KIND_SCHEMA,
+                url: z.string().nullable(),
+            }),
+        ),
+        preferences: z.object({
+            constraints: z.array(z.string()),
+            budget: z.string().nullable(),
+            shopping_cadence: z.string().nullable(),
+        }),
+    });
+    const FRIDGE_LOCATIONS_OUTPUT_SCHEMA = z.object({
+        fridge_locations: z.array(z.string()),
+    });
+
+    server.registerTool(
+        "get_household_config",
+        {
+            title: "Get Household Config",
+            description:
+                "Read the household name, fridge locations, recipe search places, and shared preferences. A household bot token and any household member may call this. Writes are household-scoped, not a person user_id.",
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            outputSchema: HOUSEHOLD_CONFIG_OUTPUT_SCHEMA,
+        },
+        async () => {
+            return withAnalytics(
+                "get_household_config",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    const config = householdConfigToWire(
+                        await getHouseholdConfig(householdId),
+                    );
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `${config.name}\nFridge: ${config.fridge_locations.join(", ") || "(none)"}`,
+                            },
+                        ],
+                        structuredContent: config,
+                    };
+                },
+                analytics,
+            );
+        },
+    );
+
+    server.registerTool(
+        "update_household_config",
+        {
+            title: "Update Household Config",
+            description:
+                "Merge household name, fridge locations, recipe search places, or shared preferences. A household bot token and any household member may call this. Places are labels only, not a recipe table.",
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                name: z.string().min(1).optional(),
+                fridge_locations: z.array(z.string()).optional(),
+                recipe_search_places: z
+                    .array(
+                        z.object({
+                            name: z.string(),
+                            kind: RECIPE_PLACE_KIND_SCHEMA,
+                            url: z.string().nullable().optional(),
+                        }),
+                    )
+                    .optional(),
+                preferences: z
+                    .object({
+                        constraints: z.array(z.string()).optional(),
+                        budget: z.string().nullable().optional(),
+                        shopping_cadence: z.string().nullable().optional(),
+                    })
+                    .optional(),
+            }),
+            outputSchema: HOUSEHOLD_CONFIG_OUTPUT_SCHEMA,
+        },
+        async (args) => {
+            return withAnalytics(
+                "update_household_config",
+                async () => {
+                    const parsed = parseHouseholdConfigPatch(args);
+                    if (!parsed.ok) throw new Error(parsed.error);
+                    const householdId = await callerHouseholdId();
+                    const current = await getHouseholdConfig(householdId);
+                    const config = householdConfigToWire(
+                        await updateHouseholdConfig(
+                            householdId,
+                            mergeHouseholdConfig(current, parsed.value),
+                        ),
+                    );
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Updated ${config.name}`,
+                            },
+                        ],
+                        structuredContent: config,
+                    };
+                },
+                analytics,
+            );
+        },
+    );
+
+    server.registerTool(
+        "update_fridge_locations",
+        {
+            title: "Update Fridge Locations",
+            description:
+                "Replace the household fridge and freezer location list. A household bot token and any household member may call this.",
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                locations: z.array(z.string()),
+            }),
+            outputSchema: FRIDGE_LOCATIONS_OUTPUT_SCHEMA,
+        },
+        async (args) => {
+            return withAnalytics(
+                "update_fridge_locations",
+                async () => {
+                    const parsed = parseFridgeLocationsInput(args);
+                    if (!parsed.ok) throw new Error(parsed.error);
+                    const householdId = await callerHouseholdId();
+                    const current = await getHouseholdConfig(householdId);
+                    const written = await updateHouseholdConfig(
+                        householdId,
+                        mergeHouseholdConfig(current, {
+                            fridgeLocations: parsed.value,
+                        }),
+                    );
+                    const payload = {
+                        fridge_locations: written.fridgeLocations,
+                    };
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text:
+                                    payload.fridge_locations.length === 0
+                                        ? "Fridge locations cleared."
+                                        : `Fridge locations: ${payload.fridge_locations.join(", ")}`,
+                            },
+                        ],
+                        structuredContent: payload,
                     };
                 },
                 analytics,

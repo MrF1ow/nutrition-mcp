@@ -16,17 +16,17 @@ import type { ToolsDoc } from "./tools.js";
 
 export const TOOLS_FR: ToolsDoc = {
     meta: {
-        title: "Référence des outils : les 38 outils",
+        title: "Référence des outils : les 41 outils",
         description:
-            "Les 38 outils que le serveur Nutrition MCP donne à ton IA — enregistrer des repas, scanner des codes-barres, importer ton historique depuis une autre app, suivre l'eau et le poids, définir des objectifs et consulter les tendances. Référence complète avec descriptions et exemples de formulations.",
+            "Les 41 outils que le serveur Nutrition MCP donne à ton IA — enregistrer des repas, scanner des codes-barres, importer ton historique depuis une autre app, suivre l'eau et le poids, définir des objectifs et consulter les tendances. Référence complète avec descriptions et exemples de formulations.",
         ogDescription:
-            "Les 38 outils que le serveur Nutrition MCP donne à ton IA, dont un importateur CSV pour ton historique venu d'une autre app — avec descriptions et exemples de formulations.",
+            "Les 41 outils que le serveur Nutrition MCP donne à ton IA, dont un importateur CSV pour ton historique venu d'une autre app — avec descriptions et exemples de formulations.",
     },
     hero: {
         eyebrow: "Référence",
         title: "Tout ce que ton IA peut faire",
         lead: "Tu n'appelles jamais ces outils directement — tu parles simplement, et l'assistant choisit le bon outil. Voici l'ensemble complet exposé par le serveur Nutrition MCP, avec ce que fait chacun et une phrase qui le déclenche.",
-        countBold: "38 outils",
+        countBold: "41 outils",
         countTail: "répartis en 7 catégories",
     },
     categories: {
@@ -428,6 +428,35 @@ export const TOOLS_FR: ToolsDoc = {
                 "Émet un nouveau jeton du bot du foyer. Le texte en clair n'apparaît qu'une fois ; seul un hash SHA-256 est stocké. N'importe quel membre peut le faire tourner. Un PAT du foyer peut le faire tourner, puis il cesse de fonctionner.",
             params: {},
             example: "Fais tourner le jeton du bot du foyer",
+        },
+        get_household_config: {
+            description:
+                "Lit le nom du foyer, les emplacements du frigo, les lieux de recettes et les préférences partagées. Un jeton bot du foyer et n'importe quel membre peuvent l'appeler. Les écritures sont au niveau du foyer, pas d'un user_id.",
+            params: {},
+            example: "C'est quoi la config de notre foyer ?",
+        },
+        update_household_config: {
+            description:
+                "Fusionne le nom du foyer, les emplacements du frigo, les lieux de recettes ou les préférences partagées. Les lieux sont des libellés, pas une table de recettes. Un jeton bot du foyer et n'importe quel membre peuvent l'appeler.",
+            params: {
+                name: "Nouveau nom du foyer",
+                fridge_locations:
+                    "Liste de remplacement des frigos et congélateurs",
+                recipe_search_places:
+                    "Liste de remplacement de lieux, chacun avec un nom et kind <code>grocery</code>, <code>recipe_site</code>, <code>meal_kit</code> ou <code>other</code>",
+                preferences:
+                    "Contraintes, budget et rythme d'achats partagés. Les champs omis restent.",
+            },
+            example: "Ajoute Costco comme lieu grocery",
+        },
+        update_fridge_locations: {
+            description:
+                "Remplace la liste des frigos et congélateurs du foyer. Un jeton bot du foyer et n'importe quel membre peuvent l'appeler.",
+            params: {
+                locations: "La liste complète des noms d'emplacement à garder",
+            },
+            example:
+                "Mets les emplacements frigo sur frigo et congélateur du garage",
         },
         delete_account: {
             description:

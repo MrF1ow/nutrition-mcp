@@ -1,0 +1,81 @@
+import { test, expect } from "bun:test";
+import {
+    EMPTY_HOUSEHOLD_PREFERENCES,
+    householdConfigFromRow,
+    mergeHouseholdConfig,
+    parseFridgeLocationsInput,
+    parseHouseholdConfigPatch,
+    type HouseholdConfig,
+} from "./household.js";
+
+const current: HouseholdConfig = {
+    name: "Home",
+    fridgeLocations: ["fridge"],
+    recipeSearchPlaces: [{ name: "Costco", kind: "grocery", url: null }],
+    preferences: {
+        constraints: ["nut-free"],
+        budget: "tight",
+        shoppingCadence: "weekly",
+    },
+};
+
+test("parse rejects an unknown recipe place kind and leaves merge unused", () => {
+    const parsed = parseHouseholdConfigPatch({
+        recipe_search_places: [
+            { name: "Costco", kind: "warehouse", url: null },
+        ],
+    });
+    expect(parsed).toEqual({
+        ok: false,
+        error: "Unknown recipe place kind.",
+    });
+    expect(mergeHouseholdConfig(current, {})).toEqual(current);
+});
+
+test("fridge replace drops blanks and overwrites the list", () => {
+    const parsed = parseFridgeLocationsInput({
+        locations: ["  freezer  ", "", "door"],
+    });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(
+        mergeHouseholdConfig(current, { fridgeLocations: parsed.value }),
+    ).toEqual({
+        ...current,
+        fridgeLocations: ["freezer", "door"],
+    });
+});
+
+test("preference merge keeps unspecified fields", () => {
+    const parsed = parseHouseholdConfigPatch({
+        preferences: { budget: "ok", shopping_cadence: "monthly" },
+    });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(mergeHouseholdConfig(current, parsed.value)).toEqual({
+        ...current,
+        preferences: {
+            constraints: ["nut-free"],
+            budget: "ok",
+            shoppingCadence: "monthly",
+        },
+    });
+});
+
+test("a missing preferences object on a row becomes empty preferences", () => {
+    const parsed = householdConfigFromRow({
+        name: "Home",
+        fridge_locations: [],
+        recipe_search_places: [],
+        household_preferences: {},
+    });
+    expect(parsed).toEqual({
+        ok: true,
+        value: {
+            name: "Home",
+            fridgeLocations: [],
+            recipeSearchPlaces: [],
+            preferences: EMPTY_HOUSEHOLD_PREFERENCES,
+        },
+    });
+});

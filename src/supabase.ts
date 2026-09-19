@@ -5,7 +5,12 @@ import { isWeightUnit, toStoredInteger, type WeightUnit } from "./units.js";
 import { isDrinkUnit, type DrinkUnit } from "./alcohol.js";
 import { escapeLikePattern, tokenizeQuery } from "./search.js";
 import type { PatreonTokens, PatreonTokenStore } from "./patreon.js";
-import type { MemberRole } from "./household.js";
+import {
+    householdConfigFromRow,
+    householdConfigToColumns,
+    type HouseholdConfig,
+    type MemberRole,
+} from "./household.js";
 import {
     combineBearerLookups,
     hashHouseholdToken,
@@ -1557,6 +1562,58 @@ export async function listHouseholdMembers(
         throw new Error(`Failed to list household members: ${error.message}`);
     }
     return (data ?? []).map((row) => membershipFromRow(row));
+}
+
+export async function getHouseholdConfig(
+    householdId: string,
+): Promise<HouseholdConfig> {
+    const { data, error } = await getSupabase()
+        .from("households")
+        .select(
+            "name, fridge_locations, recipe_search_places, household_preferences",
+        )
+        .eq("id", householdId)
+        .maybeSingle();
+
+    if (error) {
+        throw new Error(`Failed to load household config: ${error.message}`);
+    }
+    if (!data) {
+        throw new Error("Failed to load household config");
+    }
+    const parsed = householdConfigFromRow(data);
+    if (!parsed.ok) throw new Error(parsed.error);
+    return parsed.value;
+}
+
+export async function updateHouseholdConfig(
+    householdId: string,
+    config: HouseholdConfig,
+): Promise<HouseholdConfig> {
+    const columns = householdConfigToColumns(config);
+    const { data, error } = await getSupabase()
+        .from("households")
+        .update({
+            name: columns.name,
+            fridge_locations: columns.fridge_locations,
+            recipe_search_places: columns.recipe_search_places,
+            household_preferences: columns.household_preferences,
+        })
+        .eq("id", householdId)
+        .select(
+            "name, fridge_locations, recipe_search_places, household_preferences",
+        )
+        .maybeSingle();
+
+    if (error) {
+        throw new Error(`Failed to update household config: ${error.message}`);
+    }
+    if (!data) {
+        throw new Error("Failed to update household config");
+    }
+    const parsed = householdConfigFromRow(data);
+    if (!parsed.ok) throw new Error(parsed.error);
+    return parsed.value;
 }
 
 export async function rotateHouseholdMcpToken(args: {

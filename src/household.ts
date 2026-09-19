@@ -9,12 +9,78 @@ export type HouseholdMember = {
     displayName: string;
 };
 
-export type Household = {
-    id: string;
+export const RECIPE_PLACE_KINDS = [
+    "grocery",
+    "recipe_site",
+    "meal_kit",
+    "other",
+] as const;
+
+export type RecipePlaceKind = (typeof RECIPE_PLACE_KINDS)[number];
+
+export type RecipeSearchPlace = {
+    name: string;
+    kind: RecipePlaceKind;
+    url: string | null;
+};
+
+export type HouseholdPreferences = {
+    constraints: string[];
+    budget: string | null;
+    shoppingCadence: string | null;
+};
+
+export const EMPTY_HOUSEHOLD_PREFERENCES: HouseholdPreferences = {
+    constraints: [],
+    budget: null,
+    shoppingCadence: null,
+};
+
+export type HouseholdConfig = {
     name: string;
     fridgeLocations: string[];
-    recipeSearchPlaces: unknown[];
-    preferences: Record<string, unknown>;
+    recipeSearchPlaces: RecipeSearchPlace[];
+    preferences: HouseholdPreferences;
+};
+
+export type Household = HouseholdConfig & { id: string };
+
+export type HouseholdColumns = {
+    name: string;
+    fridge_locations: string[];
+    recipe_search_places: RecipeSearchPlace[];
+    household_preferences: HouseholdPreferences;
+};
+
+export type HouseholdConfigWire = {
+    name: string;
+    fridge_locations: string[];
+    recipe_search_places: Array<{
+        name: string;
+        kind: RecipePlaceKind;
+        url: string | null;
+    }>;
+    preferences: {
+        constraints: string[];
+        budget: string | null;
+        shopping_cadence: string | null;
+    };
+};
+
+export type ParseResult<T> =
+    { ok: true; value: T } | { ok: false; error: string };
+
+export type HouseholdPreferencesPatch = {
+    constraints?: string[];
+    budget?: string | null;
+    shoppingCadence?: string | null;
+};
+
+export type HouseholdConfigPatch = {
+    name?: string;
+    fridgeLocations?: string[];
+    recipeSearchPlaces?: RecipeSearchPlace[];
+    preferences?: HouseholdPreferencesPatch;
 };
 
 export type RequireMemberResult =
@@ -57,6 +123,22 @@ export type HouseholdStore = {
     deleteUser(userId: string): void;
 };
 
+function copyHousehold(household: Household): Household {
+    return {
+        id: household.id,
+        name: household.name,
+        fridgeLocations: [...household.fridgeLocations],
+        recipeSearchPlaces: household.recipeSearchPlaces.map((place) => ({
+            ...place,
+        })),
+        preferences: {
+            constraints: [...household.preferences.constraints],
+            budget: household.preferences.budget,
+            shoppingCadence: household.preferences.shoppingCadence,
+        },
+    };
+}
+
 export function createMemoryHouseholdStore(): HouseholdStore {
     const households: Household[] = [];
     const members: HouseholdMember[] = [];
@@ -69,13 +151,7 @@ export function createMemoryHouseholdStore(): HouseholdStore {
             if (households.length > 0) {
                 throw new HouseholdAlreadyExistsError();
             }
-            households.push({
-                id: household.id,
-                name: household.name,
-                fridgeLocations: [...household.fridgeLocations],
-                recipeSearchPlaces: [...household.recipeSearchPlaces],
-                preferences: { ...household.preferences },
-            });
+            households.push(copyHousehold(household));
         },
         getMember(userId) {
             return members.find((member) => member.userId === userId) ?? null;
@@ -201,7 +277,7 @@ export function bootstrapHousehold(
         name,
         fridgeLocations: [],
         recipeSearchPlaces: [],
-        preferences: {},
+        preferences: { ...EMPTY_HOUSEHOLD_PREFERENCES },
     });
     store.insertMember({
         householdId,
@@ -210,4 +286,317 @@ export function bootstrapHousehold(
         displayName,
     });
     return householdId;
+}
+
+export function isRecipePlaceKind(value: string): value is RecipePlaceKind {
+    return (RECIPE_PLACE_KINDS as readonly string[]).includes(value);
+}
+
+function asStringArray(value: unknown): string[] | null {
+    if (!Array.isArray(value)) return null;
+    const items: string[] = [];
+    for (const item of value) {
+        if (typeof item !== "string") return null;
+        items.push(item);
+    }
+    return items;
+}
+
+function optionalText(value: unknown): string | null | undefined {
+    if (value === undefined) return undefined;
+    if (value === null) return null;
+    if (typeof value !== "string") return undefined;
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+}
+
+function parseRecipePlace(value: unknown): ParseResult<RecipeSearchPlace> {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+        return { ok: false, error: "Unknown recipe place kind." };
+    }
+    const record = value as { name?: unknown; kind?: unknown; url?: unknown };
+    if (typeof record.name !== "string" || !record.name.trim()) {
+        return { ok: false, error: "Unknown recipe place kind." };
+    }
+    if (typeof record.kind !== "string" || !isRecipePlaceKind(record.kind)) {
+        return { ok: false, error: "Unknown recipe place kind." };
+    }
+    let url: string | null = null;
+    if (record.url !== undefined && record.url !== null) {
+        if (typeof record.url !== "string") {
+            return { ok: false, error: "Unknown recipe place kind." };
+        }
+        url = record.url.trim() ? record.url.trim() : null;
+    }
+    return {
+        ok: true,
+        value: {
+            name: record.name.trim(),
+            kind: record.kind,
+            url,
+        },
+    };
+}
+
+export function householdConfigFromRow(row: {
+    name: unknown;
+    fridge_locations: unknown;
+    recipe_search_places: unknown;
+    household_preferences: unknown;
+}): ParseResult<HouseholdConfig> {
+    if (typeof row.name !== "string" || !row.name.trim()) {
+        return { ok: false, error: "Enter a household name." };
+    }
+
+    const fridgeLocations = asStringArray(row.fridge_locations);
+    if (!fridgeLocations) {
+        return {
+            ok: false,
+            error: "Fridge locations must be a list of names.",
+        };
+    }
+
+    if (!Array.isArray(row.recipe_search_places)) {
+        return { ok: false, error: "Unknown recipe place kind." };
+    }
+
+    const recipeSearchPlaces: RecipeSearchPlace[] = [];
+    for (const item of row.recipe_search_places) {
+        const parsed = parseRecipePlace(item);
+        if (!parsed.ok) return parsed;
+        recipeSearchPlaces.push(parsed.value);
+    }
+
+    const prefsRaw =
+        row.household_preferences === null ||
+        row.household_preferences === undefined
+            ? {}
+            : row.household_preferences;
+    if (!prefsRaw || typeof prefsRaw !== "object" || Array.isArray(prefsRaw)) {
+        return { ok: false, error: "Household preferences must be an object." };
+    }
+    const prefs = prefsRaw as {
+        constraints?: unknown;
+        budget?: unknown;
+        shoppingCadence?: unknown;
+    };
+    const constraints =
+        prefs.constraints === undefined ? [] : asStringArray(prefs.constraints);
+    if (!constraints) {
+        return { ok: false, error: "Constraints must be a list of names." };
+    }
+    const budget =
+        prefs.budget === undefined ? null : optionalText(prefs.budget);
+    const shoppingCadence =
+        prefs.shoppingCadence === undefined
+            ? null
+            : optionalText(prefs.shoppingCadence);
+    if (budget === undefined || shoppingCadence === undefined) {
+        return {
+            ok: false,
+            error: "Budget and shopping cadence must be text.",
+        };
+    }
+
+    return {
+        ok: true,
+        value: {
+            name: row.name.trim(),
+            fridgeLocations,
+            recipeSearchPlaces,
+            preferences: {
+                constraints,
+                budget,
+                shoppingCadence,
+            },
+        },
+    };
+}
+
+export function householdConfigToColumns(
+    config: HouseholdConfig,
+): HouseholdColumns {
+    return {
+        name: config.name,
+        fridge_locations: config.fridgeLocations,
+        recipe_search_places: config.recipeSearchPlaces,
+        household_preferences: config.preferences,
+    };
+}
+
+export function householdConfigToWire(
+    config: HouseholdConfig,
+): HouseholdConfigWire {
+    return {
+        name: config.name,
+        fridge_locations: config.fridgeLocations,
+        recipe_search_places: config.recipeSearchPlaces.map((place) => ({
+            name: place.name,
+            kind: place.kind,
+            url: place.url,
+        })),
+        preferences: {
+            constraints: config.preferences.constraints,
+            budget: config.preferences.budget,
+            shopping_cadence: config.preferences.shoppingCadence,
+        },
+    };
+}
+
+function parseNameList(value: unknown, error: string): ParseResult<string[]> {
+    if (!Array.isArray(value)) return { ok: false, error };
+    const items: string[] = [];
+    for (const item of value) {
+        if (typeof item !== "string") return { ok: false, error };
+        const trimmed = item.trim();
+        if (trimmed) items.push(trimmed);
+    }
+    return { ok: true, value: items };
+}
+
+export function parseFridgeLocationsInput(
+    value: unknown,
+): ParseResult<string[]> {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+        return {
+            ok: false,
+            error: "Fridge locations must be a list of names.",
+        };
+    }
+    const record = value as { locations?: unknown };
+    return parseNameList(
+        record.locations,
+        "Fridge locations must be a list of names.",
+    );
+}
+
+function parseHouseholdPreferencesPatch(
+    value: unknown,
+): ParseResult<HouseholdPreferencesPatch> {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+        return { ok: false, error: "Household preferences must be an object." };
+    }
+    const prefs = value as {
+        constraints?: unknown;
+        budget?: unknown;
+        shoppingCadence?: unknown;
+        shopping_cadence?: unknown;
+    };
+    const patch: HouseholdPreferencesPatch = {};
+    if (prefs.constraints !== undefined) {
+        const constraints = parseNameList(
+            prefs.constraints,
+            "Constraints must be a list of names.",
+        );
+        if (!constraints.ok) return constraints;
+        patch.constraints = constraints.value;
+    }
+    const budgetRaw = prefs.budget !== undefined ? prefs.budget : undefined;
+    if (budgetRaw !== undefined) {
+        const budget = optionalText(budgetRaw);
+        if (budget === undefined) {
+            return {
+                ok: false,
+                error: "Budget and shopping cadence must be text.",
+            };
+        }
+        patch.budget = budget;
+    }
+    const cadenceRaw =
+        prefs.shoppingCadence !== undefined
+            ? prefs.shoppingCadence
+            : prefs.shopping_cadence;
+    if (cadenceRaw !== undefined) {
+        const shoppingCadence = optionalText(cadenceRaw);
+        if (shoppingCadence === undefined) {
+            return {
+                ok: false,
+                error: "Budget and shopping cadence must be text.",
+            };
+        }
+        patch.shoppingCadence = shoppingCadence;
+    }
+    return { ok: true, value: patch };
+}
+
+export function parseHouseholdConfigPatch(
+    value: unknown,
+): ParseResult<HouseholdConfigPatch> {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+        return { ok: false, error: "Household config must be an object." };
+    }
+    const record = value as {
+        name?: unknown;
+        fridgeLocations?: unknown;
+        fridge_locations?: unknown;
+        recipeSearchPlaces?: unknown;
+        recipe_search_places?: unknown;
+        preferences?: unknown;
+    };
+    const patch: HouseholdConfigPatch = {};
+    if (record.name !== undefined) {
+        if (typeof record.name !== "string" || !record.name.trim()) {
+            return { ok: false, error: "Enter a household name." };
+        }
+        patch.name = record.name.trim();
+    }
+    const fridgeRaw =
+        record.fridgeLocations !== undefined
+            ? record.fridgeLocations
+            : record.fridge_locations;
+    if (fridgeRaw !== undefined) {
+        const fridgeLocations = parseNameList(
+            fridgeRaw,
+            "Fridge locations must be a list of names.",
+        );
+        if (!fridgeLocations.ok) return fridgeLocations;
+        patch.fridgeLocations = fridgeLocations.value;
+    }
+    const placesRaw =
+        record.recipeSearchPlaces !== undefined
+            ? record.recipeSearchPlaces
+            : record.recipe_search_places;
+    if (placesRaw !== undefined) {
+        if (!Array.isArray(placesRaw)) {
+            return { ok: false, error: "Unknown recipe place kind." };
+        }
+        const recipeSearchPlaces: RecipeSearchPlace[] = [];
+        for (const item of placesRaw) {
+            const parsed = parseRecipePlace(item);
+            if (!parsed.ok) return parsed;
+            recipeSearchPlaces.push(parsed.value);
+        }
+        patch.recipeSearchPlaces = recipeSearchPlaces;
+    }
+    if (record.preferences !== undefined) {
+        const preferences = parseHouseholdPreferencesPatch(record.preferences);
+        if (!preferences.ok) return preferences;
+        patch.preferences = preferences.value;
+    }
+    return { ok: true, value: patch };
+}
+
+export function mergeHouseholdConfig(
+    current: HouseholdConfig,
+    patch: HouseholdConfigPatch,
+): HouseholdConfig {
+    return {
+        name: patch.name ?? current.name,
+        fridgeLocations: patch.fridgeLocations ?? current.fridgeLocations,
+        recipeSearchPlaces:
+            patch.recipeSearchPlaces ?? current.recipeSearchPlaces,
+        preferences: {
+            constraints:
+                patch.preferences?.constraints ??
+                current.preferences.constraints,
+            budget:
+                patch.preferences?.budget !== undefined
+                    ? patch.preferences.budget
+                    : current.preferences.budget,
+            shoppingCadence:
+                patch.preferences?.shoppingCadence !== undefined
+                    ? patch.preferences.shoppingCadence
+                    : current.preferences.shoppingCadence,
+        },
+    };
 }

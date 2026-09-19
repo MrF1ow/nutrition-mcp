@@ -20,17 +20,17 @@ import type { ToolsDoc } from "./tools.js";
 
 export const TOOLS_JA: ToolsDoc = {
     meta: {
-        title: "ツールリファレンス：38個の全ツール",
+        title: "ツールリファレンス：41個の全ツール",
         description:
-            "Nutrition MCPサーバーがあなたのAIに提供する38個すべてのツール — 食事の記録、バーコードのスキャン、他のアプリからの履歴インポート、水分と体重の記録、目標の設定、トレンドの確認。説明と例文つきの完全なリファレンスです。",
+            "Nutrition MCPサーバーがあなたのAIに提供する41個すべてのツール — 食事の記録、バーコードのスキャン、他のアプリからの履歴インポート、水分と体重の記録、目標の設定、トレンドの確認。説明と例文つきの完全なリファレンスです。",
         ogDescription:
-            "Nutrition MCPサーバーがあなたのAIに提供する38個のツール。他のアプリからの履歴用CSVインポーターを含み、説明と例文つき。",
+            "Nutrition MCPサーバーがあなたのAIに提供する41個のツール。他のアプリからの履歴用CSVインポーターを含み、説明と例文つき。",
     },
     hero: {
         eyebrow: "リファレンス",
         title: "あなたのAIができること、すべて",
         lead: "これらのツールを直接呼び出すことはありません — ただ話しかけるだけで、アシスタントが適切なツールを選びます。Nutrition MCPサーバーが公開する全ツールと、それぞれの機能、呼び出すきっかけとなるフレーズをまとめました。",
-        countBold: "38個のツール",
+        countBold: "41個のツール",
         countTail: "7つの分野にわたる",
     },
     categories: {
@@ -419,6 +419,33 @@ export const TOOLS_JA: ToolsDoc = {
                 "世帯ボット用の新しいトークンを発行します。平文は一度だけ表示され、保存されるのはSHA-256ハッシュだけです。世帯の誰でもローテートできます。世帯PAT自身がローテートすると、そのPATは使えなくなります。",
             params: {},
             example: "世帯ボットのトークンをローテートして",
+        },
+        get_household_config: {
+            description:
+                "世帯名、冷蔵庫の場所、レシピ検索先、共有の好みを読みます。世帯ボットトークンとどのメンバーでも呼べます。書き込みは世帯単位で、user_id 単位ではありません。",
+            params: {},
+            example: "世帯の設定を見せて",
+        },
+        update_household_config: {
+            description:
+                "世帯名、冷蔵庫の場所、レシピ検索先、共有の好みをマージします。場所はラベルだけで、レシピテーブルではありません。世帯ボットトークンとどのメンバーでも呼べます。",
+            params: {
+                name: "新しい世帯名",
+                fridge_locations: "冷蔵庫・冷凍庫の場所の置き換えリスト",
+                recipe_search_places:
+                    "場所の置き換えリスト。それぞれ name と kind（<code>grocery</code>、<code>recipe_site</code>、<code>meal_kit</code>、<code>other</code>）",
+                preferences:
+                    "共有の制約、予算、買い物のリズム。省略したフィールドはそのまま。",
+            },
+            example: "Costco を grocery の検索先に追加して",
+        },
+        update_fridge_locations: {
+            description:
+                "世帯の冷蔵庫・冷凍庫の場所リストを置き換えます。世帯ボットトークンとどのメンバーでも呼べます。",
+            params: {
+                locations: "残す場所名の完全なリスト",
+            },
+            example: "冷蔵庫の場所を冷蔵庫とガレージの冷凍庫にして",
         },
         delete_account: {
             description:
