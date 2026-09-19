@@ -22,6 +22,7 @@ import {
 } from "./routes.js";
 import { LOGIN_ERRORS, type LoginErrors } from "./copy/login.js";
 import { chromeFor } from "./copy/chrome.js";
+import { mintSiteSession, siteCookieHeader } from "./site-session.js";
 
 const SESSION_TTL_MS = 10 * 60 * 1000;
 
@@ -38,6 +39,9 @@ interface OAuthSession {
     // re-render of this same flow (a password or Google-sign-in failure)
     // so an error doesn't silently snap the page back to English.
     locale: SiteLocale;
+    // mcp (default): 302 to the MCP client's redirect_uri with an auth code.
+    // site: set the household dashboard cookie and send the browser to /.
+    purpose?: "mcp" | "site";
 }
 
 // In-memory session store (sessions are short-lived, 10min TTL)
@@ -95,6 +99,9 @@ async function availableLoginLocales(): Promise<SiteLocale[]> {
 // into a URL, so a field added to OAuthSession later doesn't get forgotten
 // in a second, drifting copy of this logic.
 function authorizeUrl(session: OAuthSession, locale: SiteLocale): string {
+    if (session.purpose === "site") {
+        return locale === "en" ? "/" : `/?locale=${locale}`;
+    }
     const params = new URLSearchParams({
         response_type: "code",
         client_id: session.clientId,
@@ -200,6 +207,17 @@ async function finishAuthorization(
     userId: string,
 ): Promise<Response> {
     sessions.delete(sessionId);
+
+    if (session.purpose === "site") {
+        const secure =
+            getBaseUrl(c).startsWith("https://") ||
+            c.req.header("x-forwarded-proto") === "https";
+        c.header(
+            "Set-Cookie",
+            siteCookieHeader(mintSiteSession(userId), secure),
+        );
+        return c.redirect("/");
+    }
 
     const authCode = crypto.randomUUID();
     await storeAuthCode(
@@ -309,6 +327,7 @@ export function createOAuthRouter() {
             codeChallenge,
             clientId: reqClientId,
             locale,
+            purpose: "mcp",
         };
         sessions.set(sessionId, {
             session,
@@ -592,4 +611,30 @@ export function createOAuthRouter() {
     });
 
     return oauth;
+}
+
+export async function beginSiteLogin(
+    c: Context,
+    localeQuery: string | undefined,
+    error?: string,
+): Promise<Response> {
+    const available = await availableLoginLocales();
+    const requested = localeQuery?.toLowerCase();
+    const locale: SiteLocale = available.find((l) => l === requested) ?? "en";
+    const sessionId = crypto.randomUUID();
+    const session: OAuthSession = {
+        state: "site",
+        redirectUri: "/",
+        clientId: process.env.OAUTH_CLIENT_ID ?? "site",
+        locale,
+        purpose: "site",
+    };
+    sessions.set(sessionId, {
+        session,
+        expiresAt: Date.now() + SESSION_TTL_MS,
+    });
+    return c.html(
+        await renderLoginPage(sessionId, session, error),
+        error ? 400 : 200,
+    );
 }
