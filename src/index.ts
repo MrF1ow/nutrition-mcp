@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { bodyLimit } from "hono/body-limit";
-import { createOAuthRouter } from "./oauth.js";
+import { createOAuthRouter, beginSiteLogin } from "./oauth.js";
 import {
     authenticateBearer,
     rateLimit,
@@ -12,6 +12,12 @@ import { startExportCleanup } from "./export.js";
 import { registerDiscoveryRoutes } from "./discovery.js";
 import { maskIp } from "./net.js";
 import { warmWidgets } from "./widgets.js";
+import { renderDashboardPage } from "./dashboard.js";
+import {
+    clearSiteCookieHeader,
+    readSiteSession,
+    SITE_COOKIE,
+} from "./site-session.js";
 
 const app = new Hono();
 
@@ -191,6 +197,30 @@ app.all(
     rateLimit,
     handleMcp,
 );
+
+function siteUserId(cookieHeader: string | undefined): string | null {
+    if (!cookieHeader) return null;
+    const match = cookieHeader.match(
+        new RegExp(`(?:^|;\\s*)${SITE_COOKIE}=([^;]+)`),
+    );
+    if (!match?.[1]) return null;
+    return readSiteSession(decodeURIComponent(match[1]));
+}
+
+app.get("/", async (c) => {
+    const userId = siteUserId(c.req.header("cookie"));
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    const page = await renderDashboardPage(userId, c.req.query("member"));
+    return c.html(page.html, page.status);
+});
+
+app.get("/logout", (c) => {
+    const secure =
+        c.req.header("x-forwarded-proto") === "https" ||
+        new URL(c.req.url).protocol === "https:";
+    c.header("Set-Cookie", clearSiteCookieHeader(secure));
+    return c.redirect("/");
+});
 
 // Login assets. Marketing HTML, sitemap, llms.txt, and landing APIs are
 // gone; leftover files on disk must not become routes (a registered path

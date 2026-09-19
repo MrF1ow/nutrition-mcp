@@ -28,6 +28,7 @@ function fakeSession(locale: "en" | "de" = "en") {
         redirectUri: "https://client.example/callback",
         clientId: "test-client-id",
         locale,
+        purpose: "mcp" as const,
     };
 }
 
@@ -85,6 +86,18 @@ test("renderLoginPage substitutes {{TRANSLATION_NOTICE}}: present in translated 
     expect(de).toContain('href="/authorize?response_type=code');
     expect(de).toContain("state=state-xyz");
     expect(de).not.toContain('href="/"');
+});
+
+test("site-purpose login switcher returns to / not /authorize", async () => {
+    const html = await renderLoginPage("s1", {
+        ...fakeSession(),
+        purpose: "site",
+        redirectUri: "/",
+        state: "site",
+    });
+    expect(html).toContain('href="/"');
+    expect(html).toContain("/?locale=");
+    expect(html).not.toContain("response_type=code");
 });
 
 test("renderLoginPage serves the requested locale's template when it exists", async () => {

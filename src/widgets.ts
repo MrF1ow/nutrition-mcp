@@ -153,6 +153,11 @@ export async function getWidgetHtml(key: string): Promise<string> {
     return html;
 }
 
+export function withWidgetData(html: string, data: unknown): string {
+    const json = JSON.stringify(data).replace(/</g, "\\u003c");
+    return html.replace("<script>", `<script>window.__WIDGET_DATA__=${json};`);
+}
+
 // Assemble every widget once so a broken partial/marker fails fast at startup
 // rather than on a client's first tool call.
 export async function warmWidgets(): Promise<void> {

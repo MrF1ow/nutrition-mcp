@@ -8,6 +8,7 @@ import {
     requireMember,
     requireMemberOfHousehold,
     resolveActorUserId,
+    dashboardAccess,
     type Household,
     type HouseholdMember,
 } from "./household.js";
@@ -198,6 +199,36 @@ test("OAuth with a different user_id is a mismatch, not sudo", () => {
     });
 });
 
+test("OAuth write intent targeting a peer is still a mismatch", () => {
+    expect(
+        resolveActorUserId({ kind: "user", userId: alice }, bob, "write"),
+    ).toEqual({
+        ok: false,
+        error: "oauth_mismatch",
+    });
+});
+
+test("OAuth read intent targeting a peer is a household peer read", () => {
+    expect(
+        resolveActorUserId({ kind: "user", userId: alice }, bob, "read"),
+    ).toEqual({
+        ok: true,
+        userId: bob,
+        membership: "peer",
+        viewerUserId: alice,
+    });
+});
+
+test("OAuth read intent without user_id is still self", () => {
+    expect(
+        resolveActorUserId({ kind: "user", userId: alice }, undefined, "read"),
+    ).toEqual({
+        ok: true,
+        userId: alice,
+        membership: "not_required",
+    });
+});
+
 test("household PAT without user_id is missing a target", () => {
     expect(
         resolveActorUserId(
@@ -207,6 +238,68 @@ test("household PAT without user_id is missing a target", () => {
     ).toEqual({
         ok: false,
         error: "missing_target",
+    });
+});
+
+test("dashboardAccess treats a missing viewer as not a member", () => {
+    expect(dashboardAccess(null, null)).toEqual({
+        ok: false,
+        error: "not_a_member",
+    });
+});
+
+test("dashboardAccess with no subject is self", () => {
+    const aliceMember: HouseholdMember = {
+        householdId: "hh-1",
+        userId: alice,
+        role: "owner",
+        displayName: "Alice",
+    };
+    expect(dashboardAccess(aliceMember, null)).toEqual({
+        ok: true,
+        mode: "self",
+        viewer: aliceMember,
+        subject: aliceMember,
+    });
+});
+
+test("dashboardAccess allows a same-household peer as read-only", () => {
+    const aliceMember: HouseholdMember = {
+        householdId: "hh-1",
+        userId: alice,
+        role: "owner",
+        displayName: "Alice",
+    };
+    const bobMember: HouseholdMember = {
+        householdId: "hh-1",
+        userId: bob,
+        role: "member",
+        displayName: "Bob",
+    };
+    expect(dashboardAccess(aliceMember, bobMember)).toEqual({
+        ok: true,
+        mode: "peer",
+        viewer: aliceMember,
+        subject: bobMember,
+    });
+});
+
+test("dashboardAccess rejects a member of another household", () => {
+    const aliceMember: HouseholdMember = {
+        householdId: "hh-1",
+        userId: alice,
+        role: "owner",
+        displayName: "Alice",
+    };
+    const outsider: HouseholdMember = {
+        householdId: "hh-2",
+        userId: carol,
+        role: "member",
+        displayName: "Out",
+    };
+    expect(dashboardAccess(aliceMember, outsider)).toEqual({
+        ok: false,
+        error: "not_a_peer",
     });
 });
 

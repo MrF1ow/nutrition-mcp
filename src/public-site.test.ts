@@ -1,5 +1,6 @@
 import { test, expect, describe } from "bun:test";
 import { SITE_LOCALES } from "./routes.js";
+import { SITE_COOKIE } from "./site-session.js";
 
 // index.ts calls createOAuthRouter() at module scope, which throws without
 // OAuth env. Same dance as src/index.test.ts: set defaults before the
@@ -18,7 +19,6 @@ const MARKETING_GENERATORS = [
 ] as const;
 
 const MARKETING_PATHS = [
-    "/",
     "/tools",
     "/privacy",
     "/terms",
@@ -64,11 +64,39 @@ describe("marketing HTTP is gone", () => {
         }
     });
 
-    test("GET / is 404, not HTML and not a send-to-login", async () => {
+    test("GET / without a session is login HTML, not marketing and not /authorize", async () => {
         const r = await app.request("http://x/");
-        expect(r.status).toBe(404);
+        expect(r.status).toBe(200);
         expect(r.headers.get("location")).toBeNull();
-        expect(await r.text()).not.toMatch(/<!doctype html/i);
+        const body = await r.text();
+        expect(body).toMatch(/<!doctype html/i);
+        expect(body).toContain('action="/approve"');
+        expect(body).not.toContain("MCP Tools");
+        expect(r.headers.get("location")).toBeNull();
+        expect(body).toContain('href="/"');
+        expect(body).toContain("/?locale=");
+        expect(body).not.toContain("response_type=code");
+    });
+
+    test("GET / with a bad site cookie is still login HTML", async () => {
+        const r = await app.request("http://x/", {
+            headers: { cookie: `${SITE_COOKIE}=not-a-session` },
+        });
+        expect(r.status).toBe(200);
+        const body = await r.text();
+        expect(body).toContain('action="/approve"');
+        expect(body).not.toContain("widget-frame");
+    });
+});
+
+describe("site session HTTP", () => {
+    test("GET /logout clears the site cookie and returns to /", async () => {
+        const r = await app.request("http://x/logout");
+        expect(r.status).toBe(302);
+        expect(r.headers.get("location")).toBe("/");
+        const cookie = r.headers.get("set-cookie") ?? "";
+        expect(cookie).toContain(`${SITE_COOKIE}=`);
+        expect(cookie).toContain("Max-Age=0");
     });
 });
 

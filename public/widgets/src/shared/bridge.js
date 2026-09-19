@@ -94,6 +94,7 @@ function initWidget(config) {
     // Spec: MCP Apps 2026-01-26.
     const host =
         window.parent && window.parent !== window ? window.parent : null;
+    const seeded = window.__WIDGET_DATA__;
 
     // One id space for every outbound request, and one pending map keyed by it.
     // Routing by pending id BEFORE anything else matters: a tools/call response
@@ -324,7 +325,15 @@ function initWidget(config) {
         show(d.structuredContent || d);
     });
 
-    if (host) {
+    if (seeded) {
+        paint(seeded);
+        if (typeof config.onReady === "function") {
+            try {
+                config.onReady(api);
+            } catch (_) {}
+        }
+        sendSize();
+    } else if (host) {
         // Brief loading state until the host delivers the tool result.
         root().innerHTML = config.loading;
 
