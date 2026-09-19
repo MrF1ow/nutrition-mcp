@@ -2,6 +2,7 @@ import { test, expect } from "bun:test";
 import {
     EMPTY_HOUSEHOLD_PREFERENCES,
     householdConfigFromRow,
+    householdConfigToColumns,
     mergeHouseholdConfig,
     parseFridgeLocationsInput,
     parseHouseholdConfigPatch,
@@ -77,5 +78,23 @@ test("a missing preferences object on a row becomes empty preferences", () => {
             recipeSearchPlaces: [],
             preferences: EMPTY_HOUSEHOLD_PREFERENCES,
         },
+    });
+});
+
+test("toColumns then fromRow returns the same config", () => {
+    const parsed = householdConfigFromRow(householdConfigToColumns(current));
+    expect(parsed).toEqual({ ok: true, value: current });
+});
+
+test("fromRow rejects a donor type place instead of mapping it", () => {
+    const parsed = householdConfigFromRow({
+        name: "Home",
+        fridge_locations: [],
+        recipe_search_places: [{ name: "Costco", type: "grocery" }],
+        household_preferences: {},
+    });
+    expect(parsed).toEqual({
+        ok: false,
+        error: "Unknown recipe place kind.",
     });
 });
