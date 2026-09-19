@@ -34,14 +34,12 @@ interface OAuthSession {
     // Raw nonce for an in-flight Google sign-in; the hashed form is sent to
     // Google and the raw value is handed to signInWithIdToken on callback.
     googleNonce?: string;
-    // Chosen once when the session is created (or via the switcher, which
-    // re-enters /authorize — see authorizeUrl) and reused for every
-    // re-render of this same flow (a password or Google-sign-in failure)
-    // so an error doesn't silently snap the page back to English.
+    // Chosen once when the session is created (or via the switcher) and
+    // reused for every re-render of this same flow (a password or
+    // Google-sign-in failure) so an error doesn't silently snap the page
+    // back to English.
     locale: SiteLocale;
-    // mcp (default): 302 to the MCP client's redirect_uri with an auth code.
-    // site: set the household dashboard cookie and send the browser to /.
-    purpose?: "mcp" | "site";
+    purpose: "mcp" | "site";
 }
 
 // In-memory session store (sessions are short-lived, 10min TTL)
@@ -90,14 +88,6 @@ async function availableLoginLocales(): Promise<SiteLocale[]> {
     return checks.filter((l): l is SiteLocale => l !== null);
 }
 
-// Reconstructs the /authorize URL that started this session, in a given
-// locale, from the session's own stored fields — used both to re-enter the
-// flow from the language switcher (a fresh GET /authorize mints a new
-// session, which is fine: nothing has been submitted yet at the point
-// someone is choosing a language) and nowhere else. Not exported: this is
-// deliberately the *only* place a session's fields get serialized back
-// into a URL, so a field added to OAuthSession later doesn't get forgotten
-// in a second, drifting copy of this logic.
 function authorizeUrl(session: OAuthSession, locale: SiteLocale): string {
     if (session.purpose === "site") {
         return locale === "en" ? "/" : `/?locale=${locale}`;
@@ -197,9 +187,6 @@ export async function renderLoginPage(
         );
 }
 
-// Mint an authorization code for the now-authenticated user and redirect back to
-// the MCP client. Shared by the password (/approve) and Google callback paths so
-// the two can't drift. Consumes the session.
 async function finishAuthorization(
     c: Context,
     sessionId: string,
