@@ -216,6 +216,8 @@ export function requireMemberOfHousehold(
 
 export type ResolveActorError = "missing_target" | "oauth_mismatch";
 
+export type ActorIntent = "read" | "write";
+
 export type ResolveActorResult =
     | { ok: true; userId: string; membership: "not_required" }
     | {
@@ -224,20 +226,35 @@ export type ResolveActorResult =
           membership: "required";
           householdId: string;
       }
+    | {
+          ok: true;
+          userId: string;
+          membership: "peer";
+          viewerUserId: string;
+      }
     | { ok: false; error: ResolveActorError };
 
 export function resolveActorUserId(
     auth: AuthContext,
     requestedUserId: string | undefined,
+    intent: ActorIntent = "write",
 ): ResolveActorResult {
     if (auth.kind === "user") {
-        if (requestedUserId != null && requestedUserId !== auth.userId) {
+        if (requestedUserId == null || requestedUserId === auth.userId) {
+            return {
+                ok: true,
+                userId: auth.userId,
+                membership: "not_required",
+            };
+        }
+        if (intent === "write") {
             return { ok: false, error: "oauth_mismatch" };
         }
         return {
             ok: true,
-            userId: auth.userId,
-            membership: "not_required",
+            userId: requestedUserId,
+            membership: "peer",
+            viewerUserId: auth.userId,
         };
     }
     if (requestedUserId == null) {
@@ -249,6 +266,29 @@ export function resolveActorUserId(
         membership: "required",
         householdId: auth.householdId,
     };
+}
+
+export type DashboardAccess =
+    | {
+          ok: true;
+          mode: "self" | "peer";
+          viewer: HouseholdMember;
+          subject: HouseholdMember;
+      }
+    | { ok: false; error: "not_a_member" | "not_a_peer" };
+
+export function dashboardAccess(
+    viewer: HouseholdMember | null,
+    subject: HouseholdMember | null,
+): DashboardAccess {
+    if (viewer == null) return { ok: false, error: "not_a_member" };
+    if (subject == null || subject.userId === viewer.userId) {
+        return { ok: true, mode: "self", viewer, subject: viewer };
+    }
+    if (subject.householdId !== viewer.householdId) {
+        return { ok: false, error: "not_a_peer" };
+    }
+    return { ok: true, mode: "peer", viewer, subject };
 }
 
 export function bootstrapHousehold(

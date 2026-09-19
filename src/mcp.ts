@@ -25,6 +25,7 @@ import {
     parseFridgeLocationsInput,
     parseHouseholdConfigPatch,
     parseMemberInput,
+    type ActorIntent,
 } from "./household.js";
 import {
     generateHouseholdToken,
@@ -1367,11 +1368,16 @@ export function registerTools(
                   .string()
                   .min(1)
                   .optional()
-                  .describe("Must equal the signed-in user if set.");
+                  .describe(
+                      "Household member to read. Writes still require this to match the signed-in user.",
+                  );
     const personSchema = <T extends z.ZodRawShape>(shape: T) =>
         z.object({ ...shape, user_id: userIdArg });
-    async function actorUserId(requested: string | undefined): Promise<string> {
-        const resolved = resolveActorUserId(auth, requested);
+    async function actorUserId(
+        requested: string | undefined,
+        intent: ActorIntent = "write",
+    ): Promise<string> {
+        const resolved = resolveActorUserId(auth, requested, intent);
         if (!resolved.ok) {
             throw new Error(
                 resolved.error === "oauth_mismatch"
@@ -1389,6 +1395,17 @@ export function registerTools(
                 resolved.householdId,
             );
             if (!check.ok) {
+                throw new Error("not a household member");
+            }
+        }
+        if (resolved.membership === "peer") {
+            const viewer = await getHouseholdMembership(resolved.viewerUserId);
+            const subject = await getHouseholdMembership(resolved.userId);
+            if (
+                viewer == null ||
+                subject == null ||
+                viewer.householdId !== subject.householdId
+            ) {
                 throw new Error("not a household member");
             }
         }
@@ -1966,7 +1983,7 @@ export function registerTools(
             return withAnalytics(
                 "get_meals_today",
                 async () => {
-                    const userId = await actorUserId(args.user_id);
+                    const userId = await actorUserId(args.user_id, "read");
                     const tz = await getUserTimezone(userId);
                     const meals = await getMealsByDate(
                         userId,
@@ -2012,7 +2029,7 @@ export function registerTools(
             return withAnalytics(
                 "get_meals_by_date",
                 async () => {
-                    const userId = await actorUserId(user_id);
+                    const userId = await actorUserId(user_id, "read");
                     const tz = await getUserTimezone(userId);
                     const meals = await getMealsByDate(userId, date, tz);
                     if (meals.length === 0) {
@@ -2057,7 +2074,7 @@ export function registerTools(
             return withAnalytics(
                 "get_meals_by_date_range",
                 async () => {
-                    const userId = await actorUserId(user_id);
+                    const userId = await actorUserId(user_id, "read");
                     const tz = await getUserTimezone(userId);
                     const meals = await getMealsInRange(
                         userId,
@@ -2151,7 +2168,7 @@ export function registerTools(
             return withAnalytics(
                 "search_meals",
                 async () => {
-                    const userId = await actorUserId(user_id);
+                    const userId = await actorUserId(user_id, "read");
                     const tz = await getUserTimezone(userId);
                     const windowDays = days ?? 365;
                     // A fuzzy lookback window needs no calendar-day precision,
@@ -2389,7 +2406,7 @@ export function registerTools(
             return withAnalytics(
                 "get_nutrition_summary",
                 async () => {
-                    const userId = await actorUserId(user_id);
+                    const userId = await actorUserId(user_id, "read");
                     // Sized with insights.ts's own arithmetic (the function
                     // buildDailyBuckets lays its buckets out with), so the two
                     // tools cannot disagree about how long a window is. Clamped
@@ -2793,7 +2810,7 @@ export function registerTools(
             return withAnalytics(
                 "get_nutrition_goals",
                 async () => {
-                    const userId = await actorUserId(args.user_id);
+                    const userId = await actorUserId(args.user_id, "read");
                     const [goals, unit] = await Promise.all([
                         getNutritionGoals(userId),
                         getPreferredWeightUnit(userId),
@@ -2858,7 +2875,7 @@ export function registerTools(
             return withAnalytics(
                 "get_goal_progress",
                 async () => {
-                    const userId = await actorUserId(user_id);
+                    const userId = await actorUserId(user_id, "read");
                     const profile = await getProfile(userId);
                     const tz = timezoneFromProfile(profile) ?? "UTC";
                     const targetDate = date ?? todayInTz(tz);
@@ -3197,7 +3214,7 @@ export function registerTools(
             return withAnalytics(
                 "get_water_today",
                 async () => {
-                    const userId = await actorUserId(args.user_id);
+                    const userId = await actorUserId(args.user_id, "read");
                     const tz = await getUserTimezone(userId);
                     const entries = await getWaterByDate(
                         userId,
@@ -3253,7 +3270,7 @@ export function registerTools(
             return withAnalytics(
                 "get_water_by_date",
                 async () => {
-                    const userId = await actorUserId(user_id);
+                    const userId = await actorUserId(user_id, "read");
                     const tz = await getUserTimezone(userId);
                     const entries = await getWaterByDate(userId, date, tz);
                     if (entries.length === 0) {
@@ -3426,7 +3443,7 @@ export function registerTools(
             return withAnalytics(
                 "get_weight_today",
                 async () => {
-                    const userId = await actorUserId(args.user_id);
+                    const userId = await actorUserId(args.user_id, "read");
                     const [tz, weightPref] = await Promise.all([
                         getUserTimezone(userId),
                         getPreferredWeightUnit(userId),
@@ -3484,7 +3501,7 @@ export function registerTools(
             return withAnalytics(
                 "get_weight_by_date",
                 async () => {
-                    const userId = await actorUserId(user_id);
+                    const userId = await actorUserId(user_id, "read");
                     const [tz, weightPref] = await Promise.all([
                         getUserTimezone(userId),
                         getPreferredWeightUnit(userId),
@@ -3540,7 +3557,7 @@ export function registerTools(
             return withAnalytics(
                 "get_weight_by_date_range",
                 async () => {
-                    const userId = await actorUserId(user_id);
+                    const userId = await actorUserId(user_id, "read");
                     const [tz, weightPref] = await Promise.all([
                         getUserTimezone(userId),
                         getPreferredWeightUnit(userId),
@@ -3653,7 +3670,7 @@ export function registerTools(
             return withAnalytics(
                 "get_weight_trends",
                 async () => {
-                    const userId = await actorUserId(user_id);
+                    const userId = await actorUserId(user_id, "read");
                     const profile = await getProfile(userId);
                     const tz = timezoneFromProfile(profile) ?? "UTC";
                     const unit =
@@ -4071,7 +4088,7 @@ export function registerTools(
             return withAnalytics(
                 "get_trends",
                 async () => {
-                    const userId = await actorUserId(user_id);
+                    const userId = await actorUserId(user_id, "read");
                     const profile = await getProfile(userId);
                     const tz = timezoneFromProfile(profile) ?? "UTC";
                     const locale = localeFromProfile(profile) ?? "en";
@@ -4170,7 +4187,7 @@ export function registerTools(
             return withAnalytics(
                 "get_meal_patterns",
                 async () => {
-                    const userId = await actorUserId(user_id);
+                    const userId = await actorUserId(user_id, "read");
                     const tz = await getUserTimezone(userId);
                     const endDate = end_date ?? todayInTz(tz);
                     const windowDays = days ?? 30;
@@ -4321,7 +4338,7 @@ export function registerTools(
             return withAnalytics(
                 "get_profile",
                 async () => {
-                    const userId = await actorUserId(args.user_id);
+                    const userId = await actorUserId(args.user_id, "read");
                     const profile = await getProfile(userId);
                     const tz = timezoneFromProfile(profile);
                     const locale = localeFromProfile(profile);
@@ -4477,7 +4494,7 @@ export function registerTools(
             return withAnalytics(
                 "get_current_time",
                 async () => {
-                    const userId = await actorUserId(args.user_id);
+                    const userId = await actorUserId(args.user_id, "read");
                     const configuredTz = timezoneFromProfile(
                         await getProfile(userId),
                     );
