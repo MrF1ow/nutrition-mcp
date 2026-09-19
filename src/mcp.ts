@@ -4595,8 +4595,7 @@ async function buildMcpServer(
     // derivations are the pure halves, exported for exactly this. Alcohol
     // resolves to a drink unit only when tracking is on — null is what every
     // display path treats as "this user does not track alcohol" (storage is
-    // never affected). Household PAT has no person, so the profile-derived
-    // defaults apply (widgets on, alcohol hidden).
+    // never affected).
     const profile = auth.kind === "user" ? await getProfile(auth.userId) : null;
     const drinkUnit = preferredDrinkUnitFromProfile(profile);
 
@@ -4640,11 +4639,6 @@ const IDENTITY_ONLY_METHODS = new Set([
 // backs both eras, so the tool surface cannot drift between them. Nothing is
 // kept in-process between requests on either leg, which is what keeps deploys
 // invisible to clients — there is no session to lose.
-//
-// The factory has no Hono context: auth arrives through the `authInfo`
-// pass-through (`extra.authKind` plus `extra.userId` or `extra.householdId`,
-// set in handleMcp from the bearer middleware's verdict) and the public origin
-// comes from the raw request.
 // Observability only, and the instrument that makes retiring the legacy leg a
 // measurable decision rather than a guess. The negotiated era is decided inside
 // the SDK and surfaces in exactly one place — `ctx.era` on the factory context —
@@ -4664,27 +4658,31 @@ export type McpEraTrace = {
     server?: McpServer;
 };
 
+function isAuthContext(value: unknown): value is AuthContext {
+    if (value === null || typeof value !== "object") return false;
+    const rec = value as Record<string, unknown>;
+    if (
+        rec.kind === "household" &&
+        typeof rec.householdId === "string" &&
+        rec.householdId.length > 0
+    ) {
+        return true;
+    }
+    if (
+        rec.kind === "user" &&
+        typeof rec.userId === "string" &&
+        rec.userId.length > 0
+    ) {
+        return true;
+    }
+    return false;
+}
+
 function authFromExtra(
     extra: Record<string, unknown> | undefined,
 ): AuthContext | null {
-    const authKind = extra?.authKind;
-    const householdId = extra?.householdId;
-    const userId = extra?.userId;
-    if (
-        authKind === "household" &&
-        typeof householdId === "string" &&
-        householdId.length > 0
-    ) {
-        return { kind: "household", householdId };
-    }
-    if (
-        authKind === "user" &&
-        typeof userId === "string" &&
-        userId.length > 0
-    ) {
-        return { kind: "user", userId };
-    }
-    return null;
+    const auth = extra?.auth;
+    return isAuthContext(auth) ? auth : null;
 }
 
 const mcpHandler = createMcpHandler(
@@ -4696,9 +4694,6 @@ const mcpHandler = createMcpHandler(
             ctx.authInfo?.extra as Record<string, unknown> | undefined,
         );
         if (!auth) {
-            // handleMcp always sets authKind; reaching here means the /mcp
-            // route was wired without authenticateBearer, which must fail
-            // loudly rather than serve an anonymous server.
             throw new Error("mcp: request reached the handler without auth");
         }
         // requestInfo is set on both HTTP legs; the fallback only covers a
@@ -4807,14 +4802,12 @@ export const handleMcp = async (c: Context) => {
     }
 
     // The handler never derives auth from headers: authInfo is pass-through,
-    // and the only consumer is our own factory above. extra.authKind plus
-    // extra.userId / extra.householdId are the carriers. The factory must not
-    // assume userId is a string, because a household PAT has none. clientId is
-    // left blank on purpose: it is an OAuth field the SDK documents as "the
-    // client ID associated with this token", not an app-identity slot.
-    // Nothing on the serve path reads it. The real bearer token is deliberately
-    // NOT forwarded either — nothing downstream needs it, and keeping it out of
-    // the SDK's context means no handler or error path can echo it.
+    // and the only consumer is our own factory above. clientId is left blank
+    // on purpose: it is an OAuth field the SDK documents as "the client ID
+    // associated with this token", not an app-identity slot. Nothing on the
+    // serve path reads it. The real bearer token is deliberately NOT forwarded
+    // either — nothing downstream needs it, and keeping it out of the SDK's
+    // context means no handler or error path can echo it.
     const trace: McpEraTrace = {};
     const response = await mcpHandler.fetch(c.req.raw, {
         authInfo: {
@@ -4822,10 +4815,7 @@ export const handleMcp = async (c: Context) => {
             clientId: "",
             scopes: [],
             extra: {
-                authKind: auth.kind,
-                userId: auth.kind === "user" ? auth.userId : undefined,
-                householdId:
-                    auth.kind === "household" ? auth.householdId : undefined,
+                auth,
                 trace,
             },
         },

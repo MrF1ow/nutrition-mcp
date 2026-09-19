@@ -26,7 +26,7 @@ let tokenLookups = 0;
 let supabaseAvailable = true;
 mock.module("./supabase.js", () => ({
     ...actualSupabase,
-    getUserIdByToken: async (token: string) => {
+    lookupBearer: async (token: string) => {
         tokenLookups++;
         if (!supabaseAvailable) return { status: "unavailable" };
         return token === "valid-token"

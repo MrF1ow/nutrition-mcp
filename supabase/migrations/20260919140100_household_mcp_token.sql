@@ -1,6 +1,3 @@
--- One live hashed household MCP token. Plaintext never hits Postgres.
--- Service-role only, same posture as patreon_tokens / oauth_tokens.
-
 create table public.household_mcp_tokens (
     household_id uuid primary key references public.households (id) on delete cascade,
     token_hash bytea not null unique check (octet_length(token_hash) = 32),

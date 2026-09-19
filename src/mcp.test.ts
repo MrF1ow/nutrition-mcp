@@ -3914,8 +3914,6 @@ describe("rotate_household_token from member OAuth", () => {
 // Sharing this file's single mock window is what proved green; see the
 // restore note on the afterAll above for the mechanism.
 
-// The production route minus auth: authenticateBearer's only output is the
-// authContext handleMcp hands to the server factory.
 function appFor(userId: string) {
     const app = new Hono();
     app.all("/mcp", (c) => {
@@ -4030,7 +4028,7 @@ describe("household PAT over HTTP has no default userId", () => {
     }
 
     test.each(ERAS)(
-        "tools/list succeeds without extra.userId (%p)",
+        "tools/list succeeds for a household PAT (%p)",
         async (mode) => {
             await withHouseholdHttp(mode, async (client) => {
                 const { tools } = await client.listTools();
@@ -4292,8 +4290,6 @@ describe("/mcp serves one tool surface on both protocol eras", () => {
             });
             expect(db.inserted).toHaveLength(1);
             expect(db.inserted[0]?.description).toBe("eggs");
-            // authInfo.extra.userId is the single identity carrier on both
-            // legs; every profile read of this exchange must name that user.
             expect(new Set(db.profileReads)).toEqual(new Set(["mode-user"]));
         },
     );

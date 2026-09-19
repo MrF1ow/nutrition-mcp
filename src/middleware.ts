@@ -1,7 +1,7 @@
 import type { Context, Next } from "hono";
 import type { AuthContext } from "./auth-context.js";
 import { rateLimitKey } from "./auth-context.js";
-import { getUserIdByToken } from "./supabase.js";
+import { lookupBearer } from "./supabase.js";
 import { maskIp } from "./net.js";
 import { resourceMetadataUrl } from "./discovery.js";
 import { getBaseUrl } from "./url.js";
@@ -83,7 +83,7 @@ export const authenticateBearer = async (c: Context, next: Next) => {
     }
 
     const token = authHeader.substring(7);
-    const lookup = await getUserIdByToken(token);
+    const lookup = await lookupBearer(token);
 
     if (lookup.status === "unavailable") {
         // We could not verify the token, so this is not the client's fault:

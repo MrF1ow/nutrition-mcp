@@ -1441,9 +1441,6 @@ export async function storeToken(token: string, userId: string): Promise<void> {
 // unavailable lookup as a failed auth attempt would let a brief Supabase outage
 // — during which *every* token looks invalid — trip the repeat-failure bans in
 // rate-limit.ts and keep clients shed long after the database recovered.
-//
-// Household PATs share this lookup so tools never hash or query a second time.
-// `kind` is the discriminant on the valid arm: a household hit has no userId.
 export type TokenLookup =
     | { status: "valid"; kind: "user"; userId: string }
     | { status: "valid"; kind: "household"; householdId: string }
@@ -1496,7 +1493,7 @@ async function lookupHouseholdToken(token: string): Promise<TableLookup> {
     }
 }
 
-export async function getUserIdByToken(token: string): Promise<TokenLookup> {
+export async function lookupBearer(token: string): Promise<TokenLookup> {
     const oauth = await lookupOauthToken(token);
     if (oauth.status === "hit") {
         return { status: "valid", kind: "user", userId: oauth.id };
@@ -1563,7 +1560,7 @@ export async function rotateHouseholdMcpToken(args: {
  * Backed by the single `patreon_tokens` row (id = "default") — one campaign,
  * one token pair, server-only (RLS has no policy for anon/authenticated; see
  * the patreon_tokens migration). Simplified to a plain null return on any
- * lookup failure: unlike getUserIdByToken's valid/invalid/unavailable
+ * lookup failure: unlike lookupBearer's valid/invalid/unavailable
  * TokenLookup, getRecentPosts already treats null as "nothing to show", so a
  * three-state return here would be unused precision for a landing-page
  * nicety with no auth/security stakes.
