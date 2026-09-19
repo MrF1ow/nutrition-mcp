@@ -1,37 +1,18 @@
 #!/usr/bin/env bun
 /**
- * depersonalize.ts — strip the maintainer's personal bits from the public
- * site so the project is clean to self-host.
+ * depersonalize.ts — strip the maintainer's personal bits so a fork is
+ * clean to self-host.
  *
  *   bun run scripts/depersonalize.ts          # rewrite files in place
  *   bun run scripts/depersonalize.ts --dry    # report only, change nothing
  *
- * What it removes / neutralizes:
- *   - Google Analytics (gtag) from every public HTML page + the CSP allow-list
- *   - The Glama connector-ownership route (embeds the maintainer's email)
- *   - Patreon "Support" section and hero button
- *   - GitHub repo links (nav, footer, "Star on GitHub" CTA) and the live
- *     star-count fetch
- *   - Contact section, footer contact link
- *   - The support email embedded in the bulk-import widget
- *   - Medium / YouTube footer links
- *   - The nutrition-mcp.com domain -> your-domain.com placeholder
- *     (install/MCP URL, canonical/OG tags, sitemap, robots)
- *   - The "alternative to X" comparison pages under public/alternatives/
- *     (GA, GitHub/contact links, domain)
+ * Targets the login templates (`public/login.html` and
+ * `public/{locale}/login.html`), remaining personal bits in HEAD_ASSETS
+ * (GA), the Glama route in src/index.ts, the import-widget support email,
+ * and robots.txt. Must not assume marketing pages exist.
  *
- * It is tuned to the current markup. If a pattern stops matching after a
- * redesign, the run reports "0 matches" for that rule so you can spot it.
- * Re-running is safe (idempotent): already-clean rules simply report 0.
- *
- * public/*.html is generated, not checked into git — run `bun run gen:all`
- * first, or this has nothing to depersonalize on a fresh clone.
- *
- * NOT auto-handled (edit by hand if you want): marketing copy/tone, the
- * brand images (public/og.png, favicon.ico, apple-touch-icon.png), the
- * page <title>/meta description wording, and the alternatives-page generator
- * scripts/gen-alternatives.ts (update its SITE constant, GA tag, and
- * GitHub/contact links before regenerating).
+ * Run `bun run gen:all` first on a fresh clone so the login templates exist.
+ * Re-running gen:all after this restores GA from HEAD_ASSETS.
  */
 
 import { statSync } from "node:fs";
@@ -46,7 +27,6 @@ type Rule = {
     optional?: boolean;
 };
 
-/** Remove Google Analytics from any HTML page. */
 const ANALYTICS_RULES: Rule[] = [
     {
         name: "GA loader <script>",
@@ -58,128 +38,30 @@ const ANALYTICS_RULES: Rule[] = [
     },
 ];
 
-/** Every link to the maintainer's GitHub repo (nav, footer, CTA button). */
 const GITHUB_LINKS_RULE: Rule = {
-    name: "GitHub repo links (nav / footer / CTA)",
+    name: "GitHub repo links",
     find: /[ \t]*<a\b[^>]*?href="https:\/\/github\.com\/akutishevsky\/nutrition-mcp"[\s\S]*?<\/a\s*>\n/g,
+    optional: true,
 };
 
-/**
- * Standalone maintainer mailto links (e.g. the footer "Contact" link). The
- * label is matched with [^<]* (not [\s\S]*) so a link whose </a> isn't followed
- * by a newline can't run on and swallow everything up to the next anchor.
- */
 const MAILTO_RULE: Rule = {
     name: "maintainer mailto links",
     find: /[ \t]*<a\b[^>]*?href="mailto:anton@nutrition-mcp\.com"[^>]*>[^<]*<\/a\s*>\n/g,
+    optional: true,
 };
 
-/** The one inline mailto in prose (hub "Request a comparison") -> plain text. */
-const HUB_MAILTO_RULE: Rule = {
-    name: "hub: inline 'Request a comparison' mailto -> text",
-    find: /<a\b[^>]*?href="mailto:anton@nutrition-mcp\.com"[^>]*>\s*Request a comparison<\/a\s*>/,
-    replace: "Request a comparison",
-    optional: true, // hub-only; absent from the per-app pages
+const DOMAIN_RULE: Rule = {
+    name: `domain nutrition-mcp.com -> ${PLACEHOLDER_DOMAIN}`,
+    find: /nutrition-mcp\.com/g,
+    replace: PLACEHOLDER_DOMAIN,
+    optional: true,
 };
 
-/**
- * Nav links to the Support/Contact sections we're deleting. nav() is shared
- * chrome, so these render on every page (landing page and alternatives
- * pages alike), not just the landing page. hashPath() prefixes a
- * locale-aware path ("/#support" in English, "/de#support" in German, ...)
- * and the label is translated per locale, so match on the hash target only
- * and capture-drop the label rather than hardcoding either.
- */
-const NAV_SUPPORT_RULE: Rule = {
-    name: "nav: Support link",
-    find: /[ \t]*<a href="[^"]*#support">[^<]*<\/a>\n/g,
-};
-const NAV_CONTACT_RULE: Rule = {
-    name: "nav: Contact link",
-    find: /[ \t]*<a href="[^"]*#contact">[^<]*<\/a>\n/g,
-};
-
-/** Personal content that only lives in the landing page. */
-const LANDING_RULES: Rule[] = [
-    // Rewrite prose links first so the generic GitHub sweep can't gut a sentence.
-    {
-        // The anchor text itself is already translated per locale (e.g. DE
-        // "GitHub-Repository"), so this captures it rather than hardcoding
-        // the English label — only the href/attributes are locale-constant.
-        name: "FAQ 'GitHub repository' prose link -> plain text",
-        find: /<a\b[^>]*href="https:\/\/github\.com\/akutishevsky\/nutrition-mcp"[^>]*>([^<]*)<\/a\s*>/,
-        replace: "$1",
-    },
-    {
-        // English-only: this sentence has no stable wrapper/class to key on
-        // in the other 8 locales' FAQ prose (different words, different
-        // order), so it can't be matched structurally. 0 matches on a
-        // translated public/{locale}/index.html is expected, not a warning
-        // sign — strip it by hand there if self-hosting a translated page.
-        name: "FAQ Patreon donation sentence",
-        find: /\s*Donations on Patreon\s+help cover server costs\./g,
-        replace: "",
-        optional: true,
-    },
-    NAV_SUPPORT_RULE,
-    NAV_CONTACT_RULE,
-    // Hero secondary "Support" button. Label captured rather than hardcoded
-    // (translated per locale); href keeps the same "#support" drift as the
-    // nav link above.
-    {
-        name: "hero: Support button",
-        find: /[ \t]*<a class="btn btn-secondary" href="#support"[\s\S]*?<\/a\s*>\n/,
-    },
-    // Whole Support (Patreon) and Contact sections.
-    {
-        name: "section: Support (Patreon)",
-        find: /[ \t]*<!-- Support -->[\s\S]*?<\/section>\n/,
-    },
-    {
-        name: "section: Contact",
-        find: /[ \t]*<!-- Contact -->[\s\S]*?<\/section>\n/,
-    },
-    // Footer social/contact links (Privacy stays).
-    {
-        name: "footer: Medium link",
-        find: /[ \t]*<a\b[^>]*?href="https:\/\/medium\.com[\s\S]*?<\/a\s*>\n/,
-    },
-    {
-        name: "footer: YouTube link",
-        find: /[ \t]*<a\b[^>]*?href="https:\/\/youtube\.com[\s\S]*?<\/a\s*>\n/,
-    },
-    {
-        name: "footer: Contact (mailto) link",
-        find: /[ \t]*<a href="mailto:anton@nutrition-mcp\.com">[^<]*<\/a>\n/,
-    },
-    // Every remaining link to the maintainer's repo (nav, footer, CTA button).
-    GITHUB_LINKS_RULE,
-    // The live star-count fetch (its target span was in the CTA button above).
-    {
-        name: "live GitHub star-count script",
-        find: /[ \t]*\/\/ -+ live GitHub star count -+\n[\s\S]*?\.catch\(function \(\) \{\}\);\n[ \t]*\}\n/,
-    },
-    // The recent-Patreon-posts fetch. Its target block (#patreon-updates) lives
-    // inside the "section: Support (Patreon)" HTML this file already strips
-    // wholesale above, so only the script needs its own rule here.
-    {
-        name: "recent Patreon posts script",
-        find: /[ \t]*\/\/ -+ recent Patreon posts -+\n[\s\S]*?\.catch\(function \(\) \{\}\);\n[ \t]*\}\n/,
-    },
-];
-
-/**
- * The Glama connector-ownership route (`/.well-known/glama.json`) exists only to
- * claim the maintainer's Glama listing and hard-codes their email, so drop the
- * whole handler. Matches the comment through the route's closing `});` and the
- * trailing blank line, leaving the surrounding routes intact.
- */
 const GLAMA_RULE: Rule = {
     name: "Glama connector-ownership route",
     find: /[ \t]*\/\/ Glama connector ownership verification\.[\s\S]*?app\.get\("\/\.well-known\/glama\.json"[\s\S]*?\n\}\);\n\n/,
 };
 
-/** Tighten the Content-Security-Policy: drop GA + GitHub API hosts. */
 const CSP_RULES: Rule[] = [
     {
         name: "CSP: connect-src GA + github hosts",
@@ -193,251 +75,39 @@ const CSP_RULES: Rule[] = [
     },
 ];
 
-const DOMAIN_RULE: Rule = {
-    name: `domain nutrition-mcp.com -> ${PLACEHOLDER_DOMAIN}`,
-    find: /nutrition-mcp\.com/g,
-    replace: PLACEHOLDER_DOMAIN,
-    optional: true, // absent from some pages; 0 matches there is fine
-};
-
-// The generated "alternative to X" comparison pages carry the same personal
-// bits as the landing page (GA, GitHub links, contact mailto, the domain) but
-// none of the Patreon/Medium/Contact-section markup, so they get a focused set.
-// They do still render the shared nav() chrome, though, which links to the
-// landing page's #support/#contact anchors — those need stripping here too.
-// Mailto rules run before DOMAIN_RULE so the email is removed before the domain
-// sweep could rewrite it to a placeholder address.
-const ALT_RULES: Rule[] = [
-    ...ANALYTICS_RULES,
-    GITHUB_LINKS_RULE,
-    NAV_SUPPORT_RULE,
-    NAV_CONTACT_RULE,
-    // Unwrap the inline prose mailto first, so the standalone-link rule below
-    // only sees the footer "Contact" links (and can't over-match across tags).
-    HUB_MAILTO_RULE,
-    MAILTO_RULE,
-    DOMAIN_RULE,
-];
-
-// Every comparison page under public/alternatives/, discovered at run time so a
-// newly generated app page is depersonalized without editing this list.
-/**
- * The import widget's support contact. It is JS, not markup, so the HTML-tuned
- * rules above do not apply: blank the constant rather than deleting it, because
- * every call site guards on it being non-empty and removing the declaration
- * would throw a ReferenceError inside the widget.
- */
 const WIDGET_SUPPORT_RULE: Rule = {
     name: "import widget: support email -> empty",
     find: /(\/\* support-contact:start \*\/\s*\n\s*const SUPPORT_EMAIL = )"[^"]*"/,
     replace: '$1""',
 };
 
-const altPageJobs = (
-    await Array.fromAsync(
-        new Bun.Glob("*.html").scan({ cwd: "public/alternatives" }),
-    )
-)
-    .sort()
-    .map((f) => ({ path: `public/alternatives/${f}`, rules: ALT_RULES }));
+const LOGIN_RULES: Rule[] = [
+    ...ANALYTICS_RULES,
+    GITHUB_LINKS_RULE,
+    MAILTO_RULE,
+    DOMAIN_RULE,
+];
 
-// Translated site: public/{locale}/privacy.html, public/{locale}/terms.html,
-// and (once those pages are migrated too) .../tools.html, .../index.html,
-// .../alternatives/*.html. Discovered at run time the same way altPageJobs
-// is, rather than hand-listing every locale: a locale directory that
-// doesn't exist yet on a given checkout (translation lands incrementally,
-// see src/copy/legal.ts) simply contributes no jobs. Rules per filename
-// mirror the English job for that same page below — keep the two in sync
-// by hand when you change one, the same as the rest of this file already
-// asks for GITHUB_LINKS_RULE / DOMAIN_RULE etc.
-const RULES_BY_FILENAME: Record<string, Rule[]> = {
-    "login.html": [
-        ...ANALYTICS_RULES,
-        NAV_SUPPORT_RULE,
-        NAV_CONTACT_RULE,
-        GITHUB_LINKS_RULE,
-        MAILTO_RULE,
-        DOMAIN_RULE,
-    ],
-    "privacy.html": [
-        ...ANALYTICS_RULES,
-        NAV_SUPPORT_RULE,
-        NAV_CONTACT_RULE,
-        GITHUB_LINKS_RULE,
-        MAILTO_RULE,
-        DOMAIN_RULE,
-    ],
-    "terms.html": [
-        ...ANALYTICS_RULES,
-        NAV_SUPPORT_RULE,
-        NAV_CONTACT_RULE,
-        // Prose-embedded, so unwrap to text first — same reasoning as
-        // LANDING_RULES: run before the generic sweeps below so they can't
-        // gut a sentence. The footer and mobile-menu also render a
-        // same-labeled "GitHub" link, but always immediately followed by a
-        // newline (each sits alone on its own line) where the prose mention
-        // is followed by more sentence text — (?!\n) tells them apart so
-        // this rule only fires on the prose one, and GITHUB_LINKS_RULE below
-        // cleanly deletes the other two as whole lines instead of leaving
-        // dangling plain-text "GitHub". The mailto rule is scoped the same
-        // way, by anchor text: the prose link's visible text is the email
-        // address itself, unlike the footer's "Contact" label.
-        {
-            name: "terms: 'GitHub' prose link -> plain text",
-            find: /<a\b[^>]*href="https:\/\/github\.com\/akutishevsky\/nutrition-mcp"[^>]*>GitHub<\/a\s*>(?!\n)/,
-            replace: "GitHub",
-        },
-        {
-            name: "terms: contact mailto -> placeholder address",
-            find: /<a\b[^>]*?href="mailto:anton@nutrition-mcp\.com"[^>]*>anton@nutrition-mcp\.com<\/a\s*>/,
-            replace: "your@email.com",
-        },
-        // Sweeps the header icon-button GitHub link and the footer/mobile-menu
-        // GitHub + Contact links the prose-scoped rules above deliberately
-        // don't touch.
-        GITHUB_LINKS_RULE,
-        MAILTO_RULE,
-        DOMAIN_RULE,
-    ],
-    "tools.html": [
-        ...ANALYTICS_RULES,
-        GITHUB_LINKS_RULE,
-        NAV_SUPPORT_RULE,
-        NAV_CONTACT_RULE,
-        MAILTO_RULE,
-        DOMAIN_RULE,
-    ],
-    "index.html": [...ANALYTICS_RULES, ...LANDING_RULES, DOMAIN_RULE],
-};
+const loginJobs: { path: string; rules: Rule[] }[] = [
+    { path: "public/login.html", rules: LOGIN_RULES },
+];
 
-const localeJobs: { path: string; rules: Rule[] }[] = [];
 for (const entry of await Array.fromAsync(
     new Bun.Glob("*").scan({ cwd: "public", onlyFiles: false }),
 )) {
-    // public/alternatives is itself a "locale-shaped" directory name-wise
-    // but isn't one — it's the English comparison pages, already covered
-    // by altPageJobs above.
-    if (entry === "alternatives" || !statSync(`public/${entry}`).isDirectory())
+    if (!statSync(`public/${entry}`, { throwIfNoEntry: false })?.isDirectory())
         continue;
-    const dir = `public/${entry}`;
-    for (const f of await Array.fromAsync(
-        new Bun.Glob("*.html").scan({ cwd: dir }),
-    )) {
-        const rules = RULES_BY_FILENAME[f];
-        if (rules) localeJobs.push({ path: `${dir}/${f}`, rules });
-    }
-    if (
-        statSync(`${dir}/alternatives`, {
-            throwIfNoEntry: false,
-        })?.isDirectory()
-    ) {
-        for (const f of await Array.fromAsync(
-            new Bun.Glob("*.html").scan({ cwd: `${dir}/alternatives` }),
-        )) {
-            localeJobs.push({
-                path: `${dir}/alternatives/${f}`,
-                rules: ALT_RULES,
-            });
-        }
+    const path = `public/${entry}/login.html`;
+    if (await Bun.file(path).exists()) {
+        loginJobs.push({ path, rules: LOGIN_RULES });
     }
 }
-localeJobs.sort((a, b) => a.path.localeCompare(b.path));
+loginJobs.sort((a, b) => a.path.localeCompare(b.path));
 
 const JOBS: { path: string; rules: Rule[] }[] = [
-    {
-        path: "public/index.html",
-        rules: [...ANALYTICS_RULES, ...LANDING_RULES, DOMAIN_RULE],
-    },
-    {
-        path: "public/login.html",
-        rules: [
-            ...ANALYTICS_RULES,
-            NAV_SUPPORT_RULE,
-            NAV_CONTACT_RULE,
-            GITHUB_LINKS_RULE,
-            MAILTO_RULE,
-            DOMAIN_RULE,
-        ],
-    },
-    {
-        path: "public/privacy.html",
-        rules: [
-            ...ANALYTICS_RULES,
-            NAV_SUPPORT_RULE,
-            NAV_CONTACT_RULE,
-            GITHUB_LINKS_RULE,
-            MAILTO_RULE,
-            DOMAIN_RULE,
-        ],
-    },
-    // Terms page. Its GitHub link and contact mailto sit mid-sentence, so the
-    // generic GITHUB_LINKS_RULE / MAILTO_RULE (which delete the whole anchor
-    // line) would leave dangling prose — unwrap them to text instead, scoped
-    // (via (?!\n) / exact anchor text) so they don't also swallow the
-    // footer/mobile-menu "GitHub"/"Contact" links, which the generic rules
-    // below handle instead. Both run before DOMAIN_RULE so the email goes
-    // before the domain sweep sees it.
-    {
-        path: "public/terms.html",
-        rules: [
-            ...ANALYTICS_RULES,
-            NAV_SUPPORT_RULE,
-            NAV_CONTACT_RULE,
-            {
-                name: "terms: 'GitHub' prose link -> plain text",
-                find: /<a\b[^>]*href="https:\/\/github\.com\/akutishevsky\/nutrition-mcp"[^>]*>GitHub<\/a\s*>(?!\n)/,
-                replace: "GitHub",
-            },
-            {
-                name: "terms: contact mailto -> placeholder address",
-                find: /<a\b[^>]*?href="mailto:anton@nutrition-mcp\.com"[^>]*>anton@nutrition-mcp\.com<\/a\s*>/,
-                replace: "your@email.com",
-            },
-            GITHUB_LINKS_RULE,
-            MAILTO_RULE,
-            DOMAIN_RULE,
-        ],
-    },
-    // Tools reference page: GA + the nav/footer GitHub link, the footer contact
-    // mailto, and the canonical/OG domain.
-    {
-        path: "public/tools.html",
-        rules: [
-            ...ANALYTICS_RULES,
-            GITHUB_LINKS_RULE,
-            NAV_SUPPORT_RULE,
-            NAV_CONTACT_RULE,
-            MAILTO_RULE,
-            DOMAIN_RULE,
-        ],
-    },
-    ...altPageJobs,
-    ...localeJobs,
-    // NB: the generator scripts/gen-alternatives.ts is intentionally NOT
-    // rewritten here — these HTML-tuned patterns are unreliable against its TS
-    // template literals. If you regenerate the pages, update the generator's
-    // SITE constant, GA tag, GitHub/contact links by hand (see its header).
-    // llms.txt is markdown served at /llms.txt, so none of the HTML-tuned rules
-    // above reach it — it needs its own job or a fork publishes the maintainer's
-    // domain and repo to every crawler that reads it. Its GitHub reference is a
-    // markdown link in prose, so GITHUB_LINKS_RULE (which deletes a whole <a>
-    // line) is wrong here: swap the URL for a placeholder and keep the bullet.
-    {
-        path: "public/llms.txt",
-        rules: [
-            {
-                name: "llms.txt: GitHub repo URL -> placeholder",
-                find: /https:\/\/github\.com\/akutishevsky\/nutrition-mcp/g,
-                replace: "https://github.com/your-org/nutrition-mcp",
-            },
-            DOMAIN_RULE,
-        ],
-    },
-    { path: "public/sitemap.xml", rules: [DOMAIN_RULE] },
+    ...loginJobs,
     { path: "public/robots.txt", rules: [DOMAIN_RULE] },
     { path: "src/index.ts", rules: [GLAMA_RULE, ...CSP_RULES] },
-    // The import widget is a source partial, not a served page, so it is not in
-    // the HTML jobs above — but it does embed the maintainer's support address.
     {
         path: "public/widgets/src/templates/import-meals.html",
         rules: [WIDGET_SUPPORT_RULE],
@@ -456,13 +126,13 @@ for (const job of JOBS) {
     const before = text;
     const report: string[] = [];
 
-    for (const rule of rules(job)) {
-        // Always replace with a global-flagged clone, matching what count
-        // below measures — text.replace(rule.find, ...) with a non-global
-        // rule.find silently replaces only the first occurrence, which used
-        // to under-strip every rule with >1 match and no explicit /g (this
-        // is how terms.html kept 2 of its 3 GitHub links after a "✓ 3×" report).
-        const globalFind = new RegExp(rule.find.source, flags(rule.find));
+    for (const rule of job.rules) {
+        const globalFind = new RegExp(
+            rule.find.source,
+            rule.find.flags.includes("g")
+                ? rule.find.flags
+                : rule.find.flags + "g",
+        );
         const count = (text.match(globalFind) || []).length;
         text = text.replace(globalFind, rule.replace ?? "");
         if (count === 0) {
@@ -483,13 +153,6 @@ for (const job of JOBS) {
     if (changed && !DRY) await Bun.write(job.path, text);
 }
 
-function rules(job: { rules: Rule[] }): Rule[] {
-    return job.rules;
-}
-function flags(re: RegExp): string {
-    return re.flags.includes("g") ? re.flags : re.flags + "g";
-}
-
 console.log(
     `\n${DRY ? "Dry run — no files written." : "Done."}` +
         (hadWarning
@@ -497,7 +160,6 @@ console.log(
             : ""),
 );
 console.log(
-    "Left for you: swap in your own og.png / favicon.ico / apple-touch-icon.png, " +
-        "adjust page copy, and replace the " +
+    "Left for you: swap in your own favicon.ico, and replace the " +
         `${PLACEHOLDER_DOMAIN} placeholder with your real domain.`,
 );

@@ -1,65 +1,13 @@
-// Shared HTML fragments for every generated public page (the landing page,
-// /tools, /privacy, /terms, and the /alternatives comparison pages). Used to
-// live duplicated inside scripts/gen-alternatives.ts; pulled out here so
-// every generator shares one nav()/footer() — including the locale-aware
-// links and the language switcher — instead of each page type forking its
-// own copy and drifting the way public/index.html's hand-authored nav
-// already had to be kept in sync by hand with this file's predecessor.
-//
-// Nothing here is escaped against untrusted input — every caller passes
-// developer-authored constants (page copy, not visitor input), the same
-// trust level as the rest of this generator family.
+// Shared HTML fragments for the OAuth login templates. Login is the only
+// generated public HTML; marketing pages are gone. Nothing here is escaped
+// against untrusted input — callers pass developer-authored constants.
 
-import {
-    HTML_LANG,
-    LOCALE_NAMES,
-    OG_LOCALE,
-    SITE,
-    SITE_LOCALES,
-    TRANSLATION_NOTICE,
-    hashPath,
-    pathFor,
-    urlFor,
-    type SiteLocale,
-} from "../src/routes.js";
-import { chromeFor, type ChromeCopy } from "../src/copy/chrome.js";
-
-export { SITE };
+import type { SiteLocale } from "../src/routes.js";
+import { chromeFor } from "../src/copy/chrome.js";
 
 /** Minimal HTML-entity escaping for text interpolated into element bodies. */
 export function esc(s: string): string {
     return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-/**
- * The "this page is machine-translated" banner — empty string on English
- * (nothing to disclose) or a locale TRANSLATION_NOTICE hasn't reached yet
- * (silently omitting rather than showing a half-translated notice; every
- * shipped translation should have one before it ships, but a missing entry
- * degrading to "no notice" is safer than the alternative). `suffix` is the
- * page's PAGE_ROUTES key, used to link back to the *same* page in English.
- */
-export function translationNotice(locale: SiteLocale, suffix: string): string {
-    if (locale === "en") return "";
-    const notice = TRANSLATION_NOTICE[locale];
-    if (!notice) return "";
-    return `                    <div class="translation-notice">
-                        <p>
-                            ${esc(notice.text)}
-                            <a href="${pathFor("en", suffix)}">${esc(notice.linkText)}</a>
-                        </p>
-                    </div>`;
-}
-
-export function jsonLd(obj: unknown): string {
-    return `        <script type="application/ld+json">\n${JSON.stringify(
-        obj,
-        null,
-        4,
-    )
-        .split("\n")
-        .map((l) => "            " + l)
-        .join("\n")}\n        </script>`;
 }
 
 export const HEAD_ASSETS = `        <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -98,7 +46,6 @@ export const THEME_PREPAINT = `        <script>
             })();
         </script>`;
 
-// Theme toggle, menu, reveals and copy buttons all live in /site.js.
 export const SITE_SCRIPT = `        <script src="/site.js" defer></script>`;
 
 export function generatedBanner(script: string): string {
@@ -106,185 +53,21 @@ export function generatedBanner(script: string): string {
 }
 
 /**
- * `<html lang>` + every `<head>` tag that makes the locale set legible to a
- * crawler: self-referencing canonical (never canonical-to-English — that
- * tells Google the translated page is a duplicate and it gets dropped from
- * the alternates), a full reciprocal hreflang set (every locale linking to
- * every locale, including itself, plus x-default -> English), and
- * og:locale/og:locale:alternate. `suffix` is the page's PAGE_ROUTES key
- * ("" for home, "/tools", ...) — the same value across every locale, since
- * slugs aren't localized.
+ * Login header. Brand stays on this page (`#main`); it must not send anyone
+ * to `/`, which is not HTML. Language switcher is `{{LANG_SWITCHER}}` so
+ * oauth.ts can stamp authorizeUrl() links for the in-flight session.
  */
-export function localeHead(locale: SiteLocale, suffix: string): string {
-    const canonical = urlFor(locale, suffix);
-    const hreflang = SITE_LOCALES.map(
-        (l) =>
-            `        <link rel="alternate" hreflang="${HTML_LANG[l]}" href="${urlFor(l, suffix)}" />`,
-    ).join("\n");
-    const xDefault = `        <link rel="alternate" hreflang="x-default" href="${urlFor("en", suffix)}" />`;
-    const ogLocale = `        <meta property="og:locale" content="${OG_LOCALE[locale]}" />`;
-    const ogAlternates = SITE_LOCALES.filter((l) => l !== locale)
-        .map(
-            (l) =>
-                `        <meta property="og:locale:alternate" content="${OG_LOCALE[l]}" />`,
-        )
-        .join("\n");
-    return `        <link rel="canonical" href="${canonical}" />
-${hreflang}
-${xDefault}
-${ogLocale}
-${ogAlternates}`;
-}
-
-/**
- * The "Live stats" notification badge — an app-icon-style count that hangs
- * off the top-right corner of the nav item. It ships [hidden] on every page
- * and is painted by public/site.js, which every page loads: the count is the
- * number of food logs written since the visitor arrived on the SITE, so it
- * keeps counting across a click from /tools to /privacy rather than
- * restarting at zero, which is what the menu's "since you opened" hint
- * promises. It used to be painted by the landing page's own stats poller
- * (LANDING_SCRIPT in scripts/gen-index.ts) instead, and the consequence was
- * that on /tools, /privacy and every /alternatives page the badge shipped,
- * reserved its space in the nav, and then never moved.
- *
- * The landing page keeps its 5s poller for the figures it animates and hands
- * them to site.js through a "live-stats" event rather than let it poll a
- * second time; it sends its own page-load baseline along, so on that page the
- * badge shows exactly what the .delta tag on the food-logs row shows.
- *
- * The digits alone would say nothing to a screen reader, so the count is
- * followed by a visually-hidden label naming what it counts. Deliberately
- * NOT aria-live: the poller runs every few seconds and announcing each change
- * would make the page unusable with a screen reader open.
- *
- * That label is count-sensitive, so every grammatical form ships in the
- * markup as a data-plural-<category> attribute and setNavBadge (in
- * public/site.js, which every page loads) picks one
- * with Intl.PluralRules. The forms cannot live in the script: site.js is one
- * file served to all nine locales (as LANDING_SCRIPT is one string embedded
- * byte-identically into all nine index.html files), so anything it names in
- * its own source is wrong on eight of them — the same contract the odometer
- * caption and the #facts-live word already have.
- * The rendered .vh text is the `other` form, which is what a count of 0 (the
- * markup's resting state) selects in every locale that distinguishes forms.
- *
- * There are three copies per page, not two: below the .head-nav breakpoint
- * the whole nav collapses behind the hamburger, so the badge rides the
- * hamburger itself — otherwise the one surface that tells a phone visitor
- * something arrived is hidden inside the menu they have not opened.
- */
-const PLURAL_CATEGORIES = ["one", "few", "many", "other"] as const;
-
-function liveBadge(c: ChromeCopy, decorative?: boolean): string {
-    // esc() leaves quotes alone — fine for text nodes, not for the attribute
-    // values below, where an apostrophe is harmless but a double quote would
-    // end the attribute early.
-    const attr = (s: string) => esc(s).replace(/"/g, "&quot;");
-    const forms = c.nav.liveStatsBadgeLabel;
-    // The hamburger's copy carries no label, and so needs no forms either. A
-    // button's aria-label IS its accessible name and swallows any text inside
-    // it, so a .vh span there would never be read; the count is announced
-    // properly on the Live stats item, which is on screen exactly when the
-    // menu is open and this copy is hidden (see .menu-btn .nav-badge in
-    // styles.css).
-    const label = decorative
-        ? ""
-        : ` <span class="vh">${esc(forms.other)}</span>`;
-    const plurals = decorative
-        ? ""
-        : PLURAL_CATEGORIES.filter((k) => forms[k])
-              .map((k) => ` data-plural-${k}="${attr(forms[k]!)}"`)
-              .join("");
-    return `<span class="nav-badge" data-live-badge hidden${
-        decorative ? ' aria-hidden="true"' : ""
-    }${plurals}><span class="nav-badge-n">0</span>${label}</span>`;
-}
-
-/**
- * Shared site header + mobile menu. site.js owns the theme toggle, menu and
- * scroll state. `suffix` is the current page's PAGE_ROUTES key ("" for
- * home, "/tools", "/myfitnesspal-mcp", ...) — used to build the language
- * switcher (every switcher link points at the SAME page in another locale)
- * and, via `currentSuffix`, to mark the matching nav/menu link
- * aria-current="page" (a PAGE_ROUTES key, e.g. "/tools" — NOT a locale-
- * prefixed href, since that's computed here from the locale + suffix).
- */
-export function nav(
-    locale: SiteLocale,
-    suffix: string,
-    currentSuffix?: string,
-    opts?: {
-        /**
-         * The static per-locale switcher below links to `urlFor(l, suffix)`
-         * — wrong for a page that isn't really "at" a locale-prefixed URL
-         * (public/login.html is rendered per in-flight OAuth session, not
-         * routed by path). When true, the whole <details class="lang-switch">
-         * block is replaced with a literal "{{LANG_SWITCHER}}" token for the
-         * caller to substitute at request time (see renderLangSwitcher in
-         * src/oauth.ts) instead of at generation time.
-         */
-        dynamicSwitcher?: boolean;
-    },
-): string {
-    const p = (id: string) => pathFor(locale, id);
-    const h = (id: string) => hashPath(locale, id);
+export function nav(locale: SiteLocale): string {
     const c = chromeFor(locale);
-    const switcherItems = SITE_LOCALES.map((l) => {
-        const active = l === locale;
-        return `                    <a
-                        href="${urlFor(l, suffix)}"
-                        lang="${HTML_LANG[l]}"
-                        hreflang="${HTML_LANG[l]}"${active ? '\n                        aria-current="page"' : ""}
-                        >${esc(LOCALE_NAMES[l])}</a
-                    >`;
-    }).join("\n");
-    const html = `        <a class="skip" href="#main">${esc(c.skipToContent)}</a>
+    return `        <a class="skip" href="#main">${esc(c.skipToContent)}</a>
         <header class="site-head" id="site-head">
             <div class="head-inner">
-                <a class="brand" href="${p("")}" aria-label="${esc(c.brandHomeAriaLabel)}">
+                <a class="brand" href="#main" aria-label="${esc(c.brandHomeAriaLabel)}">
                     <span class="brand-mark" aria-hidden="true">🍏</span>
                     <span>Nutrition&nbsp;MCP</span>
                 </a>
-                <nav class="head-nav" aria-label="${esc(c.landmarks.primaryNav)}">
-                    <a href="${h("how")}">${esc(c.nav.how)}</a>
-                    <a href="${h("install")}">${esc(c.nav.install)}</a>
-                    <a href="${p("/tools")}">${esc(c.nav.tools)}</a>
-                    <a href="${h("try")}">${esc(c.nav.examples)}</a>
-                    <a class="nav-has-badge" href="${h("stats")}">${esc(c.nav.liveStats)}${liveBadge(c)}</a>
-                    <a href="${h("faq")}">${esc(c.nav.faq)}</a>
-                </nav>
                 <div class="head-tools">
-                    <a
-                        class="icon-btn head-gh"
-                        href="https://github.com/akutishevsky/nutrition-mcp"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        aria-label="${esc(c.githubAriaLabel)}"
-                        title="GitHub"
-                    >
-                        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                            <path
-                                d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.2.8-.6v-2c-3.2.7-3.9-1.4-3.9-1.4-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.4-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.2 1.2a11 11 0 0 1 5.8 0c2.2-1.5 3.2-1.2 3.2-1.2.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.2c0 .3.2.7.8.6 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5z"
-                            />
-                        </svg>
-                    </a>
-${
-    opts?.dynamicSwitcher
-        ? "                    {{LANG_SWITCHER}}"
-        : `                    <details class="lang-switch">
-                        <summary
-                            class="icon-btn"
-                            aria-label="${esc(c.changeLanguageAriaLabel)}"
-                            title="${esc(c.languageTitle)}"
-                        >
-                            <span class="lang-code">${HTML_LANG[locale].toUpperCase()}</span>
-                        </summary>
-                        <div class="lang-menu" role="group" aria-label="${esc(c.languageTitle)}">
-${switcherItems}
-                        </div>
-                    </details>`
-}
+                    {{LANG_SWITCHER}}
                     <details class="theme-switch" id="theme-switch">
                         <summary
                             class="icon-btn"
@@ -309,108 +92,22 @@ ${switcherItems}
                             <button type="button" data-theme-set="dark" aria-pressed="false">${esc(c.theme.dark)}</button>
                         </div>
                     </details>
-                    <a class="btn btn-primary btn-sm head-cta" href="${h("install")}"
-                        >${esc(c.connectCta)}</a
-                    >
-                    <button
-                        class="icon-btn menu-btn"
-                        type="button"
-                        id="menu-btn"
-                        aria-expanded="false"
-                        aria-controls="site-menu"
-                        aria-label="${esc(c.openMenuAriaLabel)}"
-                        data-close-label="${esc(c.closeMenuAriaLabel)}"
-                    >
-                        <span class="burger" aria-hidden="true"></span>${liveBadge(c, true)}
-                    </button>
                 </div>
             </div>
-        </header>
-        <div class="site-menu" id="site-menu" hidden>
-            <nav aria-label="${esc(c.landmarks.menu)}">
-                <a href="${h("how")}">${esc(c.nav.how)} <small>${esc(c.menu.howSmall)}</small></a>
-                <a href="${h("install")}">${esc(c.nav.install)} <small>${esc(c.menu.installSmall)}</small></a>
-                <a href="${p("/tools")}">${esc(c.nav.tools)} <small>${esc(c.menu.toolsSmall)}</small></a>
-                <a href="${h("try")}">${esc(c.nav.examples)} <small>${esc(c.menu.examplesSmall)}</small></a>
-                <a href="${h("stats")}"><span class="menu-label nav-has-badge">${esc(c.nav.liveStats)}${liveBadge(c)}</span> <small>${esc(c.menu.liveStatsSmall)}</small></a>
-                <a href="${h("faq")}">${esc(c.nav.faq)}</a>
-                <a href="${p("/alternatives")}">${esc(c.menu.alternatives)} <small>${esc(c.menu.alternativesSmall)}</small></a>
-            </nav>
-            <div class="menu-secondary">
-                <a href="${h("support")}">${esc(c.menu.support)}</a>
-                <a href="${h("contact")}">${esc(c.menu.contact)}</a>
-                <a
-                    href="https://github.com/akutishevsky/nutrition-mcp"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    >${esc(c.menu.github)}</a
-                >
-                <a href="${p("/privacy")}">${esc(c.menu.privacy)}</a>
-                <a href="${p("/terms")}">${esc(c.menu.terms)}</a>
-            </div>
-            <div class="menu-foot">
-                <a class="btn btn-primary" href="${h("install")}">${esc(c.menu.connectInMinute)}</a>
-            </div>
-        </div>`;
-    if (!currentSuffix) return html;
-    const currentHref = p(currentSuffix);
-    // replaceAll, not replace: a page like /tools appears in both the
-    // desktop .head-nav and the .site-menu, and both copies need the mark.
-    return html.replaceAll(
-        `<a href="${currentHref}">`,
-        `<a href="${currentHref}" aria-current="page">`,
-    );
+        </header>`;
 }
 
-/**
- * `currentSuffix` is a PAGE_ROUTES key (e.g. "/privacy") when the current
- * page has a link in this footer (Tools, Alternatives, Privacy, Terms) —
- * that link gets aria-current="page", matching what every hand-authored
- * legal/tools page already did before it moved to a generator.
- */
-export function footer(locale: SiteLocale, currentSuffix?: string): string {
-    const p = (id: string) => pathFor(locale, id);
+export function footer(locale: SiteLocale): string {
     const c = chromeFor(locale);
-    const html = `        <footer class="footer">
+    return `        <footer class="footer">
             <div class="footer-inner">
                 <span class="footer-brand">
                     <span class="brand-mark" aria-hidden="true">🍏</span>
                     Nutrition MCP
                 </span>
-                <nav class="footer-links" aria-label="${esc(c.landmarks.footer)}">
-                    <a href="${p("/tools")}">${esc(c.footer.tools)}</a>
-                    <a href="${p("/alternatives")}">${esc(c.footer.alternatives)}</a>
-                    <a
-                        href="https://medium.com/@akutishevsky/how-i-replaced-myfitnesspal-and-other-apps-with-a-single-mcp-server-56ca5ec7d673"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        >${esc(c.footer.howIBuiltThis)}</a
-                    >
-                    <a
-                        href="https://youtube.com/shorts/Y1EHbfimQ70?feature=share"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        >${esc(c.footer.demo)}</a
-                    >
-                    <a
-                        href="https://github.com/akutishevsky/nutrition-mcp"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        >${esc(c.footer.github)}</a
-                    >
-                    <a href="mailto:anton@nutrition-mcp.com">${esc(c.footer.contact)}</a>
-                    <a href="${p("/privacy")}">${esc(c.footer.privacyPolicy)}</a>
-                    <a href="${p("/terms")}">${esc(c.footer.termsOfService)}</a>
-                </nav>
                 <p class="footer-note">
                     ${esc(c.footer.note)}
                 </p>
             </div>
         </footer>`;
-    if (!currentSuffix) return html;
-    const currentHref = p(currentSuffix);
-    return html.replaceAll(
-        `<a href="${currentHref}">`,
-        `<a href="${currentHref}" aria-current="page">`,
-    );
 }

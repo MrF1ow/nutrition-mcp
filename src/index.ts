@@ -9,17 +9,9 @@ import {
 } from "./middleware.js";
 import { handleMcp, closeMcpHandler } from "./mcp.js";
 import { startExportCleanup } from "./export.js";
-import {
-    getLandingStats,
-    getPatreonTokenStore,
-    seedPatreonTokensFromEnv,
-} from "./supabase.js";
-import { getRecentPosts } from "./patreon.js";
 import { registerDiscoveryRoutes } from "./discovery.js";
 import { maskIp } from "./net.js";
 import { warmWidgets } from "./widgets.js";
-import { ALT_PAGES, LOCALES, PAGE_ROUTES } from "./routes.js";
-import { createTtlCache } from "./ttl-cache.js";
 
 const app = new Hono();
 
@@ -167,9 +159,9 @@ app.use("*", async (c, next) => {
     }
     // /health is gated too, on purpose: a health check that starts failing is
     // how the platform's load balancer learns to stop routing here, which is
-    // exactly what draining wants. Everything else (landing page, OAuth,
-    // /api/stats) gets the flat {"error": …} shape the 413 and 500 responses
-    // in this file already use.
+    // exactly what draining wants. Everything else (OAuth, unauthenticated
+    // probes) gets the flat {"error": …} shape the 413 and 500 responses in
+    // this file already use.
     return c.json({ error: "shutting_down" }, 503, { "Retry-After": "1" });
 });
 
@@ -200,198 +192,24 @@ app.all(
     handleMcp,
 );
 
-// Aggregate landing-page stats, cached in-memory so page views don't each hit
-// the DB. The numbers move slowly, so a stale value for a few minutes is fine.
-// The landing page polls this every 5 s to show totals ticking up live, so the
-// server-side TTL is the same 5 s: one aggregate RPC per interval at most,
-// however many tabs are open. The RPC is a handful of sums over a small table.
-// Every other page polls it too, at 15 s, for the "Live stats" nav badge alone
-// (public/site.js) — more HTTP, but not more database: the cache is what they
-// all land on, and a caller arriving off-tick gets whatever is already there.
-const STATS_TTL_MS = 5 * 1000;
-const getStats = createTtlCache(STATS_TTL_MS, getLandingStats);
-
-app.get("/api/stats", async (c) => {
-    try {
-        const { data, stale } = await getStats();
-        return c.json(data, 200, {
-            // Stale data still moves slowly (see the comment above), so it's
-            // worth a short client-side cache too — much shorter than the
-            // happy-path TTL, so a real recovery is picked up soon, but a
-            // thundering herd during an outage is meaningfully dampened.
-            "Cache-Control": stale ? "public, max-age=60" : "public, max-age=5",
-        });
-    } catch (err) {
-        console.error("Failed to load landing stats:", err);
-        // Nothing cached at all: a 503 with a short Retry-After, so retrying
-        // clients back off instead of hammering this route during an outage.
-        return c.json({ error: "stats_unavailable" }, 503, {
-            "Retry-After": "30",
-        });
-    }
-});
-
-// Recent public Patreon posts for the landing page's Support section. A
-// self-hosted deployment won't have Patreon credentials configured, so this
-// degrades to an empty array rather than erroring — the same "optional
-// integration, silent no-op" shape as every other credential-gated feature
-// here. 1-hour TTL, not /api/stats's 5s: posts change far less often than the
-// live totals.
-const PATREON_POSTS_TTL_MS = 60 * 60 * 1000;
-// Reads the credentials fresh from process.env on every cache-miss (not
-// captured once at module scope), matching the pre-extraction behavior and
-// keeping the "not configured" gate below the single source of truth for
-// whether they're set.
-const getPatreonPosts = createTtlCache(PATREON_POSTS_TTL_MS, () =>
-    getRecentPosts(getPatreonTokenStore(), {
-        clientId: process.env.PATREON_CLIENT_ID ?? "",
-        clientSecret: process.env.PATREON_CLIENT_SECRET ?? "",
-        campaignId: process.env.PATREON_CAMPAIGN_ID ?? "",
-    }),
-);
-
-app.get("/api/patreon-posts", async (c) => {
-    const clientId = process.env.PATREON_CLIENT_ID;
-    const clientSecret = process.env.PATREON_CLIENT_SECRET;
-    const campaignId = process.env.PATREON_CAMPAIGN_ID;
-    if (!clientId || !clientSecret || !campaignId) {
-        return c.json([], 200, { "Cache-Control": "public, max-age=3600" });
-    }
-    try {
-        const { data, stale } = await getPatreonPosts();
-        return c.json(data, 200, {
-            "Cache-Control": stale
-                ? "public, max-age=60"
-                : "public, max-age=3600",
-        });
-    } catch (err) {
-        console.error("Failed to load Patreon posts:", err);
-        // Nothing cached at all: degrade to the same empty array the
-        // "not configured" branch above returns, with a short Cache-Control
-        // so an outage doesn't get hammered by clients either.
-        return c.json([], 200, { "Cache-Control": "public, max-age=60" });
-    }
-});
-
-// Static world-map data (land dot-matrix + projected timezone coords) for the
-// landing page. Generated offline; safe to cache aggressively.
-app.get("/map-data.json", async (c) => {
-    return c.body(await Bun.file("./public/map-data.json").text(), 200, {
-        "Content-Type": "application/json",
-        "Cache-Control": "public, max-age=86400",
-    });
-});
-
-// Static images (social card + touch icon)
-app.get("/og.png", async (c) => {
-    return c.body(await Bun.file("./public/og.png").arrayBuffer(), 200, {
-        "Content-Type": "image/png",
-        "Cache-Control": "public, max-age=86400",
-    });
-});
-app.get("/apple-touch-icon.png", async (c) => {
-    return c.body(
-        await Bun.file("./public/apple-touch-icon.png").arrayBuffer(),
-        200,
-        {
-            "Content-Type": "image/png",
-            "Cache-Control": "public, max-age=86400",
-        },
-    );
-});
-
-// SEO crawl files
+// Login assets. Marketing HTML, sitemap, llms.txt, and landing APIs are
+// gone; leftover files on disk must not become routes (a registered path
+// that reads a missing file 500s).
 app.get("/robots.txt", async (c) => {
     return c.body(await Bun.file("./public/robots.txt").text(), 200, {
         "Content-Type": "text/plain",
     });
 });
-app.get("/sitemap.xml", async (c) => {
-    return c.body(await Bun.file("./public/sitemap.xml").text(), 200, {
-        "Content-Type": "application/xml",
-    });
-});
-// llms.txt — curated site map for LLMs / AI agents (llmstxt.org). Relevant here
-// because this is an MCP server: Anthropic and OpenAI agents are a real referrer.
-app.get("/llms.txt", async (c) => {
-    return c.body(await Bun.file("./public/llms.txt").text(), 200, {
-        "Content-Type": "text/plain; charset=utf-8",
-    });
-});
-
-// Landing page
-app.get("/", async (c) => {
-    return c.html(await Bun.file("./public/index.html").text());
-});
-
-// Privacy Policy
-app.get("/privacy", async (c) => {
-    return c.html(await Bun.file("./public/privacy.html").text());
-});
-app.get("/privacy/", (c) => c.redirect("/privacy", 301));
-
-// Terms of Service
-app.get("/terms", async (c) => {
-    return c.html(await Bun.file("./public/terms.html").text());
-});
-app.get("/terms/", (c) => c.redirect("/terms", 301));
-
-// Tools reference — the full list of MCP tools with descriptions and examples.
-app.get("/tools", async (c) => {
-    return c.html(await Bun.file("./public/tools.html").text());
-});
-app.get("/tools/", (c) => c.redirect("/tools", 301));
-
-// SEO comparison / "alternative to X" landing pages. Each targets long-tail
-// queries like "myfitnesspal mcp" or "connect myfitnesspal to claude" and is a
-// static HTML file under public/alternatives. Kept data-driven so adding a page
-// is one entry here plus the file and a sitemap.xml line. ALT_PAGES itself now
-// lives in src/routes.ts — a module with no Supabase/side-effecting imports —
-// so tests can import it directly instead of regex-scraping it out of this
-// file's source text.
-for (const [path, file] of Object.entries(ALT_PAGES)) {
-    app.get(path, async (c) =>
-        c.html(await Bun.file(`./public/${file}`).text()),
-    );
-    // Redirect the trailing-slash variant to the canonical no-slash URL so a
-    // stray "/myfitnesspal-mcp/" link doesn't 404.
-    app.get(`${path}/`, (c) => c.redirect(path, 301));
-}
-
-// Every page above, again under each translated locale's /{locale} prefix
-// (public/{locale}/... instead of public/...) — same route/redirect shape as
-// the ALT_PAGES loop just above. English stays unprefixed at the routes
-// already registered above; it's also the x-default hreflang target (see
-// scripts/site-partials.ts's localeHead()). Not every locale has every page
-// generated yet — a missing file 500s via the error handler below rather
-// than silently 404ing, which is deliberate: a locale page that should exist
-// but doesn't is a bug to notice, not a page that was never meant to be there.
-for (const locale of LOCALES) {
-    for (const [suffix, file] of Object.entries(PAGE_ROUTES)) {
-        const path = `/${locale}${suffix}`;
-        app.get(path, async (c) =>
-            c.html(await Bun.file(`./public/${locale}/${file}`).text()),
-        );
-        app.get(`${path}/`, (c) => c.redirect(path, 301));
-    }
-}
-
-// CSS
 app.get("/styles.css", async (c) => {
     const file = Bun.file("./public/styles.css");
     return c.body(await file.text(), 200, { "Content-Type": "text/css" });
 });
-
-// Shared site script: theme toggle, header, mobile menu, scroll effects.
-// Every public page loads it, so it is served from one place like the CSS.
 app.get("/site.js", async (c) => {
     const file = Bun.file("./public/site.js");
     return c.body(await file.text(), 200, {
         "Content-Type": "text/javascript; charset=utf-8",
     });
 });
-
-// Favicon endpoint
 app.get("/favicon.ico", async (c) => {
     try {
         const file = Bun.file("./public/favicon.ico");
@@ -430,17 +248,6 @@ if (import.meta.main) {
 
     // Periodically delete expired meal-export files from the storage bucket.
     startExportCleanup();
-
-    // Best-effort, one-time: seed patreon_tokens from PATREON_ACCESS_TOKEN /
-    // PATREON_REFRESH_TOKEN if set (see seedPatreonTokensFromEnv). Fired
-    // without awaiting it — the Patreon strip on the landing page is a
-    // nicety, not a dependency the rest of boot needs to come up, and even a
-    // slow-but-successful Supabase round trip must not hold up the steps
-    // below it (or the server accepting connections). The .catch is only to
-    // keep a rejection from surfacing as an unhandled-rejection warning.
-    void seedPatreonTokensFromEnv().catch((err) =>
-        console.error("Failed to seed Patreon tokens:", err),
-    );
 
     process.on("SIGTERM", () => shutdown("SIGTERM"));
     process.on("SIGINT", () => shutdown("SIGINT"));

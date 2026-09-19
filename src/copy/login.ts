@@ -1,23 +1,15 @@
 // Typed content for the OAuth login screen (public/login.html and its
 // translated public/{locale}/login.html), rendered by scripts/gen-login.ts.
-// Unlike the rest of the site, this page is rendered per in-flight OAuth
-// session (see src/oauth.ts's renderLoginPage) rather than served as a flat
-// file at a fixed URL — it has no route in src/routes.ts's PAGE_ROUTES and
-// no entry in the sitemap, deliberately: it's reachable only via
-// GET /authorize with a client's redirect_uri/state/client_id, is linked
-// from nowhere crawlable, and has zero SEO surface. Translating it is a
-// pure UX call for the human going through the flow, not an SEO one.
+// This page is rendered per in-flight OAuth session (see src/oauth.ts's
+// renderLoginPage) rather than served as a flat file at a fixed URL. It is
+// reachable only via GET /authorize with a client's redirect_uri/state/
+// client_id, and has zero SEO surface.
 //
-// LOGIN and LOGIN_ERRORS are full `Record<SiteLocale, ...>`s, not the
-// `Partial` src/copy/legal.ts still uses: every locale in SITE_LOCALES is
-// translated, so the type can now do the enforcing. Adding a locale to
-// src/routes.ts's LOCALES without adding its login copy here is a
-// `bun run typecheck` failure — which is the whole completeness guarantee,
-// since nothing else checks it. src/oauth.ts still decides availability by
+// LOGIN and LOGIN_ERRORS are full `Record<SiteLocale, ...>`s. Adding a
+// locale to src/routes.ts's LOCALES without adding its login copy here is a
+// `bun run typecheck` failure. src/oauth.ts still decides availability by
 // asking whether public/{locale}/login.html exists on disk rather than by
-// importing this module, matching how src/index.ts's locale routes work:
-// a locale is available when its page is built, not when a data object
-// claims it should be. Keep the two in step by re-running
+// importing this module. Keep the two in step by re-running
 // scripts/gen-login.ts after touching this file.
 
 import type { SiteLocale } from "../routes.js";
@@ -38,9 +30,9 @@ export interface LoginDoc {
     emailLabel: string;
     passwordLabel: string;
     continueButton: string;
-    /** "By continuing you confirm..." — {terms}/{privacy} are replaced with
-     * the localized link text for Terms of Service / Privacy Policy by the
-     * generator; keep both placeholders in the sentence. */
+    /** "By continuing you confirm..." — {terms}/{privacy} become the
+     * localized names as plain text. Legal HTML is gone, so do not turn
+     * these into anchors. */
     consentNote: string;
     termsLinkText: string;
     privacyLinkText: string;
