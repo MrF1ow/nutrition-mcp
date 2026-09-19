@@ -5,6 +5,13 @@ import { isWeightUnit, toStoredInteger, type WeightUnit } from "./units.js";
 import { isDrinkUnit, type DrinkUnit } from "./alcohol.js";
 import { escapeLikePattern, tokenizeQuery } from "./search.js";
 import type { PatreonTokens, PatreonTokenStore } from "./patreon.js";
+import type { MemberRole } from "./household.js";
+import {
+    combineBearerLookups,
+    hashHouseholdToken,
+    householdTokenHashHex,
+    type TableLookup,
+} from "./household-token.js";
 
 let supabase: SupabaseClient;
 
@@ -1435,7 +1442,8 @@ export async function storeToken(token: string, userId: string): Promise<void> {
 // — during which *every* token looks invalid — trip the repeat-failure bans in
 // rate-limit.ts and keep clients shed long after the database recovered.
 export type TokenLookup =
-    | { status: "valid"; userId: string }
+    | { status: "valid"; kind: "user"; userId: string }
+    | { status: "valid"; kind: "household"; householdId: string }
     | { status: "invalid" }
     | { status: "unavailable" };
 
@@ -1443,7 +1451,7 @@ export type TokenLookup =
 // token does not exist), not a transport or availability failure.
 const PGRST_NO_ROWS = "PGRST116";
 
-export async function getUserIdByToken(token: string): Promise<TokenLookup> {
+async function lookupOauthToken(token: string): Promise<TableLookup> {
     try {
         const { data, error } = await getSupabase()
             .from("oauth_tokens")
@@ -1454,15 +1462,96 @@ export async function getUserIdByToken(token: string): Promise<TokenLookup> {
 
         if (error) {
             return error.code === PGRST_NO_ROWS
-                ? { status: "invalid" }
+                ? { status: "miss" }
                 : { status: "unavailable" };
         }
-        if (!data) return { status: "invalid" };
-        return { status: "valid", userId: data.user_id as string };
+        if (!data?.user_id) return { status: "miss" };
+        return { status: "hit", id: data.user_id as string };
     } catch {
-        // Network-level failure never reaches the `error` field.
         return { status: "unavailable" };
     }
+}
+
+async function lookupHouseholdToken(token: string): Promise<TableLookup> {
+    try {
+        const { data, error } = await getSupabase().rpc(
+            "resolve_household_mcp_token",
+            {
+                p_token_hash_hex: householdTokenHashHex(
+                    hashHouseholdToken(token),
+                ),
+            },
+        );
+
+        if (error) return { status: "unavailable" };
+        if (typeof data !== "string" || data.length === 0) {
+            return { status: "miss" };
+        }
+        return { status: "hit", id: data };
+    } catch {
+        return { status: "unavailable" };
+    }
+}
+
+export async function lookupBearer(token: string): Promise<TokenLookup> {
+    const oauth = await lookupOauthToken(token);
+    if (oauth.status === "hit") {
+        return { status: "valid", kind: "user", userId: oauth.id };
+    }
+    return combineBearerLookups(oauth, await lookupHouseholdToken(token));
+}
+
+export type HouseholdMembership = {
+    householdId: string;
+    userId: string;
+    role: MemberRole;
+    displayName: string;
+};
+
+export async function getHouseholdMembership(
+    userId: string,
+): Promise<HouseholdMembership | null> {
+    const { data, error } = await getSupabase()
+        .from("household_members")
+        .select("household_id, user_id, role, display_name")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+    if (error) {
+        throw new Error(
+            `Failed to load household membership: ${error.message}`,
+        );
+    }
+    if (!data) return null;
+    return {
+        householdId: data.household_id as string,
+        userId: data.user_id as string,
+        role: data.role as MemberRole,
+        displayName: data.display_name as string,
+    };
+}
+
+export async function rotateHouseholdMcpToken(args: {
+    householdId: string;
+    tokenHashHex: string;
+    issuedBy: string | null;
+}): Promise<string> {
+    const { data, error } = await getSupabase().rpc(
+        "rotate_household_mcp_token",
+        {
+            p_household_id: args.householdId,
+            p_token_hash_hex: args.tokenHashHex,
+            p_issued_by: args.issuedBy,
+        },
+    );
+
+    if (error) {
+        throw new Error(`Failed to rotate household token: ${error.message}`);
+    }
+    if (typeof data !== "string" || data.length === 0) {
+        throw new Error("Failed to rotate household token: empty issued_at");
+    }
+    return data;
 }
 
 // ---------- Patreon tokens ----------
@@ -1471,7 +1560,7 @@ export async function getUserIdByToken(token: string): Promise<TokenLookup> {
  * Backed by the single `patreon_tokens` row (id = "default") — one campaign,
  * one token pair, server-only (RLS has no policy for anon/authenticated; see
  * the patreon_tokens migration). Simplified to a plain null return on any
- * lookup failure: unlike getUserIdByToken's valid/invalid/unavailable
+ * lookup failure: unlike lookupBearer's valid/invalid/unavailable
  * TokenLookup, getRecentPosts already treats null as "nothing to show", so a
  * three-state return here would be unused precision for a landing-page
  * nicety with no auth/security stakes.

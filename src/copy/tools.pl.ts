@@ -2,17 +2,17 @@ import type { ToolsDoc } from "./tools.js";
 
 export const TOOLS_PL: ToolsDoc = {
     meta: {
-        title: "Katalog narzędzi: wszystkie 36 narzędzi",
+        title: "Katalog narzędzi: wszystkie 37 narzędzi",
         description:
-            "Wszystkie 36 narzędzi, które serwer Nutrition MCP daje Twojemu AI — zapisuj posiłki, skanuj kody kreskowe, importuj historię z innej aplikacji, śledź wodę i wagę, ustawiaj cele i przeglądaj trendy. Pełny opis wraz z przykładowymi poleceniami.",
+            "Wszystkie 37 narzędzi, które serwer Nutrition MCP daje Twojemu AI — zapisuj posiłki, skanuj kody kreskowe, importuj historię z innej aplikacji, śledź wodę i wagę, ustawiaj cele i przeglądaj trendy. Pełny opis wraz z przykładowymi poleceniami.",
         ogDescription:
-            "Wszystkie 36 narzędzi, które serwer Nutrition MCP daje Twojemu AI, w tym importer CSV do przenoszenia historii z innej aplikacji — z opisami i przykładowymi poleceniami.",
+            "Wszystkie 37 narzędzi, które serwer Nutrition MCP daje Twojemu AI, w tym importer CSV do przenoszenia historii z innej aplikacji — z opisami i przykładowymi poleceniami.",
     },
     hero: {
         eyebrow: "Dokumentacja",
         title: "Wszystko, co potrafi Twój AI",
         lead: "Nigdy nie wywołujesz tych narzędzi bezpośrednio — po prostu mówisz, a asystent sam wybiera właściwe. Oto pełny zestaw udostępniany przez serwer Nutrition MCP, wraz z opisem działania i przykładowym poleceniem, które je uruchamia.",
-        countBold: "36 narzędzi",
+        countBold: "37 narzędzi",
         countTail: "w 7 obszarach",
     },
     categories: {
@@ -399,6 +399,12 @@ export const TOOLS_PL: ToolsDoc = {
                     "Który standardowy drink pokazywać obok gramów: <code>us</code> (14 g na drinka) lub <code>uk</code> (7,9 g na jednostkę). Domyślnie <code>us</code>; faktycznie przechowywane są gramy czystego etanolu.",
             },
             example: "Zacznij śledzić moje picie, w jednostkach brytyjskich",
+        },
+        rotate_household_token: {
+            description:
+                "Wydaj nowy token bota domowego. Jawny tekst pokazywany jest raz; zapisywany jest tylko skrót SHA-256. Każdy członek może rotować. PAT gospodarstwa może rotować i wtedy przestaje działać.",
+            params: {},
+            example: "Rotuj token bota domowego",
         },
         delete_account: {
             description:

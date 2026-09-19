@@ -10,6 +10,16 @@ import { formatClientId } from "./client-id.js";
 import { z } from "zod";
 import type { Context } from "hono";
 import {
+    analyticsUserId,
+    requireActorUserId,
+    type AuthContext,
+} from "./auth-context.js";
+import {
+    generateHouseholdToken,
+    hashHouseholdToken,
+    householdTokenHashHex,
+} from "./household-token.js";
+import {
     insertMeal,
     getMealsByDate,
     getMealsInRange,
@@ -40,6 +50,8 @@ import {
     localeFromProfile,
     upsertProfile,
     getProfile,
+    getHouseholdMembership,
+    rotateHouseholdMcpToken,
     countMeals,
     existingIdempotencyKeys,
     existingMealIds,
@@ -1315,7 +1327,7 @@ export function missingNutrientNote(meal: Meal): string {
 // via buildMcpServer.
 export function registerTools(
     server: McpServer,
-    userId: string,
+    auth: AuthContext,
     widgetsEnabled: boolean,
     alcohol: AlcoholDisplay,
     // Optional so the many direct callers in mcp.test.ts keep working: they
@@ -1323,11 +1335,12 @@ export function registerTools(
     // is exactly what a non-HTTP embedding should record.
     protocolEra?: "legacy" | "modern",
 ) {
-    // One context for all 36 tools. clientInfo is a getter, not a value: at
+    const requireUser = () => requireActorUserId(auth);
+    // One context for all 37 tools. clientInfo is a getter, not a value: at
     // registration time the SDK has not yet resolved who is calling, and on the
     // modern leg it backfills the identity per request before dispatch.
     const analytics = {
-        userId,
+        userId: analyticsUserId(auth),
         protocolEra,
         clientInfo: () => server.server.getClientVersion(),
     };
@@ -1466,6 +1479,7 @@ export function registerTools(
             return withAnalytics(
                 "log_meal",
                 async () => {
+                    const userId = requireUser();
                     const { iso, note } = await resolveWriteTimestamp(
                         userId,
                         args.logged_at,
@@ -1550,6 +1564,7 @@ export function registerTools(
             return withAnalytics(
                 "start_meal_import",
                 async () => {
+                    const userId = requireUser();
                     const profile = await getProfile(userId);
                     const tz = timezoneFromProfile(profile);
                     const structuredContent = startImportPayload({
@@ -1649,6 +1664,7 @@ export function registerTools(
             return withAnalytics(
                 "bulk_import_meals",
                 async () => {
+                    const userId = requireUser();
                     // One profile read serves both: the timezone, and whether the
                     // user ever configured one via timezoneFromProfile (null
                     // means never set — see the Profile.timezone doc comment in
@@ -1795,6 +1811,7 @@ export function registerTools(
             return withAnalytics(
                 "lookup_barcode",
                 async () => {
+                    const userId = requireUser();
                     const normalized = normalizeBarcode(barcode);
                     if (!normalized) {
                         return {
@@ -1881,6 +1898,7 @@ export function registerTools(
             return withAnalytics(
                 "get_meals_today",
                 async () => {
+                    const userId = requireUser();
                     const tz = await getUserTimezone(userId);
                     const meals = await getMealsByDate(
                         userId,
@@ -1926,6 +1944,7 @@ export function registerTools(
             return withAnalytics(
                 "get_meals_by_date",
                 async () => {
+                    const userId = requireUser();
                     const tz = await getUserTimezone(userId);
                     const meals = await getMealsByDate(userId, date, tz);
                     if (meals.length === 0) {
@@ -1970,6 +1989,7 @@ export function registerTools(
             return withAnalytics(
                 "get_meals_by_date_range",
                 async () => {
+                    const userId = requireUser();
                     const tz = await getUserTimezone(userId);
                     const meals = await getMealsInRange(
                         userId,
@@ -2063,6 +2083,7 @@ export function registerTools(
             return withAnalytics(
                 "search_meals",
                 async () => {
+                    const userId = requireUser();
                     const tz = await getUserTimezone(userId);
                     const windowDays = days ?? 365;
                     // A fuzzy lookback window needs no calendar-day precision,
@@ -2300,6 +2321,7 @@ export function registerTools(
             return withAnalytics(
                 "get_nutrition_summary",
                 async () => {
+                    const userId = requireUser();
                     // Sized with insights.ts's own arithmetic (the function
                     // buildDailyBuckets lays its buckets out with), so the two
                     // tools cannot disagree about how long a window is. Clamped
@@ -2600,6 +2622,7 @@ export function registerTools(
             return withAnalytics(
                 "set_nutrition_goals",
                 async () => {
+                    const userId = requireUser();
                     const [existing, preferredUnit] = await Promise.all([
                         getNutritionGoals(userId),
                         getPreferredWeightUnit(userId),
@@ -2701,6 +2724,7 @@ export function registerTools(
             return withAnalytics(
                 "get_nutrition_goals",
                 async () => {
+                    const userId = requireUser();
                     const [goals, unit] = await Promise.all([
                         getNutritionGoals(userId),
                         getPreferredWeightUnit(userId),
@@ -2765,6 +2789,7 @@ export function registerTools(
             return withAnalytics(
                 "get_goal_progress",
                 async () => {
+                    const userId = requireUser();
                     const profile = await getProfile(userId);
                     const tz = timezoneFromProfile(profile) ?? "UTC";
                     const targetDate = date ?? todayInTz(tz);
@@ -2888,6 +2913,7 @@ export function registerTools(
             return withAnalytics(
                 "delete_meal",
                 async () => {
+                    const userId = requireUser();
                     const deleted = await deleteMeal(userId, id);
                     return {
                         content: [
@@ -2980,6 +3006,7 @@ export function registerTools(
             return withAnalytics(
                 "update_meal",
                 async () => {
+                    const userId = requireUser();
                     const { iso, note } = await resolveWriteTimestamp(
                         userId,
                         fields.logged_at,
@@ -3057,6 +3084,7 @@ export function registerTools(
             return withAnalytics(
                 "log_water",
                 async () => {
+                    const userId = requireUser();
                     const { iso, note } = await resolveWriteTimestamp(
                         userId,
                         args.logged_at,
@@ -3099,6 +3127,7 @@ export function registerTools(
             return withAnalytics(
                 "get_water_today",
                 async () => {
+                    const userId = requireUser();
                     const tz = await getUserTimezone(userId);
                     const entries = await getWaterByDate(
                         userId,
@@ -3154,6 +3183,7 @@ export function registerTools(
             return withAnalytics(
                 "get_water_by_date",
                 async () => {
+                    const userId = requireUser();
                     const tz = await getUserTimezone(userId);
                     const entries = await getWaterByDate(userId, date, tz);
                     if (entries.length === 0) {
@@ -3205,6 +3235,7 @@ export function registerTools(
             return withAnalytics(
                 "delete_water",
                 async () => {
+                    const userId = requireUser();
                     const deleted = await deleteWater(userId, id);
                     return {
                         content: [
@@ -3273,6 +3304,7 @@ export function registerTools(
             return withAnalytics(
                 "log_weight",
                 async () => {
+                    const userId = requireUser();
                     const { iso, note } = await resolveWriteTimestamp(
                         userId,
                         args.logged_at,
@@ -3323,6 +3355,7 @@ export function registerTools(
             return withAnalytics(
                 "get_weight_today",
                 async () => {
+                    const userId = requireUser();
                     const [tz, weightPref] = await Promise.all([
                         getUserTimezone(userId),
                         getPreferredWeightUnit(userId),
@@ -3380,6 +3413,7 @@ export function registerTools(
             return withAnalytics(
                 "get_weight_by_date",
                 async () => {
+                    const userId = requireUser();
                     const [tz, weightPref] = await Promise.all([
                         getUserTimezone(userId),
                         getPreferredWeightUnit(userId),
@@ -3435,6 +3469,7 @@ export function registerTools(
             return withAnalytics(
                 "get_weight_by_date_range",
                 async () => {
+                    const userId = requireUser();
                     const [tz, weightPref] = await Promise.all([
                         getUserTimezone(userId),
                         getPreferredWeightUnit(userId),
@@ -3547,6 +3582,7 @@ export function registerTools(
             return withAnalytics(
                 "get_weight_trends",
                 async () => {
+                    const userId = requireUser();
                     const profile = await getProfile(userId);
                     const tz = timezoneFromProfile(profile) ?? "UTC";
                     const unit =
@@ -3676,6 +3712,7 @@ export function registerTools(
             return withAnalytics(
                 "update_weight",
                 async () => {
+                    const userId = requireUser();
                     const { iso, note } = await resolveWriteTimestamp(
                         userId,
                         logged_at,
@@ -3737,6 +3774,7 @@ export function registerTools(
             return withAnalytics(
                 "delete_weight",
                 async () => {
+                    const userId = requireUser();
                     const deleted = await deleteWeight(userId, id);
                     return {
                         content: [
@@ -3779,6 +3817,7 @@ export function registerTools(
             return withAnalytics(
                 "set_weight_unit",
                 async () => {
+                    const userId = requireUser();
                     if (unit !== null && !isWeightUnit(unit)) {
                         throw new Error(
                             `Invalid weight unit: ${unit}. Use 'kg', 'lb', or null to clear.`,
@@ -3827,6 +3866,7 @@ export function registerTools(
             return withAnalytics(
                 "set_widget_display",
                 async () => {
+                    const userId = requireUser();
                     const profile = await upsertProfile(userId, {
                         widgets_enabled: enabled,
                     });
@@ -3887,6 +3927,7 @@ export function registerTools(
             return withAnalytics(
                 "set_alcohol_tracking",
                 async () => {
+                    const userId = requireUser();
                     const profile = await upsertProfile(userId, {
                         alcohol_tracking_enabled: enabled,
                         // Left untouched when omitted, so toggling tracking off
@@ -3959,6 +4000,7 @@ export function registerTools(
             return withAnalytics(
                 "get_trends",
                 async () => {
+                    const userId = requireUser();
                     const profile = await getProfile(userId);
                     const tz = timezoneFromProfile(profile) ?? "UTC";
                     const locale = localeFromProfile(profile) ?? "en";
@@ -4057,6 +4099,7 @@ export function registerTools(
             return withAnalytics(
                 "get_meal_patterns",
                 async () => {
+                    const userId = requireUser();
                     const tz = await getUserTimezone(userId);
                     const endDate = end_date ?? todayInTz(tz);
                     const windowDays = days ?? 30;
@@ -4107,6 +4150,7 @@ export function registerTools(
             return withAnalytics(
                 "export_all_data",
                 async () => {
+                    const userId = requireUser();
                     const { counts, goals, profile, url } =
                         await exportAllData(userId);
                     // No link means the account had nothing at all — not even a
@@ -4156,6 +4200,7 @@ export function registerTools(
             mimeType: "text/plain",
         },
         async (uri) => {
+            const userId = requireUser();
             const tz = await getUserTimezone(userId);
             const endDate = todayInTz(tz);
             const startDate = shiftLocalDate(endDate, -6);
@@ -4203,6 +4248,7 @@ export function registerTools(
             return withAnalytics(
                 "get_profile",
                 async () => {
+                    const userId = requireUser();
                     const profile = await getProfile(userId);
                     const tz = timezoneFromProfile(profile);
                     const locale = localeFromProfile(profile);
@@ -4269,6 +4315,7 @@ export function registerTools(
             return withAnalytics(
                 "set_timezone",
                 async () => {
+                    const userId = requireUser();
                     if (!validateTz(timezone)) {
                         throw new Error(
                             `Invalid timezone: ${timezone}. Use an IANA identifier like 'America/Los_Angeles' or 'Europe/London'.`,
@@ -4312,6 +4359,7 @@ export function registerTools(
             return withAnalytics(
                 "set_language",
                 async () => {
+                    const userId = requireUser();
                     if (!SITE_LOCALES.includes(locale as SiteLocale)) {
                         throw new Error(
                             `Unsupported language: ${locale}. Use one of: ${SITE_LOCALES.join(", ")}.`,
@@ -4355,6 +4403,7 @@ export function registerTools(
             return withAnalytics(
                 "get_current_time",
                 async () => {
+                    const userId = requireUser();
                     const configuredTz = timezoneFromProfile(
                         await getProfile(userId),
                     );
@@ -4369,6 +4418,67 @@ export function registerTools(
                                 text: `${formatClockLine(configuredTz ?? "UTC")}${unset}`,
                             },
                         ],
+                    };
+                },
+                analytics,
+            );
+        },
+    );
+
+    const ROTATE_HOUSEHOLD_TOKEN_OUTPUT_SCHEMA = z.object({
+        token: z.string(),
+        issued_at: z.string(),
+    });
+
+    server.registerTool(
+        "rotate_household_token",
+        {
+            title: "Rotate Household Token",
+            description:
+                "Issue a new household bot token (prefix nt_hh_). The plaintext is returned once; only its SHA-256 hash is stored. Any household member may rotate. A household PAT may rotate and invalidates itself. Person tools still have no default user on a PAT.",
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            outputSchema: ROTATE_HOUSEHOLD_TOKEN_OUTPUT_SCHEMA,
+        },
+        async () => {
+            return withAnalytics(
+                "rotate_household_token",
+                async () => {
+                    let householdId: string;
+                    let issuedBy: string | null;
+                    if (auth.kind === "user") {
+                        const member = await getHouseholdMembership(
+                            auth.userId,
+                        );
+                        if (!member) {
+                            throw new Error("not a household member");
+                        }
+                        householdId = member.householdId;
+                        issuedBy = auth.userId;
+                    } else {
+                        householdId = auth.householdId;
+                        issuedBy = null;
+                    }
+                    const token = generateHouseholdToken();
+                    const issued_at = await rotateHouseholdMcpToken({
+                        householdId,
+                        tokenHashHex: householdTokenHashHex(
+                            hashHouseholdToken(token),
+                        ),
+                        issuedBy,
+                    });
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Household bot token (shown once):\n${token}`,
+                            },
+                        ],
+                        structuredContent: { token, issued_at },
                     };
                 },
                 analytics,
@@ -4400,6 +4510,7 @@ export function registerTools(
             return withAnalytics(
                 "delete_account",
                 async () => {
+                    const userId = requireUser();
                     if (!confirm) {
                         return {
                             content: [
@@ -4426,7 +4537,9 @@ export function registerTools(
                 // (nothing deleted) still belongs to the real user.
                 {
                     ...analytics,
-                    userId: confirm ? DELETED_ACCOUNT_ANALYTICS_ID : userId,
+                    userId: confirm
+                        ? DELETED_ACCOUNT_ANALYTICS_ID
+                        : requireUser(),
                 },
             );
         },
@@ -4470,7 +4583,7 @@ function newMcpServer(baseUrl: string): McpServer {
 // used only to advertise the server icon.
 async function buildMcpServer(
     baseUrl: string,
-    userId: string,
+    auth: AuthContext,
     protocolEra?: "legacy" | "modern",
 ): Promise<McpServer> {
     const server = newMcpServer(baseUrl);
@@ -4483,12 +4596,12 @@ async function buildMcpServer(
     // resolves to a drink unit only when tracking is on — null is what every
     // display path treats as "this user does not track alcohol" (storage is
     // never affected).
-    const profile = await getProfile(userId);
+    const profile = auth.kind === "user" ? await getProfile(auth.userId) : null;
     const drinkUnit = preferredDrinkUnitFromProfile(profile);
 
     registerTools(
         server,
-        userId,
+        auth,
         widgetsEnabledFromProfile(profile),
         alcoholTrackingEnabledFromProfile(profile) ? (drinkUnit ?? "us") : null,
         protocolEra,
@@ -4526,10 +4639,6 @@ const IDENTITY_ONLY_METHODS = new Set([
 // backs both eras, so the tool surface cannot drift between them. Nothing is
 // kept in-process between requests on either leg, which is what keeps deploys
 // invisible to clients — there is no session to lose.
-//
-// The factory has no Hono context: the authenticated user arrives through the
-// `authInfo` pass-through (`extra.userId`, set in handleMcp from the bearer
-// middleware's verdict) and the public origin comes from the raw request.
 // Observability only, and the instrument that makes retiring the legacy leg a
 // measurable decision rather than a guess. The negotiated era is decided inside
 // the SDK and surfaces in exactly one place — `ctx.era` on the factory context —
@@ -4549,19 +4658,43 @@ export type McpEraTrace = {
     server?: McpServer;
 };
 
+function isAuthContext(value: unknown): value is AuthContext {
+    if (value === null || typeof value !== "object") return false;
+    const rec = value as Record<string, unknown>;
+    if (
+        rec.kind === "household" &&
+        typeof rec.householdId === "string" &&
+        rec.householdId.length > 0
+    ) {
+        return true;
+    }
+    if (
+        rec.kind === "user" &&
+        typeof rec.userId === "string" &&
+        rec.userId.length > 0
+    ) {
+        return true;
+    }
+    return false;
+}
+
+function authFromExtra(
+    extra: Record<string, unknown> | undefined,
+): AuthContext | null {
+    const auth = extra?.auth;
+    return isAuthContext(auth) ? auth : null;
+}
+
 const mcpHandler = createMcpHandler(
     async (ctx: McpRequestContext) => {
         const trace = ctx.authInfo?.extra?.trace as McpEraTrace | undefined;
         if (trace) trace.era = ctx.era;
 
-        const userId = ctx.authInfo?.extra?.userId;
-        if (typeof userId !== "string" || userId.length === 0) {
-            // handleMcp always sets it; reaching here means the /mcp route was
-            // wired without authenticateBearer, which must fail loudly rather
-            // than serve an anonymous server.
-            throw new Error(
-                "mcp: request reached the handler without a userId",
-            );
+        const auth = authFromExtra(
+            ctx.authInfo?.extra as Record<string, unknown> | undefined,
+        );
+        if (!auth) {
+            throw new Error("mcp: request reached the handler without auth");
         }
         // requestInfo is set on both HTTP legs; the fallback only covers a
         // non-HTTP embedding of this factory (e.g. serveStdio), which never
@@ -4577,7 +4710,7 @@ const mcpHandler = createMcpHandler(
             return bare;
         }
 
-        const server = await buildMcpServer(baseUrl, userId, ctx.era);
+        const server = await buildMcpServer(baseUrl, auth, ctx.era);
         if (trace) trace.server = server;
         return server;
     },
@@ -4663,26 +4796,28 @@ export const handleMcp = async (c: Context) => {
         );
     }
 
-    const userId = c.get("userId") as string;
+    const auth = c.get("authContext");
+    if (!auth) {
+        throw new Error("mcp: handleMcp ran without authenticateBearer");
+    }
 
     // The handler never derives auth from headers: authInfo is pass-through,
-    // and the only consumer is our own factory above. `extra.userId` is the
-    // single authoritative carrier — the SDK-designated slot for application
-    // data, which the factory reads behind a typeof guard because `extra` is
-    // untyped. clientId is left blank on purpose: it is an OAuth field the SDK
-    // documents as "the client ID associated with this token", not an
-    // app-identity slot, and carrying the user id in both places left no way to
-    // tell which one a future reader (or a future SDK feature) should trust.
-    // Nothing on the serve path reads it. The real bearer token is deliberately
-    // NOT forwarded either — nothing downstream needs it, and keeping it out of
-    // the SDK's context means no handler or error path can echo it.
+    // and the only consumer is our own factory above. clientId is left blank
+    // on purpose: it is an OAuth field the SDK documents as "the client ID
+    // associated with this token", not an app-identity slot. Nothing on the
+    // serve path reads it. The real bearer token is deliberately NOT forwarded
+    // either — nothing downstream needs it, and keeping it out of the SDK's
+    // context means no handler or error path can echo it.
     const trace: McpEraTrace = {};
     const response = await mcpHandler.fetch(c.req.raw, {
         authInfo: {
             token: "",
             clientId: "",
             scopes: [],
-            extra: { userId, trace },
+            extra: {
+                auth,
+                trace,
+            },
         },
     });
 

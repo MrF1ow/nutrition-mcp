@@ -46,6 +46,8 @@ import * as actualSupabase from "./supabase.js";
 // the next file the mock again. Restore from this copy.
 const realSupabase = { ...actualSupabase };
 import { DELETED_ACCOUNT_ANALYTICS_ID } from "./analytics.js";
+import { HOUSEHOLD_HAS_NO_DEFAULT_USER } from "./auth-context.js";
+import { HOUSEHOLD_TOKEN_PREFIX } from "./household-token.js";
 import { formatFoodResult, type FoodResult } from "./foods.js";
 import {
     buildDailyBuckets,
@@ -1436,6 +1438,18 @@ const db = {
     analyticsRows: [] as Record<string, unknown>[],
     accountWipes: 0,
     profileReads: [] as string[],
+    membershipReads: [] as string[],
+    tokenRotations: [] as {
+        householdId: string;
+        tokenHashHex: string;
+        issuedBy: string | null;
+    }[],
+    membership: {
+        householdId: "hh-1",
+        userId: "u1",
+        role: "owner" as const,
+        displayName: "U1",
+    } as actualSupabase.HouseholdMembership | null,
 };
 
 mock.module("./supabase.js", () => ({
@@ -1547,6 +1561,18 @@ mock.module("./supabase.js", () => ({
     existingIdempotencyKeys: async () => new Set<string>(),
     existingMealIds: async (_userId: string, ids: string[]) =>
         new Set(ids.filter((id) => db.meals.some((m) => m.id === id))),
+    getHouseholdMembership: async (userId: string) => {
+        db.membershipReads.push(userId);
+        return db.membership;
+    },
+    rotateHouseholdMcpToken: async (args: {
+        householdId: string;
+        tokenHashHex: string;
+        issuedBy: string | null;
+    }) => {
+        db.tokenRotations.push(args);
+        return "2026-09-19T12:00:00.000Z";
+    },
     getPreferredWeightUnit: async () =>
         db.profile?.preferred_weight_unit ?? null,
     upsertNutritionGoals: async (
@@ -1585,6 +1611,14 @@ beforeEach(() => {
     db.analyticsRows = [];
     db.accountWipes = 0;
     db.profileReads = [];
+    db.membershipReads = [];
+    db.tokenRotations = [];
+    db.membership = {
+        householdId: "hh-1",
+        userId: "u1",
+        role: "owner",
+        displayName: "U1",
+    };
 });
 
 interface ToolResult {
@@ -1608,7 +1642,7 @@ async function withTools(
         { name: "nutrition-mcp-test", version: "0.0.0" },
         { capabilities: { tools: {}, resources: {} } },
     );
-    registerTools(server, "u1", true, alcohol);
+    registerTools(server, { kind: "user", userId: "u1" }, true, alcohol);
     const [clientTransport, serverTransport] =
         InMemoryTransport.createLinkedPair();
     const client = new Client({ name: "test-client", version: "0.0.0" });
@@ -2143,7 +2177,7 @@ describe("log_meal and update_meal round-trip caffeine_mg", () => {
             { name: "t", version: "0.0.0" },
             { capabilities: { tools: {}, resources: {} } },
         );
-        registerTools(server, "u1", true, null);
+        registerTools(server, { kind: "user", userId: "u1" }, true, null);
         const [ct, st] = InMemoryTransport.createLinkedPair();
         const client = new Client({ name: "c", version: "0.0.0" });
         await Promise.all([server.connect(st), client.connect(ct)]);
@@ -2402,7 +2436,7 @@ describe("set_alcohol_tracking", () => {
             { name: "t", version: "0.0.0" },
             { capabilities: { tools: {}, resources: {} } },
         );
-        registerTools(server, "u1", true, null);
+        registerTools(server, { kind: "user", userId: "u1" }, true, null);
         const [ct, st] = InMemoryTransport.createLinkedPair();
         const client = new Client({ name: "c", version: "0.0.0" });
         await Promise.all([server.connect(st), client.connect(ct)]);
@@ -2428,7 +2462,7 @@ describe("the nutrient-completeness rule reaches the write tools", () => {
             { name: "t", version: "0.0.0" },
             { capabilities: { tools: {}, resources: {} } },
         );
-        registerTools(server, "u1", true, null);
+        registerTools(server, { kind: "user", userId: "u1" }, true, null);
         const [ct, st] = InMemoryTransport.createLinkedPair();
         const client = new Client({ name: "c", version: "0.0.0" });
         await Promise.all([server.connect(st), client.connect(ct)]);
@@ -3659,7 +3693,7 @@ describe("current-time disclosure", () => {
             { name: "t", version: "0.0.0" },
             { capabilities: { tools: {}, resources: {} } },
         );
-        registerTools(server, "u1", true, null);
+        registerTools(server, { kind: "user", userId: "u1" }, true, null);
         const [ct, st] = InMemoryTransport.createLinkedPair();
         const client = new Client({ name: "c", version: "0.0.0" });
         await Promise.all([server.connect(st), client.connect(ct)]);
@@ -3703,7 +3737,7 @@ describe("export_all_data is on the tool surface", () => {
             { name: "t", version: "0.0.0" },
             { capabilities: { tools: {}, resources: {} } },
         );
-        registerTools(server, "u1", true, null);
+        registerTools(server, { kind: "user", userId: "u1" }, true, null);
         const [ct, st] = InMemoryTransport.createLinkedPair();
         const client = new Client({ name: "c", version: "0.0.0" });
         await Promise.all([server.connect(st), client.connect(ct)]);
@@ -3758,6 +3792,120 @@ describe("export_all_data is on the tool surface", () => {
     });
 });
 
+describe("household PAT has no default user", () => {
+    async function withHousehold(
+        run: (call: CallTool, list: () => Promise<string[]>) => Promise<void>,
+    ): Promise<void> {
+        const server = new McpServer(
+            { name: "nutrition-mcp-test", version: "0.0.0" },
+            { capabilities: { tools: {}, resources: {} } },
+        );
+        registerTools(
+            server,
+            { kind: "household", householdId: "hh-1" },
+            true,
+            null,
+        );
+        const [clientTransport, serverTransport] =
+            InMemoryTransport.createLinkedPair();
+        const client = new Client({ name: "test-client", version: "0.0.0" });
+        await Promise.all([
+            server.connect(serverTransport),
+            client.connect(clientTransport),
+        ]);
+        try {
+            await run(
+                (name, args = {}) =>
+                    client.callTool({
+                        name,
+                        arguments: args,
+                    }) as Promise<ToolResult>,
+                async () => {
+                    const { tools } = await client.listTools();
+                    return tools.map((t) => t.name);
+                },
+            );
+        } finally {
+            await client.close();
+            await server.close();
+        }
+    }
+
+    test("tools/list still advertises person tools and rotate_household_token", async () => {
+        await withHousehold(async (_call, list) => {
+            const names = await list();
+            expect(names).toContain("log_meal");
+            expect(names).toContain("get_profile");
+            expect(names).toContain("rotate_household_token");
+        });
+    });
+
+    test("log_meal without a user fails and writes nothing", async () => {
+        await withHousehold(async (call) => {
+            const r = await call("log_meal", {
+                description: "toast",
+                meal_type: "breakfast",
+                calories: 100,
+                protein_g: 4,
+                carbs_g: 18,
+                fat_g: 1,
+            });
+            expect(r.isError).toBe(true);
+            expect(textOf(r)).toContain(HOUSEHOLD_HAS_NO_DEFAULT_USER);
+            expect(db.inserted).toHaveLength(0);
+        });
+    });
+
+    test("get_profile does not invent a user", async () => {
+        await withHousehold(async (call) => {
+            const r = await call("get_profile");
+            expect(r.isError).toBe(true);
+            expect(textOf(r)).toContain(HOUSEHOLD_HAS_NO_DEFAULT_USER);
+            expect(db.profileReads).toHaveLength(0);
+        });
+    });
+
+    test("rotate_household_token returns a nt_hh_ token once", async () => {
+        await withHousehold(async (call) => {
+            const r = await call("rotate_household_token");
+            expect(r.isError).toBeFalsy();
+            const token = r.structuredContent?.token as string;
+            expect(token.startsWith(HOUSEHOLD_TOKEN_PREFIX)).toBe(true);
+            expect(textOf(r)).toContain(token);
+            expect(db.tokenRotations).toHaveLength(1);
+            expect(db.tokenRotations[0]!.householdId).toBe("hh-1");
+            expect(db.tokenRotations[0]!.issuedBy).toBeNull();
+            expect(db.tokenRotations[0]!.tokenHashHex).toHaveLength(64);
+        });
+    });
+});
+
+describe("rotate_household_token from member OAuth", () => {
+    test("any member may rotate", async () => {
+        await withTools(null, async (call) => {
+            const r = await call("rotate_household_token");
+            expect(r.isError).toBeFalsy();
+            expect(db.membershipReads).toEqual(["u1"]);
+            expect(db.tokenRotations[0]!.issuedBy).toBe("u1");
+            expect(
+                (r.structuredContent?.token as string).startsWith(
+                    HOUSEHOLD_TOKEN_PREFIX,
+                ),
+            ).toBe(true);
+        });
+    });
+
+    test("a non-member is refused", async () => {
+        db.membership = null;
+        await withTools(null, async (call) => {
+            const r = await call("rotate_household_token");
+            expect(r.isError).toBe(true);
+            expect(textOf(r)).toContain("not a household member");
+            expect(db.tokenRotations).toHaveLength(0);
+        });
+    });
+});
+
 // ---------- /mcp over HTTP: both protocol eras ----------
 //
 // Kept in this file rather than its own: mock.module is process-wide, and a
@@ -3766,12 +3914,19 @@ describe("export_all_data is on the tool surface", () => {
 // Sharing this file's single mock window is what proved green; see the
 // restore note on the afterAll above for the mechanism.
 
-// The production route minus auth: authenticateBearer's only output is the
-// userId variable, which is what handleMcp hands to the server factory.
 function appFor(userId: string) {
     const app = new Hono();
     app.all("/mcp", (c) => {
-        c.set("userId", userId);
+        c.set("authContext", { kind: "user", userId });
+        return handleMcp(c);
+    });
+    return app;
+}
+
+function appForHousehold(householdId: string) {
+    const app = new Hono();
+    app.all("/mcp", (c) => {
+        c.set("authContext", { kind: "household", householdId });
         return handleMcp(c);
     });
     return app;
@@ -3846,6 +4001,78 @@ async function sseFrame(r: Response): Promise<Record<string, unknown>> {
         .find((l) => l.startsWith("data:"));
     return JSON.parse(line?.slice(5) ?? "{}") as Record<string, unknown>;
 }
+
+describe("household PAT over HTTP has no default userId", () => {
+    async function withHouseholdHttp<T>(
+        mode: EraMode,
+        run: (client: Client) => Promise<T>,
+    ): Promise<T> {
+        const app = appForHousehold("hh-1");
+        const transport = new StreamableHTTPClientTransport(
+            new URL("http://test.local/mcp"),
+            {
+                fetch: async (url, init) =>
+                    app.request(new Request(String(url), init)),
+            },
+        );
+        const client = new Client(
+            { name: "t", version: "0" },
+            { versionNegotiation: { mode } },
+        );
+        await client.connect(transport);
+        try {
+            return await run(client);
+        } finally {
+            await client.close();
+        }
+    }
+
+    test.each(ERAS)(
+        "tools/list succeeds for a household PAT (%p)",
+        async (mode) => {
+            await withHouseholdHttp(mode, async (client) => {
+                const { tools } = await client.listTools();
+                expect(
+                    tools.some((t) => t.name === "rotate_household_token"),
+                ).toBe(true);
+                expect(tools.some((t) => t.name === "log_meal")).toBe(true);
+            });
+        },
+    );
+
+    test.each(ERAS)("get_profile does not invent a user (%p)", async (mode) => {
+        await withHouseholdHttp(mode, async (client) => {
+            const r = await client.callTool({
+                name: "get_profile",
+                arguments: {},
+            });
+            expect(r.isError).toBe(true);
+            expect(
+                (r.content as { type: string; text?: string }[])
+                    .map((c) => c.text ?? "")
+                    .join("\n"),
+            ).toContain(HOUSEHOLD_HAS_NO_DEFAULT_USER);
+        });
+    });
+
+    test.each(ERAS)("log_meal writes nothing (%p)", async (mode) => {
+        await withHouseholdHttp(mode, async (client) => {
+            const r = await client.callTool({
+                name: "log_meal",
+                arguments: {
+                    description: "toast",
+                    meal_type: "breakfast",
+                    calories: 100,
+                    protein_g: 4,
+                    carbs_g: 18,
+                    fat_g: 1,
+                },
+            });
+            expect(r.isError).toBe(true);
+            expect(db.inserted).toHaveLength(0);
+        });
+    });
+});
 
 describe("/mcp serves the 2026-07-28 revision", () => {
     test("a negotiating client lands on the modern era", async () => {
@@ -4063,8 +4290,6 @@ describe("/mcp serves one tool surface on both protocol eras", () => {
             });
             expect(db.inserted).toHaveLength(1);
             expect(db.inserted[0]?.description).toBe("eggs");
-            // authInfo.extra.userId is the single identity carrier on both
-            // legs; every profile read of this exchange must name that user.
             expect(new Set(db.profileReads)).toEqual(new Set(["mode-user"]));
         },
     );
@@ -4270,7 +4495,7 @@ describe("/mcp records the negotiated era for the access log", () => {
     function recordingApp(userId: string, seen: (entry: string) => void) {
         const app = new Hono();
         app.all("/mcp", async (c) => {
-            c.set("userId", userId);
+            c.set("authContext", { kind: "user", userId });
             const res = await handleMcp(c);
             seen(
                 `${c.req.method}:${c.get("mcpEra") ?? "-"}:${c.get("mcpClient") ?? "-"}`,

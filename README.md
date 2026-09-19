@@ -92,6 +92,7 @@ Read the story behind it: [How I Replaced MyFitnessPal and Other Apps with a Sin
 | `get_current_time`         | Get the current date and time in the user's timezone, plus the UTC instant — for hosts with no clock in context                                  |
 | `set_widget_display`       | Enable or disable the in-chat visual widgets (dashboards, rings, charts); enabled by default                                                     |
 | `set_alcohol_tracking`     | Turn alcohol tracking on or off (off by default) and choose US standard drinks or UK units; turning it off hides alcohol rather than deleting it |
+| `rotate_household_token`   | Issue a household bot token (`nt_hh_…`). Shown once; stored as a hash. Any member may rotate. A PAT may rotate and then stops working            |
 | `delete_account`           | Permanently delete account and all associated data                                                                                               |
 
 ## MCP Resources

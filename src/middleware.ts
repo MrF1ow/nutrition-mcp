@@ -1,5 +1,7 @@
 import type { Context, Next } from "hono";
-import { getUserIdByToken } from "./supabase.js";
+import type { AuthContext } from "./auth-context.js";
+import { rateLimitKey } from "./auth-context.js";
+import { lookupBearer } from "./supabase.js";
 import { maskIp } from "./net.js";
 import { resourceMetadataUrl } from "./discovery.js";
 import { getBaseUrl } from "./url.js";
@@ -9,7 +11,7 @@ import { getBaseUrl } from "./url.js";
 // suppressAccessLog.
 declare module "hono" {
     interface ContextVariableMap {
-        userId: string;
+        authContext: AuthContext;
         accessToken: string;
         suppressAccessLog: boolean;
         // The protocol era /mcp actually negotiated for this request, set by
@@ -81,7 +83,7 @@ export const authenticateBearer = async (c: Context, next: Next) => {
     }
 
     const token = authHeader.substring(7);
-    const lookup = await getUserIdByToken(token);
+    const lookup = await lookupBearer(token);
 
     if (lookup.status === "unavailable") {
         // We could not verify the token, so this is not the client's fault:
@@ -114,7 +116,12 @@ export const authenticateBearer = async (c: Context, next: Next) => {
     clearAuthFailures(getClientIp(c));
 
     c.set("accessToken", token);
-    c.set("userId", lookup.userId);
+    c.set(
+        "authContext",
+        lookup.kind === "user"
+            ? { kind: "user", userId: lookup.userId }
+            : { kind: "household", householdId: lookup.householdId },
+    );
     await next();
 };
 
@@ -160,12 +167,12 @@ export const rateLimitAuth = async (c: Context, next: Next) => {
 };
 
 export const rateLimit = async (c: Context, next: Next) => {
-    const userId = c.get("userId") as string | undefined;
-    if (!userId) {
+    const auth = c.get("authContext");
+    if (!auth) {
         await next();
         return;
     }
-    const result = checkRateLimit(userId);
+    const result = checkRateLimit(rateLimitKey(auth));
     c.header("X-RateLimit-Limit", String(result.limit));
     c.header("X-RateLimit-Remaining", String(result.remaining));
     if (!result.allowed) {

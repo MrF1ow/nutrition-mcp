@@ -26,12 +26,14 @@ let tokenLookups = 0;
 let supabaseAvailable = true;
 mock.module("./supabase.js", () => ({
     ...actualSupabase,
-    getUserIdByToken: async (token: string) => {
+    lookupBearer: async (token: string) => {
         tokenLookups++;
         if (!supabaseAvailable) return { status: "unavailable" };
         return token === "valid-token"
-            ? { status: "valid", userId: "user-1" }
-            : { status: "invalid" };
+            ? { status: "valid", kind: "user", userId: "user-1" }
+            : token === "hh-token"
+              ? { status: "valid", kind: "household", householdId: "hh-1" }
+              : { status: "invalid" };
     },
 }));
 afterAll(() => {
@@ -55,7 +57,7 @@ function buildApp() {
         logs.push(`[req] ${c.req.method} ${c.req.path} ${c.res.status}`);
     });
     app.all("/mcp", banRepeatAuthFailures, authenticateBearer, rateLimit, (c) =>
-        c.json({ ok: true }),
+        c.json({ ok: true, auth: c.get("authContext") ?? null }),
     );
     return { app, logs };
 }
@@ -174,4 +176,46 @@ test("bans are per-IP and do not affect other clients", async () => {
     expect((await app.fetch(from("8.8.8.8"))).status).toBe(429);
     expect((await app.fetch(from("8.8.4.4"))).status).toBe(401);
     expect((await app.fetch(from("8.8.4.4", "valid-token"))).status).toBe(200);
+});
+
+test("OAuth still maps to its userId", async () => {
+    const { app } = buildApp();
+    const res = await app.fetch(from("10.0.0.1", "valid-token"));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+        ok: true,
+        auth: { kind: "user", userId: "user-1" },
+    });
+});
+
+test("household PAT authenticates with no userId", async () => {
+    const { app } = buildApp();
+    const res = await app.fetch(from("10.0.0.2", "hh-token"));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+        ok: true,
+        auth: { kind: "household", householdId: "hh-1" },
+    });
+});
+
+test("an unknown token is 401", async () => {
+    const { app } = buildApp();
+    expect((await app.fetch(from("10.0.0.3", "nope"))).status).toBe(401);
+    expect((await app.fetch(from("10.0.0.3", "nt_hh_truncated"))).status).toBe(
+        401,
+    );
+});
+
+test("PAT traffic is rate-limited on householdId", async () => {
+    const { app } = buildApp();
+    const ip = "10.0.0.4";
+    for (let i = 0; i < 60; i++) {
+        expect((await app.fetch(from(ip, "hh-token"))).status).toBe(200);
+    }
+    expect((await app.fetch(from(ip, "hh-token"))).status).toBe(429);
+    expect(
+        (await app.fetch(from("10.0.0.5", "hh-token"))).status,
+        "same household PAT shares the householdId bucket across IPs",
+    ).toBe(429);
+    expect((await app.fetch(from(ip, "valid-token"))).status).toBe(200);
 });

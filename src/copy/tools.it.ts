@@ -13,17 +13,17 @@ import type { ToolsDoc } from "./tools.js";
 
 export const TOOLS_IT: ToolsDoc = {
     meta: {
-        title: "Guida agli strumenti: tutti i 36 strumenti",
+        title: "Guida agli strumenti: tutti i 37 strumenti",
         description:
-            "Tutti i 36 strumenti che il server Nutrition MCP mette a disposizione della tua IA — registra i pasti, scansiona codici a barre, importa il tuo storico da un'altra app, monitora acqua e peso, imposta obiettivi e rivedi gli andamenti. Guida completa con descrizioni ed esempi di richieste.",
+            "Tutti i 37 strumenti che il server Nutrition MCP mette a disposizione della tua IA — registra i pasti, scansiona codici a barre, importa il tuo storico da un'altra app, monitora acqua e peso, imposta obiettivi e rivedi gli andamenti. Guida completa con descrizioni ed esempi di richieste.",
         ogDescription:
-            "Tutti i 36 strumenti che il server Nutrition MCP mette a disposizione della tua IA, incluso un importatore CSV per il tuo storico da un'altra app — con descrizioni ed esempi di richieste.",
+            "Tutti i 37 strumenti che il server Nutrition MCP mette a disposizione della tua IA, incluso un importatore CSV per il tuo storico da un'altra app — con descrizioni ed esempi di richieste.",
     },
     hero: {
         eyebrow: "Guida di riferimento",
         title: "Tutto quello che la tua IA può fare",
         lead: "Non li chiami mai direttamente — parli e basta, e l'assistente sceglie lo strumento giusto. Ecco l'elenco completo che il server Nutrition MCP mette a disposizione, con cosa fa ciascuno e una frase che lo attiva.",
-        countBold: "36 strumenti",
+        countBold: "37 strumenti",
         countTail: "in 7 aree",
     },
     categories: {
@@ -413,6 +413,12 @@ export const TOOLS_IT: ToolsDoc = {
                     "Quale drink standard mostrare accanto ai grammi: <code>us</code> (14 g per drink) o <code>uk</code> (7,9 g per unità). Predefinito <code>us</code>; ciò che viene effettivamente memorizzato sono i grammi di etanolo puro.",
             },
             example: "Inizia a tracciare quanto bevo, in unità britanniche",
+        },
+        rotate_household_token: {
+            description:
+                "Emette un nuovo token del bot familiare. Il testo in chiaro viene mostrato una sola volta; viene salvato solo un hash SHA-256. Qualsiasi membro può ruotarlo. Un PAT familiare può ruotarlo e poi smette di funzionare.",
+            params: {},
+            example: "Ruota il token del bot familiare",
         },
         delete_account: {
             description:

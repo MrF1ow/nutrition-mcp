@@ -8,17 +8,17 @@ import type { ToolsDoc } from "./tools.js";
 
 export const TOOLS_NL: ToolsDoc = {
     meta: {
-        title: "Toolreferentie: alle 36 tools",
+        title: "Toolreferentie: alle 37 tools",
         description:
-            "Alle 36 tools die de Nutrition MCP-server aan je AI geeft — maaltijden loggen, barcodes scannen, je geschiedenis uit een andere app importeren, water en gewicht bijhouden, doelen instellen en trends bekijken. Volledige referentie met beschrijvingen en voorbeeldzinnen.",
+            "Alle 37 tools die de Nutrition MCP-server aan je AI geeft — maaltijden loggen, barcodes scannen, je geschiedenis uit een andere app importeren, water en gewicht bijhouden, doelen instellen en trends bekijken. Volledige referentie met beschrijvingen en voorbeeldzinnen.",
         ogDescription:
-            "Alle 36 tools die de Nutrition MCP-server aan je AI geeft, inclusief een CSV-importer voor je geschiedenis uit een andere app — met beschrijvingen en voorbeeldzinnen.",
+            "Alle 37 tools die de Nutrition MCP-server aan je AI geeft, inclusief een CSV-importer voor je geschiedenis uit een andere app — met beschrijvingen en voorbeeldzinnen.",
     },
     hero: {
         eyebrow: "Referentie",
         title: "Alles wat je AI kan doen",
         lead: "Je roept deze tools nooit rechtstreeks aan — je praat gewoon, en de assistent kiest de juiste tool. Hier is de volledige set die de Nutrition MCP-server aanbiedt, met wat elke tool doet en een zin die hem activeert.",
-        countBold: "36 tools",
+        countBold: "37 tools",
         countTail: "verdeeld over 7 categorieën",
     },
     categories: {
@@ -410,6 +410,12 @@ export const TOOLS_NL: ToolsDoc = {
             },
             example:
                 "Begin met het bijhouden van mijn drankgebruik, in Britse eenheden",
+        },
+        rotate_household_token: {
+            description:
+                "Geef een nieuw huishouden-bottoken uit. De plaintext zie je één keer; er wordt alleen een SHA-256-hash bewaard. Elk lid mag roteren. Een huishouden-PAT mag roteren en werkt daarna niet meer.",
+            params: {},
+            example: "Roteer het huishouden-bottoken",
         },
         delete_account: {
             description:
