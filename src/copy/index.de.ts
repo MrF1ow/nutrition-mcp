@@ -686,7 +686,7 @@ export const INDEX_DE: IndexDoc = {
         note: "Das alles ist optional. Du kannst es jetzt, später oder nie machen — leg einfach mit dem Erfassen los und stell das ein, wann immer du willst.",
         toolsCta: {
             heading: "Neugierig, was es wirklich kann?",
-            body: "Sieh dir alle 36 Werkzeuge an — Erfassen, Barcodes, Wasser, Gewicht, Ziele und Trends — jeweils mit Beschreibung und einem Beispielsatz.",
+            body: "Sieh dir alle 37 Werkzeuge an — Erfassen, Barcodes, Wasser, Gewicht, Ziele und Trends — jeweils mit Beschreibung und einem Beispielsatz.",
             arrow: "Werkzeuge entdecken",
         },
     },

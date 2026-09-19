@@ -16,17 +16,17 @@ import type { ToolsDoc } from "./tools.js";
 
 export const TOOLS_FR: ToolsDoc = {
     meta: {
-        title: "Référence des outils : les 36 outils",
+        title: "Référence des outils : les 37 outils",
         description:
-            "Les 36 outils que le serveur Nutrition MCP donne à ton IA — enregistrer des repas, scanner des codes-barres, importer ton historique depuis une autre app, suivre l'eau et le poids, définir des objectifs et consulter les tendances. Référence complète avec descriptions et exemples de formulations.",
+            "Les 37 outils que le serveur Nutrition MCP donne à ton IA — enregistrer des repas, scanner des codes-barres, importer ton historique depuis une autre app, suivre l'eau et le poids, définir des objectifs et consulter les tendances. Référence complète avec descriptions et exemples de formulations.",
         ogDescription:
-            "Les 36 outils que le serveur Nutrition MCP donne à ton IA, dont un importateur CSV pour ton historique venu d'une autre app — avec descriptions et exemples de formulations.",
+            "Les 37 outils que le serveur Nutrition MCP donne à ton IA, dont un importateur CSV pour ton historique venu d'une autre app — avec descriptions et exemples de formulations.",
     },
     hero: {
         eyebrow: "Référence",
         title: "Tout ce que ton IA peut faire",
         lead: "Tu n'appelles jamais ces outils directement — tu parles simplement, et l'assistant choisit le bon outil. Voici l'ensemble complet exposé par le serveur Nutrition MCP, avec ce que fait chacun et une phrase qui le déclenche.",
-        countBold: "36 outils",
+        countBold: "37 outils",
         countTail: "répartis en 7 catégories",
     },
     categories: {
@@ -416,6 +416,12 @@ export const TOOLS_FR: ToolsDoc = {
             },
             example:
                 "Commence à suivre ma consommation d'alcool, en unités britanniques",
+        },
+        rotate_household_token: {
+            description:
+                "Émet un nouveau jeton du bot du foyer. Le texte en clair n'apparaît qu'une fois ; seul un hash SHA-256 est stocké. N'importe quel membre peut le faire tourner. Un PAT du foyer peut le faire tourner, puis il cesse de fonctionner.",
+            params: {},
+            example: "Fais tourner le jeton du bot du foyer",
         },
         delete_account: {
             description:
