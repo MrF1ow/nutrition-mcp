@@ -16,17 +16,17 @@ import type { ToolsDoc } from "./tools.js";
 
 export const TOOLS_FR: ToolsDoc = {
     meta: {
-        title: "Référence des outils : les 37 outils",
+        title: "Référence des outils : les 38 outils",
         description:
-            "Les 37 outils que le serveur Nutrition MCP donne à ton IA — enregistrer des repas, scanner des codes-barres, importer ton historique depuis une autre app, suivre l'eau et le poids, définir des objectifs et consulter les tendances. Référence complète avec descriptions et exemples de formulations.",
+            "Les 38 outils que le serveur Nutrition MCP donne à ton IA — enregistrer des repas, scanner des codes-barres, importer ton historique depuis une autre app, suivre l'eau et le poids, définir des objectifs et consulter les tendances. Référence complète avec descriptions et exemples de formulations.",
         ogDescription:
-            "Les 37 outils que le serveur Nutrition MCP donne à ton IA, dont un importateur CSV pour ton historique venu d'une autre app — avec descriptions et exemples de formulations.",
+            "Les 38 outils que le serveur Nutrition MCP donne à ton IA, dont un importateur CSV pour ton historique venu d'une autre app — avec descriptions et exemples de formulations.",
     },
     hero: {
         eyebrow: "Référence",
         title: "Tout ce que ton IA peut faire",
         lead: "Tu n'appelles jamais ces outils directement — tu parles simplement, et l'assistant choisit le bon outil. Voici l'ensemble complet exposé par le serveur Nutrition MCP, avec ce que fait chacun et une phrase qui le déclenche.",
-        countBold: "37 outils",
+        countBold: "38 outils",
         countTail: "répartis en 7 catégories",
     },
     categories: {
@@ -416,6 +416,12 @@ export const TOOLS_FR: ToolsDoc = {
             },
             example:
                 "Commence à suivre ma consommation d'alcool, en unités britanniques",
+        },
+        list_members: {
+            description:
+                "Liste les membres du foyer comme user_id, display_name et role. Un jeton bot du foyer et n'importe quel membre peuvent l'appeler. Les outils personne sur un jeton foyer exigent user_id égal à l'un de ces ids.",
+            params: {},
+            example: "Qui est dans ce foyer ?",
         },
         rotate_household_token: {
             description:

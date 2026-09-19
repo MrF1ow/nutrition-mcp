@@ -11,9 +11,12 @@ import { z } from "zod";
 import type { Context } from "hono";
 import {
     analyticsUserId,
+    HOUSEHOLD_HAS_NO_DEFAULT_USER,
+    OAUTH_USER_MISMATCH,
     requireActorUserId,
     type AuthContext,
 } from "./auth-context.js";
+import { requireMemberOfHousehold, resolveActorUserId } from "./household.js";
 import {
     generateHouseholdToken,
     hashHouseholdToken,
@@ -51,6 +54,7 @@ import {
     upsertProfile,
     getProfile,
     getHouseholdMembership,
+    listHouseholdMembers,
     rotateHouseholdMcpToken,
     countMeals,
     existingIdempotencyKeys,
@@ -1336,7 +1340,53 @@ export function registerTools(
     protocolEra?: "legacy" | "modern",
 ) {
     const requireUser = () => requireActorUserId(auth);
-    // One context for all 37 tools. clientInfo is a getter, not a value: at
+    const userIdArg =
+        auth.kind === "household"
+            ? z
+                  .string()
+                  .min(1)
+                  .describe(
+                      "Household member to act as. Required on a household bot token.",
+                  )
+            : z
+                  .string()
+                  .min(1)
+                  .optional()
+                  .describe(
+                      "Must equal the signed-in user if set. A household bot token uses this to pick a member.",
+                  );
+    const personSchema = <T extends z.ZodRawShape>(shape: T) =>
+        z.object({ ...shape, user_id: userIdArg });
+    async function actorUserId(requested: string | undefined): Promise<string> {
+        const resolved = resolveActorUserId(auth, requested);
+        if (!resolved.ok) {
+            throw new Error(
+                resolved.error === "oauth_mismatch"
+                    ? OAUTH_USER_MISMATCH
+                    : HOUSEHOLD_HAS_NO_DEFAULT_USER,
+            );
+        }
+        if (resolved.membership === "required") {
+            const member = await getHouseholdMembership(resolved.userId);
+            const check = requireMemberOfHousehold(
+                member,
+                resolved.householdId,
+            );
+            if (!check.ok) {
+                throw new Error("not a household member");
+            }
+        }
+        return resolved.userId;
+    }
+    async function callerHouseholdId(): Promise<string> {
+        if (auth.kind === "household") return auth.householdId;
+        const member = await getHouseholdMembership(auth.userId);
+        if (!member) {
+            throw new Error("not a household member");
+        }
+        return member.householdId;
+    }
+    // One context for all 38 tools. clientInfo is a getter, not a value: at
     // registration time the SDK has not yet resolved who is calling, and on the
     // modern leg it backfills the identity per request before dispatch.
     const analytics = {
@@ -1381,7 +1431,7 @@ export function registerTools(
                 idempotentHint: false,
                 openWorldHint: false,
             },
-            inputSchema: z.object({
+            inputSchema: personSchema({
                 description: z.string().describe("What was eaten"),
                 meal_type: z
                     .enum(["breakfast", "lunch", "dinner", "snack"])
@@ -1479,13 +1529,14 @@ export function registerTools(
             return withAnalytics(
                 "log_meal",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(args.user_id);
+                    const { user_id: _target, ...mealArgs } = args;
                     const { iso, note } = await resolveWriteTimestamp(
                         userId,
-                        args.logged_at,
+                        mealArgs.logged_at,
                     );
                     const { meal, deduplicated } = await insertMeal(userId, {
-                        ...args,
+                        ...mealArgs,
                         logged_at: iso,
                     });
                     const header = deduplicated
@@ -1550,7 +1601,7 @@ export function registerTools(
             title: "Import Meals from a File",
             description:
                 "Open an importer the user can drive themselves to load a meal-history export (MyFitnessPal, Cronometer, Lose It!, MacroFactor). Prefer this over bulk_import_meals whenever the user has an actual file: the importer reads and maps it in the browser, so the rows never pass through you and cannot be mistranscribed, and it handles column mapping, batching and retries. Call it when the user says they want to import, upload, or bring in their history from another app. Fall back to bulk_import_meals if the user cannot use the importer, if they have already pasted the data into the conversation, or if the importer reports that this client will not let it save. If the user has alcohol tracking off but wants alcohol from the file, turn it on with set_alcohol_tracking BEFORE importing: the importer skips the alcohol column while tracking is off, and re-importing afterwards will not backfill it.",
-            inputSchema: z.object({}),
+            inputSchema: personSchema({}),
             outputSchema: START_IMPORT_OUTPUT_SCHEMA,
             annotations: {
                 title: "Import Meals from a File",
@@ -1560,11 +1611,11 @@ export function registerTools(
             },
             ...uiMeta(IMPORT_MEALS_WIDGET_URI),
         },
-        async () => {
+        async (args) => {
             return withAnalytics(
                 "start_meal_import",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(args.user_id);
                     const profile = await getProfile(userId);
                     const tz = timezoneFromProfile(profile);
                     const structuredContent = startImportPayload({
@@ -1600,7 +1651,7 @@ export function registerTools(
                 " rows per call: split larger files by date range, keeping all rows for one calendar date in the same call. If a single calendar date alone has more than " +
                 MAX_ROWS_PER_CALL +
                 " rows, that date has to be split across more than one call — the row cap is a hard server-side limit and wins over the same-call grouping. Doing so loosens deduplication for that date only: two rows in it that are byte-identical (same description, meal_type, calories, protein_g, carbs_g, fat_g, notes and logged_at) may collapse into one if they land in different calls, so prefer keeping duplicate-looking rows together in one call when you have to split. If the file is an export from THIS server (its header starts with an id column), map that column to source_id on every row, and map its timezone column to timezone on every row too — source_id is what makes restoring a backup a no-op instead of doubling the user's history, and timezone is what makes a restored row resolve at the local time it was actually recorded rather than the account's current timezone.",
-            inputSchema: z.object({
+            inputSchema: personSchema({
                 meals: z
                     .array(IMPORT_ROW_SCHEMA)
                     .describe(
@@ -1664,7 +1715,7 @@ export function registerTools(
             return withAnalytics(
                 "bulk_import_meals",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(args.user_id);
                     // One profile read serves both: the timezone, and whether the
                     // user ever configured one via timezoneFromProfile (null
                     // means never set — see the Profile.timezone doc comment in
@@ -1789,7 +1840,7 @@ export function registerTools(
                 idempotentHint: true,
                 openWorldHint: true,
             },
-            inputSchema: z.object({
+            inputSchema: personSchema({
                 barcode: z
                     .string()
                     .describe(
@@ -1797,7 +1848,7 @@ export function registerTools(
                     ),
             }),
         },
-        async ({ barcode }) => {
+        async ({ barcode, user_id }) => {
             // lookupBarcode's own failures (OFF down, timeout, bad config) are
             // caught below and turned into a normal (non-isError) content
             // response so the model can fall back to estimating — but that
@@ -1811,7 +1862,7 @@ export function registerTools(
             return withAnalytics(
                 "lookup_barcode",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(user_id);
                     const normalized = normalizeBarcode(barcode);
                     if (!normalized) {
                         return {
@@ -1893,12 +1944,13 @@ export function registerTools(
                 idempotentHint: true,
                 openWorldHint: false,
             },
+            inputSchema: personSchema({}),
         },
-        async () => {
+        async (args) => {
             return withAnalytics(
                 "get_meals_today",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(args.user_id);
                     const tz = await getUserTimezone(userId);
                     const meals = await getMealsByDate(
                         userId,
@@ -1936,15 +1988,15 @@ export function registerTools(
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            inputSchema: z.object({
+            inputSchema: personSchema({
                 date: z.string().describe("Date in YYYY-MM-DD format"),
             }),
         },
-        async ({ date }) => {
+        async ({ date, user_id }) => {
             return withAnalytics(
                 "get_meals_by_date",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(user_id);
                     const tz = await getUserTimezone(userId);
                     const meals = await getMealsByDate(userId, date, tz);
                     if (meals.length === 0) {
@@ -1980,16 +2032,16 @@ export function registerTools(
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            inputSchema: z.object({
+            inputSchema: personSchema({
                 start_date: z.string().describe("Start date (YYYY-MM-DD)"),
                 end_date: z.string().describe("End date (YYYY-MM-DD)"),
             }),
         },
-        async ({ start_date, end_date }) => {
+        async ({ start_date, end_date, user_id }) => {
             return withAnalytics(
                 "get_meals_by_date_range",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(user_id);
                     const tz = await getUserTimezone(userId);
                     const meals = await getMealsInRange(
                         userId,
@@ -2055,7 +2107,7 @@ export function registerTools(
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            inputSchema: z.object({
+            inputSchema: personSchema({
                 queries: z
                     .array(z.string().min(1))
                     .min(1)
@@ -2079,11 +2131,11 @@ export function registerTools(
                     .describe("Max matching entries to analyze (default 50)."),
             }),
         },
-        async ({ queries, days, limit }) => {
+        async ({ queries, days, limit, user_id }) => {
             return withAnalytics(
                 "search_meals",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(user_id);
                     const tz = await getUserTimezone(userId);
                     const windowDays = days ?? 365;
                     // A fuzzy lookback window needs no calendar-day precision,
@@ -2266,7 +2318,7 @@ export function registerTools(
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            inputSchema: z.object({
+            inputSchema: personSchema({
                 start_date: z.string().describe("Start date (YYYY-MM-DD)"),
                 end_date: z.string().describe("End date (YYYY-MM-DD)"),
             }),
@@ -2317,11 +2369,11 @@ export function registerTools(
             // Link the tool to its dashboard UI (MCP Apps).
             ...uiMeta(SUMMARY_WIDGET_URI),
         },
-        async ({ start_date, end_date }) => {
+        async ({ start_date, end_date, user_id }) => {
             return withAnalytics(
                 "get_nutrition_summary",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(user_id);
                     // Sized with insights.ts's own arithmetic (the function
                     // buildDailyBuckets lays its buckets out with), so the two
                     // tools cannot disagree about how long a window is. Clamped
@@ -2527,7 +2579,7 @@ export function registerTools(
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            inputSchema: z.object({
+            inputSchema: personSchema({
                 // Bounded in the schema for the same reason as log_meal, with
                 // the gram ceiling set by the numeric(6,2) goal columns rather
                 // than by what a plausible meal carries.
@@ -2622,7 +2674,7 @@ export function registerTools(
             return withAnalytics(
                 "set_nutrition_goals",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(args.user_id);
                     const [existing, preferredUnit] = await Promise.all([
                         getNutritionGoals(userId),
                         getPreferredWeightUnit(userId),
@@ -2719,12 +2771,13 @@ export function registerTools(
                 idempotentHint: true,
                 openWorldHint: false,
             },
+            inputSchema: personSchema({}),
         },
-        async () => {
+        async (args) => {
             return withAnalytics(
                 "get_nutrition_goals",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(args.user_id);
                     const [goals, unit] = await Promise.all([
                         getNutritionGoals(userId),
                         getPreferredWeightUnit(userId),
@@ -2755,7 +2808,7 @@ export function registerTools(
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            inputSchema: z.object({
+            inputSchema: personSchema({
                 date: z
                     .string()
                     .optional()
@@ -2785,11 +2838,11 @@ export function registerTools(
             // Link the tool to its progress UI (MCP Apps).
             ...uiMeta(GOAL_PROGRESS_WIDGET_URI),
         },
-        async ({ date }) => {
+        async ({ date, user_id }) => {
             return withAnalytics(
                 "get_goal_progress",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(user_id);
                     const profile = await getProfile(userId);
                     const tz = timezoneFromProfile(profile) ?? "UTC";
                     const targetDate = date ?? todayInTz(tz);
@@ -2905,15 +2958,15 @@ export function registerTools(
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            inputSchema: z.object({
+            inputSchema: personSchema({
                 id: z.string().describe("UUID of the meal to delete"),
             }),
         },
-        async ({ id }) => {
+        async ({ id, user_id }) => {
             return withAnalytics(
                 "delete_meal",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(user_id);
                     const deleted = await deleteMeal(userId, id);
                     return {
                         content: [
@@ -2947,7 +3000,7 @@ export function registerTools(
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            inputSchema: z.object({
+            inputSchema: personSchema({
                 id: z.string().describe("UUID of the meal to update"),
                 description: z.string().optional(),
                 meal_type: z
@@ -3002,11 +3055,11 @@ export function registerTools(
             // changes its header. Renders nothing when no goals are set.
             ...uiMeta(MEAL_LOGGED_WIDGET_URI),
         },
-        async ({ id, ...fields }) => {
+        async ({ id, user_id, ...fields }) => {
             return withAnalytics(
                 "update_meal",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(user_id);
                     const { iso, note } = await resolveWriteTimestamp(
                         userId,
                         fields.logged_at,
@@ -3052,7 +3105,7 @@ export function registerTools(
                 idempotentHint: false,
                 openWorldHint: false,
             },
-            inputSchema: z.object({
+            inputSchema: personSchema({
                 amount_ml: z.coerce
                     .number()
                     .int()
@@ -3084,13 +3137,14 @@ export function registerTools(
             return withAnalytics(
                 "log_water",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(args.user_id);
+                    const { user_id: _target, ...waterArgs } = args;
                     const { iso, note } = await resolveWriteTimestamp(
                         userId,
-                        args.logged_at,
+                        waterArgs.logged_at,
                     );
                     const { entry, deduplicated } = await insertWater(userId, {
-                        ...args,
+                        ...waterArgs,
                         logged_at: iso,
                     });
                     const prefix = deduplicated
@@ -3122,12 +3176,13 @@ export function registerTools(
                 idempotentHint: true,
                 openWorldHint: false,
             },
+            inputSchema: personSchema({}),
         },
-        async () => {
+        async (args) => {
             return withAnalytics(
                 "get_water_today",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(args.user_id);
                     const tz = await getUserTimezone(userId);
                     const entries = await getWaterByDate(
                         userId,
@@ -3175,15 +3230,15 @@ export function registerTools(
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            inputSchema: z.object({
+            inputSchema: personSchema({
                 date: z.string().describe("Date in YYYY-MM-DD format"),
             }),
         },
-        async ({ date }) => {
+        async ({ date, user_id }) => {
             return withAnalytics(
                 "get_water_by_date",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(user_id);
                     const tz = await getUserTimezone(userId);
                     const entries = await getWaterByDate(userId, date, tz);
                     if (entries.length === 0) {
@@ -3227,15 +3282,15 @@ export function registerTools(
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            inputSchema: z.object({
+            inputSchema: personSchema({
                 id: z.string().describe("UUID of the water entry to delete"),
             }),
         },
-        async ({ id }) => {
+        async ({ id, user_id }) => {
             return withAnalytics(
                 "delete_water",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(user_id);
                     const deleted = await deleteWater(userId, id);
                     return {
                         content: [
@@ -3265,7 +3320,7 @@ export function registerTools(
                 idempotentHint: false,
                 openWorldHint: false,
             },
-            inputSchema: z.object({
+            inputSchema: personSchema({
                 weight: z.coerce
                     .number()
                     .positive()
@@ -3304,7 +3359,7 @@ export function registerTools(
             return withAnalytics(
                 "log_weight",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(args.user_id);
                     const { iso, note } = await resolveWriteTimestamp(
                         userId,
                         args.logged_at,
@@ -3350,12 +3405,13 @@ export function registerTools(
                 idempotentHint: true,
                 openWorldHint: false,
             },
+            inputSchema: personSchema({}),
         },
-        async () => {
+        async (args) => {
             return withAnalytics(
                 "get_weight_today",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(args.user_id);
                     const [tz, weightPref] = await Promise.all([
                         getUserTimezone(userId),
                         getPreferredWeightUnit(userId),
@@ -3405,15 +3461,15 @@ export function registerTools(
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            inputSchema: z.object({
+            inputSchema: personSchema({
                 date: z.string().describe("Date in YYYY-MM-DD format"),
             }),
         },
-        async ({ date }) => {
+        async ({ date, user_id }) => {
             return withAnalytics(
                 "get_weight_by_date",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(user_id);
                     const [tz, weightPref] = await Promise.all([
                         getUserTimezone(userId),
                         getPreferredWeightUnit(userId),
@@ -3460,16 +3516,16 @@ export function registerTools(
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            inputSchema: z.object({
+            inputSchema: personSchema({
                 start_date: z.string().describe("Start date (YYYY-MM-DD)"),
                 end_date: z.string().describe("End date (YYYY-MM-DD)"),
             }),
         },
-        async ({ start_date, end_date }) => {
+        async ({ start_date, end_date, user_id }) => {
             return withAnalytics(
                 "get_weight_by_date_range",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(user_id);
                     const [tz, weightPref] = await Promise.all([
                         getUserTimezone(userId),
                         getPreferredWeightUnit(userId),
@@ -3544,7 +3600,7 @@ export function registerTools(
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            inputSchema: z.object({
+            inputSchema: personSchema({
                 days: z.coerce
                     .number()
                     .int()
@@ -3578,11 +3634,11 @@ export function registerTools(
             // Link the tool to its interactive weight-trends UI (MCP Apps).
             ...uiMeta(WEIGHT_TRENDS_WIDGET_URI),
         },
-        async ({ days, end_date }) => {
+        async ({ days, end_date, user_id }) => {
             return withAnalytics(
                 "get_weight_trends",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(user_id);
                     const profile = await getProfile(userId);
                     const tz = timezoneFromProfile(profile) ?? "UTC";
                     const unit =
@@ -3686,7 +3742,7 @@ export function registerTools(
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            inputSchema: z.object({
+            inputSchema: personSchema({
                 id: z.string().describe("UUID of the weight entry to update"),
                 weight: z.coerce
                     .number()
@@ -3708,11 +3764,11 @@ export function registerTools(
                 notes: z.string().optional(),
             }),
         },
-        async ({ id, weight, unit, logged_at, notes }) => {
+        async ({ id, weight, unit, logged_at, notes, user_id }) => {
             return withAnalytics(
                 "update_weight",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(user_id);
                     const { iso, note } = await resolveWriteTimestamp(
                         userId,
                         logged_at,
@@ -3766,15 +3822,15 @@ export function registerTools(
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            inputSchema: z.object({
+            inputSchema: personSchema({
                 id: z.string().describe("UUID of the weight entry to delete"),
             }),
         },
-        async ({ id }) => {
+        async ({ id, user_id }) => {
             return withAnalytics(
                 "delete_weight",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(user_id);
                     const deleted = await deleteWeight(userId, id);
                     return {
                         content: [
@@ -3804,7 +3860,7 @@ export function registerTools(
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            inputSchema: z.object({
+            inputSchema: personSchema({
                 unit: z
                     .enum(["kg", "lb"])
                     .nullable()
@@ -3813,11 +3869,11 @@ export function registerTools(
                     ),
             }),
         },
-        async ({ unit }) => {
+        async ({ unit, user_id }) => {
             return withAnalytics(
                 "set_weight_unit",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(user_id);
                     if (unit !== null && !isWeightUnit(unit)) {
                         throw new Error(
                             `Invalid weight unit: ${unit}. Use 'kg', 'lb', or null to clear.`,
@@ -3854,7 +3910,7 @@ export function registerTools(
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            inputSchema: z.object({
+            inputSchema: personSchema({
                 enabled: z
                     .boolean()
                     .describe(
@@ -3862,11 +3918,11 @@ export function registerTools(
                     ),
             }),
         },
-        async ({ enabled }) => {
+        async ({ enabled, user_id }) => {
             return withAnalytics(
                 "set_widget_display",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(user_id);
                     const profile = await upsertProfile(userId, {
                         widgets_enabled: enabled,
                     });
@@ -3898,7 +3954,7 @@ export function registerTools(
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            inputSchema: z.object({
+            inputSchema: personSchema({
                 enabled: z
                     .boolean()
                     .describe(
@@ -3923,11 +3979,11 @@ export function registerTools(
         // McpServer per POST (sessionIdGenerator: undefined) with buildMcpServer
         // re-reading the profile every time — so the very next tool call, in the
         // same open chat, already sees the new setting.
-        async ({ enabled, drink_unit }) => {
+        async ({ enabled, drink_unit, user_id }) => {
             return withAnalytics(
                 "set_alcohol_tracking",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(user_id);
                     const profile = await upsertProfile(userId, {
                         alcohol_tracking_enabled: enabled,
                         // Left untouched when omitted, so toggling tracking off
@@ -3967,7 +4023,7 @@ export function registerTools(
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            inputSchema: z.object({
+            inputSchema: personSchema({
                 days: z.coerce
                     .number()
                     .int()
@@ -3996,11 +4052,11 @@ export function registerTools(
             // Link the tool to its interactive trends UI (MCP Apps).
             ...uiMeta(TRENDS_WIDGET_URI),
         },
-        async ({ days, end_date }) => {
+        async ({ days, end_date, user_id }) => {
             return withAnalytics(
                 "get_trends",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(user_id);
                     const profile = await getProfile(userId);
                     const tz = timezoneFromProfile(profile) ?? "UTC";
                     const locale = localeFromProfile(profile) ?? "en";
@@ -4079,7 +4135,7 @@ export function registerTools(
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            inputSchema: z.object({
+            inputSchema: personSchema({
                 days: z.coerce
                     .number()
                     .int()
@@ -4095,11 +4151,11 @@ export function registerTools(
                     .describe("Window end date YYYY-MM-DD (default today)."),
             }),
         },
-        async ({ days, end_date }) => {
+        async ({ days, end_date, user_id }) => {
             return withAnalytics(
                 "get_meal_patterns",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(user_id);
                     const tz = await getUserTimezone(userId);
                     const endDate = end_date ?? todayInTz(tz);
                     const windowDays = days ?? 30;
@@ -4145,12 +4201,13 @@ export function registerTools(
                 idempotentHint: false,
                 openWorldHint: false,
             },
+            inputSchema: personSchema({}),
         },
-        async () => {
+        async (args) => {
             return withAnalytics(
                 "export_all_data",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(args.user_id);
                     const { counts, goals, profile, url } =
                         await exportAllData(userId);
                     // No link means the account had nothing at all — not even a
@@ -4243,12 +4300,13 @@ export function registerTools(
                 idempotentHint: true,
                 openWorldHint: false,
             },
+            inputSchema: personSchema({}),
         },
-        async () => {
+        async (args) => {
             return withAnalytics(
                 "get_profile",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(args.user_id);
                     const profile = await getProfile(userId);
                     const tz = timezoneFromProfile(profile);
                     const locale = localeFromProfile(profile);
@@ -4303,7 +4361,7 @@ export function registerTools(
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            inputSchema: z.object({
+            inputSchema: personSchema({
                 timezone: z
                     .string()
                     .describe(
@@ -4311,11 +4369,11 @@ export function registerTools(
                     ),
             }),
         },
-        async ({ timezone }) => {
+        async ({ timezone, user_id }) => {
             return withAnalytics(
                 "set_timezone",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(user_id);
                     if (!validateTz(timezone)) {
                         throw new Error(
                             `Invalid timezone: ${timezone}. Use an IANA identifier like 'America/Los_Angeles' or 'Europe/London'.`,
@@ -4347,7 +4405,7 @@ export function registerTools(
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            inputSchema: z.object({
+            inputSchema: personSchema({
                 locale: z
                     .string()
                     .describe(
@@ -4355,11 +4413,11 @@ export function registerTools(
                     ),
             }),
         },
-        async ({ locale }) => {
+        async ({ locale, user_id }) => {
             return withAnalytics(
                 "set_language",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(user_id);
                     if (!SITE_LOCALES.includes(locale as SiteLocale)) {
                         throw new Error(
                             `Unsupported language: ${locale}. Use one of: ${SITE_LOCALES.join(", ")}.`,
@@ -4398,12 +4456,13 @@ export function registerTools(
                 idempotentHint: false,
                 openWorldHint: false,
             },
+            inputSchema: personSchema({}),
         },
-        async () => {
+        async (args) => {
             return withAnalytics(
                 "get_current_time",
                 async () => {
-                    const userId = requireUser();
+                    const userId = await actorUserId(args.user_id);
                     const configuredTz = timezoneFromProfile(
                         await getProfile(userId),
                     );
@@ -4425,6 +4484,65 @@ export function registerTools(
         },
     );
 
+    const LIST_MEMBERS_OUTPUT_SCHEMA = z.object({
+        members: z.array(
+            z.object({
+                user_id: z.string(),
+                display_name: z.string(),
+                role: z.enum(["owner", "member"]),
+            }),
+        ),
+    });
+
+    server.registerTool(
+        "list_members",
+        {
+            title: "List Household Members",
+            description:
+                "List household members as user_id, display_name, and role. A household bot token and any household member may call this. Person tools on a household token require user_id set to one of these ids.",
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            outputSchema: LIST_MEMBERS_OUTPUT_SCHEMA,
+        },
+        async () => {
+            return withAnalytics(
+                "list_members",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    const members = await listHouseholdMembers(householdId);
+                    const payload = members.map((member) => ({
+                        user_id: member.userId,
+                        display_name: member.displayName,
+                        role: member.role,
+                    }));
+                    const lines =
+                        payload.length === 0
+                            ? "No household members."
+                            : payload
+                                  .map(
+                                      (member) =>
+                                          `${member.display_name} (${member.role}) ${member.user_id}`,
+                                  )
+                                  .join("\n");
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: lines,
+                            },
+                        ],
+                        structuredContent: { members: payload },
+                    };
+                },
+                analytics,
+            );
+        },
+    );
+
     const ROTATE_HOUSEHOLD_TOKEN_OUTPUT_SCHEMA = z.object({
         token: z.string(),
         issued_at: z.string(),
@@ -4435,7 +4553,7 @@ export function registerTools(
         {
             title: "Rotate Household Token",
             description:
-                "Issue a new household bot token (prefix nt_hh_). The plaintext is returned once; only its SHA-256 hash is stored. Any household member may rotate. A household PAT may rotate and invalidates itself. Person tools still have no default user on a PAT.",
+                "Issue a new household bot token (prefix nt_hh_). The plaintext is returned once; only its SHA-256 hash is stored. Any household member may rotate. A household PAT may rotate and invalidates itself.",
             annotations: {
                 readOnlyHint: false,
                 destructiveHint: false,
@@ -4448,21 +4566,8 @@ export function registerTools(
             return withAnalytics(
                 "rotate_household_token",
                 async () => {
-                    let householdId: string;
-                    let issuedBy: string | null;
-                    if (auth.kind === "user") {
-                        const member = await getHouseholdMembership(
-                            auth.userId,
-                        );
-                        if (!member) {
-                            throw new Error("not a household member");
-                        }
-                        householdId = member.householdId;
-                        issuedBy = auth.userId;
-                    } else {
-                        householdId = auth.householdId;
-                        issuedBy = null;
-                    }
+                    const householdId = await callerHouseholdId();
+                    const issuedBy = auth.kind === "user" ? auth.userId : null;
                     const token = generateHouseholdToken();
                     const issued_at = await rotateHouseholdMcpToken({
                         householdId,
@@ -4614,7 +4719,7 @@ async function buildMcpServer(
 // (supportedVersions + capabilities + instructions) and `subscriptions/listen`
 // (refused outright below, but the SDK still reads getCapabilities() and the
 // serverInfo off the instance before refusing). Both are served from
-// newMcpServer, skipping a Supabase profile read and ~38 tool registrations.
+// newMcpServer, skipping a Supabase profile read and 38 tool registrations.
 // server/discover is the FIRST request every negotiating client sends, so under
 // Supabase pressure it was the probe that failed — for a response that contains
 // nothing a registration produces.

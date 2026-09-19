@@ -8,17 +8,17 @@ import type { ToolsDoc } from "./tools.js";
 
 export const TOOLS_NL: ToolsDoc = {
     meta: {
-        title: "Toolreferentie: alle 37 tools",
+        title: "Toolreferentie: alle 38 tools",
         description:
-            "Alle 37 tools die de Nutrition MCP-server aan je AI geeft — maaltijden loggen, barcodes scannen, je geschiedenis uit een andere app importeren, water en gewicht bijhouden, doelen instellen en trends bekijken. Volledige referentie met beschrijvingen en voorbeeldzinnen.",
+            "Alle 38 tools die de Nutrition MCP-server aan je AI geeft — maaltijden loggen, barcodes scannen, je geschiedenis uit een andere app importeren, water en gewicht bijhouden, doelen instellen en trends bekijken. Volledige referentie met beschrijvingen en voorbeeldzinnen.",
         ogDescription:
-            "Alle 37 tools die de Nutrition MCP-server aan je AI geeft, inclusief een CSV-importer voor je geschiedenis uit een andere app — met beschrijvingen en voorbeeldzinnen.",
+            "Alle 38 tools die de Nutrition MCP-server aan je AI geeft, inclusief een CSV-importer voor je geschiedenis uit een andere app — met beschrijvingen en voorbeeldzinnen.",
     },
     hero: {
         eyebrow: "Referentie",
         title: "Alles wat je AI kan doen",
         lead: "Je roept deze tools nooit rechtstreeks aan — je praat gewoon, en de assistent kiest de juiste tool. Hier is de volledige set die de Nutrition MCP-server aanbiedt, met wat elke tool doet en een zin die hem activeert.",
-        countBold: "37 tools",
+        countBold: "38 tools",
         countTail: "verdeeld over 7 categorieën",
     },
     categories: {
@@ -410,6 +410,12 @@ export const TOOLS_NL: ToolsDoc = {
             },
             example:
                 "Begin met het bijhouden van mijn drankgebruik, in Britse eenheden",
+        },
+        list_members: {
+            description:
+                "Toon de huishoudleden als user_id, display_name en role. Een household-bottoken en elk lid mogen dit aanroepen. Persoonstools op een household-token vereisen user_id van een van deze ids.",
+            params: {},
+            example: "Wie zit er in dit huishouden?",
         },
         rotate_household_token: {
             description:

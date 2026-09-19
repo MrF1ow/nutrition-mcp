@@ -3,7 +3,9 @@ export type AuthContext =
     | { kind: "household"; householdId: string };
 
 export const HOUSEHOLD_HAS_NO_DEFAULT_USER =
-    "This household token has no default user. Person tools need a member OAuth session until targeting ships.";
+    "This household token has no default user. Pass user_id set to a household member.";
+
+export const OAUTH_USER_MISMATCH = "user_id must match the signed-in user";
 
 export function requireActorUserId(auth: AuthContext): string {
     if (auth.kind !== "user") {

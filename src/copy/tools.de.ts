@@ -6,17 +6,17 @@ import type { ToolsDoc } from "./tools.js";
 
 export const TOOLS_DE: ToolsDoc = {
     meta: {
-        title: "Werkzeug-Referenz: Alle 37 Werkzeuge",
+        title: "Werkzeug-Referenz: Alle 38 Werkzeuge",
         description:
-            "Alle 37 Werkzeuge, die der Nutrition-MCP-Server deiner KI gibt — Mahlzeiten erfassen, Barcodes scannen, deine Historie aus einer anderen App importieren, Wasser und Gewicht verfolgen, Ziele festlegen und Trends auswerten. Vollständige Referenz mit Beschreibungen und Beispielsätzen.",
+            "Alle 38 Werkzeuge, die der Nutrition-MCP-Server deiner KI gibt — Mahlzeiten erfassen, Barcodes scannen, deine Historie aus einer anderen App importieren, Wasser und Gewicht verfolgen, Ziele festlegen und Trends auswerten. Vollständige Referenz mit Beschreibungen und Beispielsätzen.",
         ogDescription:
-            "Alle 37 Werkzeuge, die der Nutrition-MCP-Server deiner KI gibt, inklusive eines CSV-Importers für deine Historie aus einer anderen App — mit Beschreibungen und Beispielsätzen.",
+            "Alle 38 Werkzeuge, die der Nutrition-MCP-Server deiner KI gibt, inklusive eines CSV-Importers für deine Historie aus einer anderen App — mit Beschreibungen und Beispielsätzen.",
     },
     hero: {
         eyebrow: "Referenz",
         title: "Alles, was deine KI kann",
         lead: "Du rufst diese Werkzeuge nie selbst auf — du sprichst einfach, und der Assistent wählt das richtige Werkzeug. Hier ist die vollständige Liste, die der Nutrition-MCP-Server bereitstellt, mit dem, was jedes tut, und einem Satz, der es auslöst.",
-        countBold: "37 Werkzeuge",
+        countBold: "38 Werkzeuge",
         countTail: "in 7 Bereichen",
     },
     categories: {
@@ -410,6 +410,12 @@ export const TOOLS_DE: ToolsDoc = {
             },
             example:
                 "Fang an, meinen Alkoholkonsum zu erfassen, in UK-Einheiten",
+        },
+        list_members: {
+            description:
+                "Listet die Haushaltsmitglieder als user_id, display_name und Rolle. Ein Household-Bot-Token und jedes Mitglied dürfen das aufrufen. Personen-Tools auf einem Household-Token brauchen user_id als eine dieser IDs.",
+            params: {},
+            example: "Wer ist in diesem Haushalt?",
         },
         rotate_household_token: {
             description:

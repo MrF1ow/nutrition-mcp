@@ -1,4 +1,4 @@
-// Typed content for /tools (the "all 37 tools" reference page), rendered
+// Typed content for /tools (the "all 38 tools" reference page), rendered
 // by scripts/gen-tools.ts. Extracted verbatim from the previously
 // hand-authored public/tools.html — see CLAUDE.md's "Public site" section
 // for the generator family this belongs to, and gen-tools.ts's own header
@@ -128,11 +128,11 @@ export interface ToolIdentity {
 }
 
 /**
- * All 37 tools, in the exact document order of public/tools.html (grouped
+ * All 38 tools, in the exact document order of public/tools.html (grouped
  * by category — see CategoryId — for the reader). Cross-checked against
- * the 37 `server.registerTool()` calls in src/mcp.ts: the two orders
+ * the 38 `server.registerTool()` calls in src/mcp.ts: the two orders
  * differ (mcp.ts registers in its own order, unrelated to this page's
- * reader-facing grouping) but the *set* of 37 tool names is identical —
+ * reader-facing grouping) but the *set* of 38 tool names is identical —
  * nothing here was dropped or invented.
  */
 export const TOOLS: ToolIdentity[] = [
@@ -447,6 +447,13 @@ export const TOOLS: ToolIdentity[] = [
         hasPhotoHint: false,
     },
     {
+        name: "list_members",
+        category: "settings-account",
+        badges: ["lookup"],
+        params: [],
+        hasPhotoHint: false,
+    },
+    {
         name: "rotate_household_token",
         category: "settings-account",
         badges: ["setting"],
@@ -543,17 +550,17 @@ export interface ToolsDoc {
 
 const TOOLS_EN: ToolsDoc = {
     meta: {
-        title: "Tools Reference: All 37 Tools",
+        title: "Tools Reference: All 38 Tools",
         description:
-            "All 37 tools the Nutrition MCP server gives your AI — log meals, scan barcodes, import your history from another app, track water and weight, set goals, and review trends. Full reference with descriptions and example prompts.",
+            "All 38 tools the Nutrition MCP server gives your AI — log meals, scan barcodes, import your history from another app, track water and weight, set goals, and review trends. Full reference with descriptions and example prompts.",
         ogDescription:
-            "All 37 tools the Nutrition MCP server gives your AI, including a CSV importer for your history from another app — with descriptions and example prompts.",
+            "All 38 tools the Nutrition MCP server gives your AI, including a CSV importer for your history from another app — with descriptions and example prompts.",
     },
     hero: {
         eyebrow: "Reference",
         title: "Everything your AI can do",
         lead: "You never call these directly — you just talk, and the assistant picks the right tool. Here's the full set the Nutrition MCP server exposes, with what each one does and a phrase that triggers it.",
-        countBold: "37 tools",
+        countBold: "38 tools",
         countTail: "across 7 areas",
     },
     categories: {
@@ -930,6 +937,12 @@ const TOOLS_EN: ToolsDoc = {
                     "Which standard drink to show alongside the grams: <code>us</code> (14 g per drink) or <code>uk</code> (7.9 g per unit). Defaults to <code>us</code>; grams of pure ethanol are what's actually stored.",
             },
             example: "Start tracking my drinking, in UK units",
+        },
+        list_members: {
+            description:
+                "List household members as user_id, display_name, and role. A household bot token and any household member may call this. Person tools on a household token require user_id set to one of these ids.",
+            params: {},
+            example: "Who is in this household?",
         },
         rotate_household_token: {
             description:
