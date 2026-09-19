@@ -99,7 +99,7 @@ export interface ToolIdentity {
     hasPhotoHint: boolean;
 }
 
-export const TOOLS: ToolIdentity[] = [
+const TOOLS_BASE: ToolIdentity[] = [
     {
         name: "log_meal",
         category: "logging-food-meals",
@@ -425,6 +425,32 @@ export const TOOLS: ToolIdentity[] = [
         hasPhotoHint: false,
     },
     {
+        name: "get_household_config",
+        category: "settings-account",
+        badges: ["view"],
+        params: [],
+        hasPhotoHint: false,
+    },
+    {
+        name: "update_household_config",
+        category: "settings-account",
+        badges: ["setting"],
+        params: [
+            { name: "name", required: false },
+            { name: "fridge_locations", required: false },
+            { name: "recipe_search_places", required: false },
+            { name: "preferences", required: false },
+        ],
+        hasPhotoHint: false,
+    },
+    {
+        name: "update_fridge_locations",
+        category: "settings-account",
+        badges: ["setting"],
+        params: [{ name: "locations", required: true }],
+        hasPhotoHint: false,
+    },
+    {
         name: "delete_account",
         category: "settings-account",
         badges: ["remove"],
@@ -432,6 +458,36 @@ export const TOOLS: ToolIdentity[] = [
         hasPhotoHint: false,
     },
 ];
+
+export const HOUSEHOLD_SCOPED_TOOL_NAMES = [
+    "list_members",
+    "rotate_household_token",
+    "get_household_config",
+    "update_household_config",
+    "update_fridge_locations",
+] as const;
+
+export const OAUTH_ONLY_TOOL_NAMES = ["delete_account"] as const;
+
+const PERSON_USER_ID_PARAM: ToolParamIdentity = {
+    name: "user_id",
+    required: false,
+};
+
+export const TOOLS: ToolIdentity[] = TOOLS_BASE.map((tool) => {
+    if (
+        (HOUSEHOLD_SCOPED_TOOL_NAMES as readonly string[]).includes(
+            tool.name,
+        ) ||
+        (OAUTH_ONLY_TOOL_NAMES as readonly string[]).includes(tool.name)
+    ) {
+        return tool;
+    }
+    return {
+        ...tool,
+        params: [...tool.params, PERSON_USER_ID_PARAM],
+    };
+});
 
 /** One category's translatable copy — the jump-bar pill's short label,
  * and the section head's longer title + one-line description. */
@@ -508,17 +564,17 @@ export interface ToolsDoc {
 
 const TOOLS_EN: ToolsDoc = {
     meta: {
-        title: "Tools Reference: All 38 Tools",
+        title: "Tools Reference: All 41 Tools",
         description:
-            "All 38 tools the Nutrition MCP server gives your AI — log meals, scan barcodes, import your history from another app, track water and weight, set goals, and review trends. Full reference with descriptions and example prompts.",
+            "All 41 tools the Nutrition MCP server gives your AI — log meals, scan barcodes, import your history from another app, track water and weight, set goals, and review trends. Full reference with descriptions and example prompts.",
         ogDescription:
-            "All 38 tools the Nutrition MCP server gives your AI, including a CSV importer for your history from another app — with descriptions and example prompts.",
+            "All 41 tools the Nutrition MCP server gives your AI, including a CSV importer for your history from another app — with descriptions and example prompts.",
     },
     hero: {
         eyebrow: "Reference",
         title: "Everything your AI can do",
         lead: "You never call these directly — you just talk, and the assistant picks the right tool. Here's the full set the Nutrition MCP server exposes, with what each one does and a phrase that triggers it.",
-        countBold: "38 tools",
+        countBold: "41 tools",
         countTail: "across 7 areas",
     },
     categories: {
@@ -908,6 +964,34 @@ const TOOLS_EN: ToolsDoc = {
             params: {},
             example: "Rotate the household bot token",
         },
+        get_household_config: {
+            description:
+                "Read the household name, fridge locations, recipe search places, and shared preferences. A household bot token and any household member may call this. Writes are household-scoped, not a person user_id.",
+            params: {},
+            example: "What's in our household config?",
+        },
+        update_household_config: {
+            description:
+                "Merge the household name, fridge locations, recipe search places, or shared preferences. Places are labels only, not a recipe table. A household bot token and any household member may call this.",
+            params: {
+                name: "New household name",
+                fridge_locations:
+                    "Replacement list of fridge and freezer names",
+                recipe_search_places:
+                    "Replacement list of places, each with a name and kind <code>grocery</code>, <code>recipe_site</code>, <code>meal_kit</code>, or <code>other</code>",
+                preferences:
+                    "Shared constraints, budget, and shopping cadence. Omitted fields stay as they are.",
+            },
+            example: "Add Costco as a grocery search place",
+        },
+        update_fridge_locations: {
+            description:
+                "Replace the household fridge and freezer location list. A household bot token and any household member may call this.",
+            params: {
+                locations: "The full list of location names to keep",
+            },
+            example: "Set fridge locations to fridge and garage freezer",
+        },
         delete_account: {
             description:
                 "Permanently delete your account and all associated data. This is irreversible — the AI always confirms with you first.",
@@ -917,14 +1001,45 @@ const TOOLS_EN: ToolsDoc = {
     },
 };
 
+const USER_ID_PARAM_COPY: Record<SiteLocale, string> = {
+    en: "Household member to act as. Required on a household bot token. If set on a personal login, it must equal you.",
+    de: "Haushaltsmitglied, als das gehandelt wird. Pflicht auf einem Household-Bot-Token. Bei einem persönlichen Login muss es, wenn gesetzt, du selbst sein.",
+    es: "Miembro del hogar como el que se actúa. Obligatorio con un token de bot del hogar. En un inicio de sesión personal, si se indica, tiene que ser tú.",
+    fr: "Membre du foyer pour lequel agir. Obligatoire avec un jeton bot du foyer. Sur une connexion personnelle, s'il est fourni, il doit être toi.",
+    nl: "Huishoudlid om als te handelen. Verplicht op een household-bottoken. Bij een persoonlijke login moet het, als het gezet is, jijzelf zijn.",
+    pl: "Członek gospodarstwa, w którego imieniu działać. Wymagane na tokenie bota gospodarstwa. Przy osobistym logowaniu, jeśli podane, musi być tobą.",
+    it: "Membro della famiglia per cui agire. Obbligatorio con un token bot della famiglia. Su un accesso personale, se impostato, deve essere tu.",
+    uk: "Член домогосподарства, від імені якого діяти. Обов'язково на токені бота домогосподарства. У особистому вході, якщо вказано, має бути ти.",
+    ja: "操作対象の世帯メンバー。世帯ボットトークンでは必須。個人ログインで指定する場合は自分自身である必要があります。",
+};
+
+function withUserIdCopy(locale: SiteLocale, doc: ToolsDoc): ToolsDoc {
+    const skip = new Set<string>([
+        ...HOUSEHOLD_SCOPED_TOOL_NAMES,
+        ...OAUTH_ONLY_TOOL_NAMES,
+    ]);
+    const tools: ToolsDoc["tools"] = {};
+    for (const [name, prose] of Object.entries(doc.tools)) {
+        if (skip.has(name) || prose.params.user_id) {
+            tools[name] = prose;
+            continue;
+        }
+        tools[name] = {
+            ...prose,
+            params: { ...prose.params, user_id: USER_ID_PARAM_COPY[locale] },
+        };
+    }
+    return { ...doc, tools };
+}
+
 export const TOOLS_COPY: Partial<Record<SiteLocale, ToolsDoc>> = {
-    en: TOOLS_EN,
-    de: TOOLS_DE,
-    es: TOOLS_ES,
-    fr: TOOLS_FR,
-    nl: TOOLS_NL,
-    pl: TOOLS_PL,
-    it: TOOLS_IT,
-    uk: TOOLS_UK,
-    ja: TOOLS_JA,
+    en: withUserIdCopy("en", TOOLS_EN),
+    de: withUserIdCopy("de", TOOLS_DE),
+    es: withUserIdCopy("es", TOOLS_ES),
+    fr: withUserIdCopy("fr", TOOLS_FR),
+    nl: withUserIdCopy("nl", TOOLS_NL),
+    pl: withUserIdCopy("pl", TOOLS_PL),
+    it: withUserIdCopy("it", TOOLS_IT),
+    uk: withUserIdCopy("uk", TOOLS_UK),
+    ja: withUserIdCopy("ja", TOOLS_JA),
 };

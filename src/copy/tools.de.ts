@@ -2,17 +2,17 @@ import type { ToolsDoc } from "./tools.js";
 
 export const TOOLS_DE: ToolsDoc = {
     meta: {
-        title: "Werkzeug-Referenz: Alle 38 Werkzeuge",
+        title: "Werkzeug-Referenz: Alle 41 Werkzeuge",
         description:
-            "Alle 38 Werkzeuge, die der Nutrition-MCP-Server deiner KI gibt — Mahlzeiten erfassen, Barcodes scannen, deine Historie aus einer anderen App importieren, Wasser und Gewicht verfolgen, Ziele festlegen und Trends auswerten. Vollständige Referenz mit Beschreibungen und Beispielsätzen.",
+            "Alle 41 Werkzeuge, die der Nutrition-MCP-Server deiner KI gibt — Mahlzeiten erfassen, Barcodes scannen, deine Historie aus einer anderen App importieren, Wasser und Gewicht verfolgen, Ziele festlegen und Trends auswerten. Vollständige Referenz mit Beschreibungen und Beispielsätzen.",
         ogDescription:
-            "Alle 38 Werkzeuge, die der Nutrition-MCP-Server deiner KI gibt, inklusive eines CSV-Importers für deine Historie aus einer anderen App — mit Beschreibungen und Beispielsätzen.",
+            "Alle 41 Werkzeuge, die der Nutrition-MCP-Server deiner KI gibt, inklusive eines CSV-Importers für deine Historie aus einer anderen App — mit Beschreibungen und Beispielsätzen.",
     },
     hero: {
         eyebrow: "Referenz",
         title: "Alles, was deine KI kann",
         lead: "Du rufst diese Werkzeuge nie selbst auf — du sprichst einfach, und der Assistent wählt das richtige Werkzeug. Hier ist die vollständige Liste, die der Nutrition-MCP-Server bereitstellt, mit dem, was jedes tut, und einem Satz, der es auslöst.",
-        countBold: "38 Werkzeuge",
+        countBold: "41 Werkzeuge",
         countTail: "in 7 Bereichen",
     },
     categories: {
@@ -418,6 +418,35 @@ export const TOOLS_DE: ToolsDoc = {
                 "Stell ein neues Household-Bot-Token aus. Der Klartext erscheint nur einmal; gespeichert wird nur ein SHA-256-Hash. Jedes Haushaltsmitglied darf rotieren. Ein Household-PAT darf rotieren und funktioniert danach nicht mehr.",
             params: {},
             example: "Rotiere das Household-Bot-Token",
+        },
+        get_household_config: {
+            description:
+                "Liest den Haushaltsnamen, die Kühlschrankorte, die Rezept-Suchorte und die gemeinsamen Vorlieben. Ein Household-Bot-Token und jedes Mitglied dürfen das aufrufen. Schreibzugriffe gelten für den Haushalt, nicht für eine user_id.",
+            params: {},
+            example: "Was steht in unserer Haushaltskonfiguration?",
+        },
+        update_household_config: {
+            description:
+                "Führt Haushaltsname, Kühlschrankorte, Rezept-Suchorte oder gemeinsame Vorlieben zusammen. Orte sind nur Labels, keine Rezepttabelle. Ein Household-Bot-Token und jedes Mitglied dürfen das aufrufen.",
+            params: {
+                name: "Neuer Haushaltsname",
+                fridge_locations: "Ersatzliste der Kühl- und Gefrierorte",
+                recipe_search_places:
+                    "Ersatzliste von Orten, jeweils mit Name und kind <code>grocery</code>, <code>recipe_site</code>, <code>meal_kit</code> oder <code>other</code>",
+                preferences:
+                    "Gemeinsame Einschränkungen, Budget und Einkaufsrythmus. Weggelassene Felder bleiben.",
+            },
+            example: "Füg Costco als grocery-Suchort hinzu",
+        },
+        update_fridge_locations: {
+            description:
+                "Ersetzt die Liste der Kühl- und Gefrierorte im Haushalt. Ein Household-Bot-Token und jedes Mitglied dürfen das aufrufen.",
+            params: {
+                locations:
+                    "Die vollständige Liste der Ortsnamen, die bleiben sollen",
+            },
+            example:
+                "Setz die Kühlschrankorte auf Kühlschrank und Garage-Gefriertruhe",
         },
         delete_account: {
             description:

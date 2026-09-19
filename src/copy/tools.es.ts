@@ -11,17 +11,17 @@ import type { ToolsDoc } from "./tools.js";
 
 export const TOOLS_ES: ToolsDoc = {
     meta: {
-        title: "Referencia de herramientas: las 38 herramientas",
+        title: "Referencia de herramientas: las 41 herramientas",
         description:
-            "Las 38 herramientas que el servidor Nutrition MCP le da a tu IA: registra comidas, escanea códigos de barras, importa tu historial desde otra app, controla el agua y el peso, define objetivos y revisa tendencias. Referencia completa con descripciones y frases de ejemplo.",
+            "Las 41 herramientas que el servidor Nutrition MCP le da a tu IA: registra comidas, escanea códigos de barras, importa tu historial desde otra app, controla el agua y el peso, define objetivos y revisa tendencias. Referencia completa con descripciones y frases de ejemplo.",
         ogDescription:
-            "Las 38 herramientas que el servidor Nutrition MCP le da a tu IA, incluido un importador CSV para tu historial desde otra app, con descripciones y frases de ejemplo.",
+            "Las 41 herramientas que el servidor Nutrition MCP le da a tu IA, incluido un importador CSV para tu historial desde otra app, con descripciones y frases de ejemplo.",
     },
     hero: {
         eyebrow: "Referencia",
         title: "Todo lo que tu IA puede hacer",
         lead: "Nunca llamas a estas herramientas directamente: tú solo hablas, y el asistente elige la herramienta correcta. Aquí tienes el conjunto completo que expone el servidor Nutrition MCP, con lo que hace cada una y una frase que la activa.",
-        countBold: "38 herramientas",
+        countBold: "41 herramientas",
         countTail: "en 7 áreas",
     },
     categories: {
@@ -421,6 +421,36 @@ export const TOOLS_ES: ToolsDoc = {
                 "Emite un token nuevo del bot del hogar. El texto en claro se muestra una sola vez; solo se guarda un hash SHA-256. Cualquier miembro puede rotarlo. Un PAT del hogar puede rotarlo y entonces deja de funcionar.",
             params: {},
             example: "Rota el token del bot del hogar",
+        },
+        get_household_config: {
+            description:
+                "Lee el nombre del hogar, las ubicaciones de la nevera, los sitios de recetas y las preferencias compartidas. Un token de bot del hogar y cualquier miembro pueden llamarlo. Las escrituras son del hogar, no de un user_id.",
+            params: {},
+            example: "¿Cuál es la configuración de nuestro hogar?",
+        },
+        update_household_config: {
+            description:
+                "Fusiona el nombre del hogar, las ubicaciones de la nevera, los sitios de recetas o las preferencias compartidas. Los sitios son solo etiquetas, no una tabla de recetas. Un token de bot del hogar y cualquier miembro pueden llamarlo.",
+            params: {
+                name: "Nuevo nombre del hogar",
+                fridge_locations:
+                    "Lista de reemplazo de neveras y congeladores",
+                recipe_search_places:
+                    "Lista de reemplazo de sitios, cada uno con nombre y kind <code>grocery</code>, <code>recipe_site</code>, <code>meal_kit</code> u <code>other</code>",
+                preferences:
+                    "Restricciones, presupuesto y cadencia de compra compartidos. Los campos omitidos se quedan.",
+            },
+            example: "Añade Costco como sitio grocery",
+        },
+        update_fridge_locations: {
+            description:
+                "Sustituye la lista de neveras y congeladores del hogar. Un token de bot del hogar y cualquier miembro pueden llamarlo.",
+            params: {
+                locations:
+                    "La lista completa de nombres de ubicación que se quedan",
+            },
+            example:
+                "Pon las ubicaciones de nevera en nevera y congelador del garaje",
         },
         delete_account: {
             description:

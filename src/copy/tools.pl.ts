@@ -2,17 +2,17 @@ import type { ToolsDoc } from "./tools.js";
 
 export const TOOLS_PL: ToolsDoc = {
     meta: {
-        title: "Katalog narzędzi: wszystkie 38 narzędzi",
+        title: "Katalog narzędzi: wszystkie 41 narzędzi",
         description:
-            "Wszystkie 38 narzędzi, które serwer Nutrition MCP daje Twojemu AI — zapisuj posiłki, skanuj kody kreskowe, importuj historię z innej aplikacji, śledź wodę i wagę, ustawiaj cele i przeglądaj trendy. Pełny opis wraz z przykładowymi poleceniami.",
+            "Wszystkie 41 narzędzi, które serwer Nutrition MCP daje Twojemu AI — zapisuj posiłki, skanuj kody kreskowe, importuj historię z innej aplikacji, śledź wodę i wagę, ustawiaj cele i przeglądaj trendy. Pełny opis wraz z przykładowymi poleceniami.",
         ogDescription:
-            "Wszystkie 38 narzędzi, które serwer Nutrition MCP daje Twojemu AI, w tym importer CSV do przenoszenia historii z innej aplikacji — z opisami i przykładowymi poleceniami.",
+            "Wszystkie 41 narzędzi, które serwer Nutrition MCP daje Twojemu AI, w tym importer CSV do przenoszenia historii z innej aplikacji — z opisami i przykładowymi poleceniami.",
     },
     hero: {
         eyebrow: "Dokumentacja",
         title: "Wszystko, co potrafi Twój AI",
         lead: "Nigdy nie wywołujesz tych narzędzi bezpośrednio — po prostu mówisz, a asystent sam wybiera właściwe. Oto pełny zestaw udostępniany przez serwer Nutrition MCP, wraz z opisem działania i przykładowym poleceniem, które je uruchamia.",
-        countBold: "38 narzędzi",
+        countBold: "41 narzędzi",
         countTail: "w 7 obszarach",
     },
     categories: {
@@ -411,6 +411,34 @@ export const TOOLS_PL: ToolsDoc = {
                 "Wydaj nowy token bota domowego. Jawny tekst pokazywany jest raz; zapisywany jest tylko skrót SHA-256. Każdy członek może rotować. PAT gospodarstwa może rotować i wtedy przestaje działać.",
             params: {},
             example: "Rotuj token bota domowego",
+        },
+        get_household_config: {
+            description:
+                "Odczytuje nazwę gospodarstwa, lokalizacje lodówek, miejsca szukania przepisów i wspólne preferencje. Token bota gospodarstwa i każdy członek mogą to wywołać. Zapisy dotyczą gospodarstwa, nie user_id.",
+            params: {},
+            example: "Jaka jest konfiguracja naszego gospodarstwa?",
+        },
+        update_household_config: {
+            description:
+                "Scala nazwę gospodarstwa, lokalizacje lodówek, miejsca szukania przepisów lub wspólne preferencje. Miejsca to etykiety, nie tabela przepisów. Token bota gospodarstwa i każdy członek mogą to wywołać.",
+            params: {
+                name: "Nowa nazwa gospodarstwa",
+                fridge_locations: "Nowa lista lodówek i zamrażarek",
+                recipe_search_places:
+                    "Nowa lista miejsc, każde z nazwą i kind <code>grocery</code>, <code>recipe_site</code>, <code>meal_kit</code> lub <code>other</code>",
+                preferences:
+                    "Wspólne ograniczenia, budżet i rytm zakupów. Pominięte pola zostają.",
+            },
+            example: "Dodaj Costco jako miejsce grocery",
+        },
+        update_fridge_locations: {
+            description:
+                "Zastępuje listę lodówek i zamrażarek gospodarstwa. Token bota gospodarstwa i każdy członek mogą to wywołać.",
+            params: {
+                locations: "Pełna lista nazw lokalizacji, które zostają",
+            },
+            example:
+                "Ustaw lokalizacje lodówek na lodówka i zamrażarka w garażu",
         },
         delete_account: {
             description:

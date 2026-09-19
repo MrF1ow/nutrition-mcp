@@ -13,17 +13,17 @@ import type { ToolsDoc } from "./tools.js";
 
 export const TOOLS_IT: ToolsDoc = {
     meta: {
-        title: "Guida agli strumenti: tutti i 38 strumenti",
+        title: "Guida agli strumenti: tutti i 41 strumenti",
         description:
-            "Tutti i 38 strumenti che il server Nutrition MCP mette a disposizione della tua IA — registra i pasti, scansiona codici a barre, importa il tuo storico da un'altra app, monitora acqua e peso, imposta obiettivi e rivedi gli andamenti. Guida completa con descrizioni ed esempi di richieste.",
+            "Tutti i 41 strumenti che il server Nutrition MCP mette a disposizione della tua IA — registra i pasti, scansiona codici a barre, importa il tuo storico da un'altra app, monitora acqua e peso, imposta obiettivi e rivedi gli andamenti. Guida completa con descrizioni ed esempi di richieste.",
         ogDescription:
-            "Tutti i 38 strumenti che il server Nutrition MCP mette a disposizione della tua IA, incluso un importatore CSV per il tuo storico da un'altra app — con descrizioni ed esempi di richieste.",
+            "Tutti i 41 strumenti che il server Nutrition MCP mette a disposizione della tua IA, incluso un importatore CSV per il tuo storico da un'altra app — con descrizioni ed esempi di richieste.",
     },
     hero: {
         eyebrow: "Guida di riferimento",
         title: "Tutto quello che la tua IA può fare",
         lead: "Non li chiami mai direttamente — parli e basta, e l'assistente sceglie lo strumento giusto. Ecco l'elenco completo che il server Nutrition MCP mette a disposizione, con cosa fa ciascuno e una frase che lo attiva.",
-        countBold: "38 strumenti",
+        countBold: "41 strumenti",
         countTail: "in 7 aree",
     },
     categories: {
@@ -425,6 +425,35 @@ export const TOOLS_IT: ToolsDoc = {
                 "Emette un nuovo token del bot familiare. Il testo in chiaro viene mostrato una sola volta; viene salvato solo un hash SHA-256. Qualsiasi membro può ruotarlo. Un PAT familiare può ruotarlo e poi smette di funzionare.",
             params: {},
             example: "Ruota il token del bot familiare",
+        },
+        get_household_config: {
+            description:
+                "Legge il nome della famiglia, le posizioni del frigo, i luoghi di ricerca ricette e le preferenze condivise. Un token bot della famiglia e qualsiasi membro possono chiamarlo. Le scritture sono della famiglia, non di un user_id.",
+            params: {},
+            example: "Qual è la configurazione della nostra famiglia?",
+        },
+        update_household_config: {
+            description:
+                "Unisce nome della famiglia, posizioni del frigo, luoghi di ricerca ricette o preferenze condivise. I luoghi sono etichette, non una tabella di ricette. Un token bot della famiglia e qualsiasi membro possono chiamarlo.",
+            params: {
+                name: "Nuovo nome della famiglia",
+                fridge_locations:
+                    "Elenco sostitutivo di frigoriferi e congelatori",
+                recipe_search_places:
+                    "Elenco sostitutivo di luoghi, ciascuno con nome e kind <code>grocery</code>, <code>recipe_site</code>, <code>meal_kit</code> o <code>other</code>",
+                preferences:
+                    "Vincoli, budget e ritmo della spesa condivisi. I campi omessi restano.",
+            },
+            example: "Aggiungi Costco come luogo grocery",
+        },
+        update_fridge_locations: {
+            description:
+                "Sostituisce l'elenco di frigoriferi e congelatori della famiglia. Un token bot della famiglia e qualsiasi membro possono chiamarlo.",
+            params: {
+                locations: "L'elenco completo dei nomi di posizione da tenere",
+            },
+            example:
+                "Imposta le posizioni frigo su frigo e congelatore del garage",
         },
         delete_account: {
             description:

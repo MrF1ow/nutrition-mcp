@@ -2240,7 +2240,7 @@ export const INDEX_IT: IndexDoc = {
         note: "Tutto questo è facoltativo. Puoi farlo ora, più tardi o mai — inizia semplicemente a registrare e imposta queste opzioni quando vuoi.",
         toolsCta: {
             heading: "Curioso di scoprire cosa può fare davvero?",
-            body: "Sfoglia tutti i 38 strumenti — registrazione, codici a barre, acqua, peso, obiettivi e andamenti — con una descrizione e un esempio di richiesta per ciascuno.",
+            body: "Sfoglia tutti i 41 strumenti — registrazione, codici a barre, acqua, peso, obiettivi e andamenti — con una descrizione e un esempio di richiesta per ciascuno.",
             arrow: "Esplora gli strumenti",
         },
     },

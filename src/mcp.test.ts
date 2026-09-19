@@ -51,6 +51,15 @@ import {
     OAUTH_USER_MISMATCH,
 } from "./auth-context.js";
 import { HOUSEHOLD_TOKEN_PREFIX } from "./household-token.js";
+import {
+    EMPTY_HOUSEHOLD_PREFERENCES,
+    type HouseholdConfig,
+} from "./household.js";
+import {
+    TOOLS,
+    HOUSEHOLD_SCOPED_TOOL_NAMES,
+    OAUTH_ONLY_TOOL_NAMES,
+} from "./copy/tools.js";
 import { formatFoodResult, type FoodResult } from "./foods.js";
 import {
     buildDailyBuckets,
@@ -1450,6 +1459,7 @@ const db = {
         tokenHashHex: string;
         issuedBy: string | null;
     }[],
+    household: null as HouseholdConfig | null,
 };
 
 mock.module("./supabase.js", () => ({
@@ -1576,6 +1586,19 @@ mock.module("./supabase.js", () => ({
             .filter((member) => member.householdId === householdId)
             .slice()
             .sort((a, b) => a.displayName.localeCompare(b.displayName)),
+    getHouseholdConfig: async () => {
+        if (db.household == null) {
+            throw new Error("Failed to load household config");
+        }
+        return structuredClone(db.household);
+    },
+    updateHouseholdConfig: async (
+        _householdId: string,
+        config: HouseholdConfig,
+    ) => {
+        db.household = structuredClone(config);
+        return structuredClone(db.household);
+    },
     rotateHouseholdMcpToken: async (args: {
         householdId: string;
         tokenHashHex: string;
@@ -1624,6 +1647,12 @@ beforeEach(() => {
     db.profileReads = [];
     db.membershipReads = [];
     db.tokenRotations = [];
+    db.household = {
+        name: "Home",
+        fridgeLocations: [],
+        recipeSearchPlaces: [],
+        preferences: { ...EMPTY_HOUSEHOLD_PREFERENCES },
+    };
     db.members = [
         {
             householdId: "hh-1",
@@ -3851,6 +3880,9 @@ describe("household PAT has no default user", () => {
             expect(names).toContain("get_profile");
             expect(names).toContain("rotate_household_token");
             expect(names).toContain("list_members");
+            expect(names).toContain("get_household_config");
+            expect(names).toContain("update_household_config");
+            expect(names).toContain("update_fridge_locations");
         });
     });
 
@@ -4125,6 +4157,233 @@ describe("household person targeting", () => {
             expect(r.isError).toBe(true);
             expect(textOf(r)).toContain("not a household member");
         });
+    });
+});
+
+describe("household config tools", () => {
+    const alice = "11111111-1111-4111-8111-111111111111";
+
+    async function withHousehold(
+        run: (call: CallTool, list: () => Promise<string[]>) => Promise<void>,
+    ): Promise<void> {
+        db.members = [
+            {
+                householdId: "hh-1",
+                userId: alice,
+                role: "owner",
+                displayName: "Alice",
+            },
+        ];
+        const server = new McpServer(
+            { name: "nutrition-mcp-test", version: "0.0.0" },
+            { capabilities: { tools: {}, resources: {} } },
+        );
+        registerTools(
+            server,
+            { kind: "household", householdId: "hh-1" },
+            true,
+            null,
+        );
+        const [clientTransport, serverTransport] =
+            InMemoryTransport.createLinkedPair();
+        const client = new Client({ name: "test-client", version: "0.0.0" });
+        await Promise.all([
+            server.connect(serverTransport),
+            client.connect(clientTransport),
+        ]);
+        try {
+            await run(
+                (name, args = {}) =>
+                    client.callTool({
+                        name,
+                        arguments: args,
+                    }) as Promise<ToolResult>,
+                async () => {
+                    const { tools } = await client.listTools();
+                    return tools.map((t) => t.name);
+                },
+            );
+        } finally {
+            await client.close();
+            await server.close();
+        }
+    }
+
+    test("PAT get on a fresh household returns the bootstrap name and empty lists", async () => {
+        await withHousehold(async (call) => {
+            const r = await call("get_household_config");
+            expect(r.isError).toBeFalsy();
+            expect(r.structuredContent).toEqual({
+                name: "Home",
+                fridge_locations: [],
+                recipe_search_places: [],
+                preferences: {
+                    constraints: [],
+                    budget: null,
+                    shopping_cadence: null,
+                },
+            });
+        });
+    });
+
+    test("PAT fridge replace then get returns those names", async () => {
+        await withHousehold(async (call) => {
+            const written = await call("update_fridge_locations", {
+                locations: ["fridge", "freezer"],
+            });
+            expect(written.isError).toBeFalsy();
+            expect(written.structuredContent).toEqual({
+                fridge_locations: ["fridge", "freezer"],
+            });
+            const got = await call("get_household_config");
+            expect(got.structuredContent?.fridge_locations).toEqual([
+                "fridge",
+                "freezer",
+            ]);
+        });
+    });
+
+    test("PAT recipe places persist kinds", async () => {
+        await withHousehold(async (call) => {
+            const r = await call("update_household_config", {
+                recipe_search_places: [
+                    {
+                        name: "Costco",
+                        kind: "grocery",
+                        url: "https://costco.com",
+                    },
+                ],
+            });
+            expect(r.isError).toBeFalsy();
+            expect(r.structuredContent?.recipe_search_places).toEqual([
+                {
+                    name: "Costco",
+                    kind: "grocery",
+                    url: "https://costco.com",
+                },
+            ]);
+        });
+    });
+
+    test("member OAuth reads the same config the PAT wrote", async () => {
+        await withHousehold(async (call) => {
+            await call("update_fridge_locations", {
+                locations: ["garage freezer"],
+            });
+        });
+        db.members = [
+            {
+                householdId: "hh-1",
+                userId: "u1",
+                role: "member",
+                displayName: "U1",
+            },
+        ];
+        await withTools(null, async (call) => {
+            const r = await call("get_household_config");
+            expect(r.isError).toBeFalsy();
+            expect(r.structuredContent?.fridge_locations).toEqual([
+                "garage freezer",
+            ]);
+        });
+    });
+
+    test("member OAuth fridge write sticks", async () => {
+        await withTools(null, async (call) => {
+            const r = await call("update_fridge_locations", {
+                locations: ["crisper"],
+            });
+            expect(r.isError).toBeFalsy();
+        });
+        expect(db.household?.fridgeLocations).toEqual(["crisper"]);
+    });
+
+    test("invalid recipe place kind errors and leaves config unchanged", async () => {
+        db.household = {
+            name: "Home",
+            fridgeLocations: ["fridge"],
+            recipeSearchPlaces: [],
+            preferences: { ...EMPTY_HOUSEHOLD_PREFERENCES },
+        };
+        await withHousehold(async (call) => {
+            const r = await call("update_household_config", {
+                recipe_search_places: [{ name: "X", kind: "warehouse" }],
+            });
+            expect(r.isError).toBe(true);
+        });
+        expect(db.household?.fridgeLocations).toEqual(["fridge"]);
+        expect(db.household?.recipeSearchPlaces).toEqual([]);
+    });
+
+    test("PAT log_meal for Alice still writes after a config update", async () => {
+        db.members = [
+            {
+                householdId: "hh-1",
+                userId: alice,
+                role: "owner",
+                displayName: "Alice",
+            },
+        ];
+        await withHousehold(async (call) => {
+            await call("update_fridge_locations", { locations: ["fridge"] });
+            const r = await call("log_meal", {
+                description: "toast",
+                meal_type: "breakfast",
+                calories: 100,
+                protein_g: 4,
+                carbs_g: 18,
+                fat_g: 1,
+                user_id: alice,
+            });
+            expect(r.isError).toBeFalsy();
+            expect(db.inserted[0]!.user_id).toBe(alice);
+        });
+    });
+
+    test("the last of two config writes wins", async () => {
+        await withHousehold(async (call) => {
+            await call("update_fridge_locations", { locations: ["a"] });
+            await call("update_fridge_locations", { locations: ["b"] });
+            const got = await call("get_household_config");
+            expect(got.structuredContent?.fridge_locations).toEqual(["b"]);
+        });
+    });
+
+    test("tools/list includes the three config tools", async () => {
+        await withHousehold(async (_call, list) => {
+            const names = await list();
+            expect(names).toContain("get_household_config");
+            expect(names).toContain("update_household_config");
+            expect(names).toContain("update_fridge_locations");
+        });
+    });
+
+    test("TOOLS names match the registered tool set", async () => {
+        await withHousehold(async (_call, list) => {
+            expect((await list()).slice().sort()).toEqual(
+                TOOLS.map((tool) => tool.name)
+                    .slice()
+                    .sort(),
+            );
+        });
+    });
+
+    test("person-scoped catalog tools include optional user_id", () => {
+        const skip = new Set<string>([
+            ...HOUSEHOLD_SCOPED_TOOL_NAMES,
+            ...OAUTH_ONLY_TOOL_NAMES,
+        ]);
+        for (const tool of TOOLS) {
+            const param = tool.params.find((item) => item.name === "user_id");
+            if (skip.has(tool.name)) {
+                expect(param, tool.name).toBeUndefined();
+            } else {
+                expect(param, tool.name).toEqual({
+                    name: "user_id",
+                    required: false,
+                });
+            }
+        }
     });
 });
 

@@ -2,17 +2,17 @@ import type { ToolsDoc } from "./tools.js";
 
 export const TOOLS_NL: ToolsDoc = {
     meta: {
-        title: "Toolreferentie: alle 38 tools",
+        title: "Toolreferentie: alle 41 tools",
         description:
-            "Alle 38 tools die de Nutrition MCP-server aan je AI geeft — maaltijden loggen, barcodes scannen, je geschiedenis uit een andere app importeren, water en gewicht bijhouden, doelen instellen en trends bekijken. Volledige referentie met beschrijvingen en voorbeeldzinnen.",
+            "Alle 41 tools die de Nutrition MCP-server aan je AI geeft — maaltijden loggen, barcodes scannen, je geschiedenis uit een andere app importeren, water en gewicht bijhouden, doelen instellen en trends bekijken. Volledige referentie met beschrijvingen en voorbeeldzinnen.",
         ogDescription:
-            "Alle 38 tools die de Nutrition MCP-server aan je AI geeft, inclusief een CSV-importer voor je geschiedenis uit een andere app — met beschrijvingen en voorbeeldzinnen.",
+            "Alle 41 tools die de Nutrition MCP-server aan je AI geeft, inclusief een CSV-importer voor je geschiedenis uit een andere app — met beschrijvingen en voorbeeldzinnen.",
     },
     hero: {
         eyebrow: "Referentie",
         title: "Alles wat je AI kan doen",
         lead: "Je roept deze tools nooit rechtstreeks aan — je praat gewoon, en de assistent kiest de juiste tool. Hier is de volledige set die de Nutrition MCP-server aanbiedt, met wat elke tool doet en een zin die hem activeert.",
-        countBold: "38 tools",
+        countBold: "41 tools",
         countTail: "verdeeld over 7 categorieën",
     },
     categories: {
@@ -416,6 +416,34 @@ export const TOOLS_NL: ToolsDoc = {
                 "Geef een nieuw huishouden-bottoken uit. De plaintext zie je één keer; er wordt alleen een SHA-256-hash bewaard. Elk lid mag roteren. Een huishouden-PAT mag roteren en werkt daarna niet meer.",
             params: {},
             example: "Roteer het huishouden-bottoken",
+        },
+        get_household_config: {
+            description:
+                "Leest de huishoudnaam, koelkastlocaties, receptzoekplaatsen en gedeelde voorkeuren. Een household-bottoken en elk lid mogen dit aanroepen. Writes gelden voor het huishouden, niet voor een user_id.",
+            params: {},
+            example: "Wat staat er in onze huishoudconfig?",
+        },
+        update_household_config: {
+            description:
+                "Voegt huishoudnaam, koelkastlocaties, receptzoekplaatsen of gedeelde voorkeuren samen. Plaatsen zijn labels, geen recepttabel. Een household-bottoken en elk lid mogen dit aanroepen.",
+            params: {
+                name: "Nieuwe huishoudnaam",
+                fridge_locations:
+                    "Vervangende lijst van koel- en vrieslocaties",
+                recipe_search_places:
+                    "Vervangende lijst van plaatsen, elk met een naam en kind <code>grocery</code>, <code>recipe_site</code>, <code>meal_kit</code> of <code>other</code>",
+                preferences:
+                    "Gedeelde beperkingen, budget en winkelritme. Weengelaten velden blijven.",
+            },
+            example: "Voeg Costco toe als grocery-zoekplaats",
+        },
+        update_fridge_locations: {
+            description:
+                "Vervangt de lijst van koel- en vrieslocaties van het huishouden. Een household-bottoken en elk lid mogen dit aanroepen.",
+            params: {
+                locations: "De volledige lijst van locatienamen die blijven",
+            },
+            example: "Zet koelkastlocaties op koelkast en garagevriezer",
         },
         delete_account: {
             description:

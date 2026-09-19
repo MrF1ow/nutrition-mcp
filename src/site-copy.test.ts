@@ -1,5 +1,6 @@
 import { test, expect } from "bun:test";
 import { INDEX } from "./copy/index.js";
+import { TOOLS } from "./copy/tools.js";
 import type { SiteLocale } from "./routes.js";
 
 // The public pages are the only place the product describes ITSELF, and they
@@ -223,6 +224,7 @@ test("tools.html documents export_all_data and what is in the ZIP", async () => 
 
 test("llms.txt names the export tool and the archive members", async () => {
     const llms = await Bun.file("./public/llms.txt").text();
+    expect(llms).toContain(`all ${TOOLS.length} MCP tools`);
     expect(llms).toContain("export_all_data");
     // The meals-only tool was removed rather than kept alongside the archive.
     // An LLM reading a stale mention would hand the user a tool name the
