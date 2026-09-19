@@ -37,7 +37,7 @@ https://nutrition-mcp.com/mcp
 
 On first connect you'll be asked to register with an email and password. Your data persists across reconnections.
 
-Switching from another tracker? See the [nutrition-app alternatives](https://nutrition-mcp.com/alternatives) — how it compares to [MyFitnessPal](https://nutrition-mcp.com/myfitnesspal-mcp), [Cronometer](https://nutrition-mcp.com/cronometer-mcp), [Lose It!](https://nutrition-mcp.com/lose-it-mcp), [MacroFactor](https://nutrition-mcp.com/macrofactor-mcp), [Yazio](https://nutrition-mcp.com/yazio-mcp), and [Lifesum](https://nutrition-mcp.com/lifesum-mcp). Bring your history with you: say "import my meals" and an importer opens in the chat, where you pick the CSV you exported from your old app, map its columns, and check what will be added before anything is saved. Exports from MyFitnessPal, Cronometer, Lose It! and MacroFactor are recognised automatically; any other CSV works by mapping its columns yourself. In clients that can't show in-chat panels, paste the export instead and the AI imports it for you. If your export has an alcohol column and you want it kept, turn alcohol tracking on before importing — the importer skips that column while tracking is off, and re-importing the same file later won't backfill it.
+Bring your history with you: say "import my meals" and an importer opens in the chat, where you pick the CSV you exported from your old app, map its columns, and check what will be added before anything is saved. Exports from MyFitnessPal, Cronometer, Lose It! and MacroFactor are recognised automatically; any other CSV works by mapping its columns yourself. In clients that can't show in-chat panels, paste the export instead and the AI imports it for you. If your export has an alcohol column and you want it kept, turn alcohol tracking on before importing. The importer skips that column while tracking is off, and re-importing the same file later won't backfill it.
 
 ## Demo
 
@@ -119,7 +119,7 @@ cp .env.example .env   # fill in real values as you go through the steps below
 
 Requires Bun 1.x (matches the Dockerfile's `oven/bun:1` base image; no exact minor version is pinned).
 
-> **Making it yours:** The public site includes the maintainer's personal bits — Google Analytics, Patreon/GitHub/contact links, and the `nutrition-mcp.com` domain. Run `bun run gen:all` to produce the public pages, then `bun run depersonalize` to strip the personal bits in one pass (analytics + CSP, the Support/Contact sections, social links, and the domain → a `your-domain.com` placeholder). Use `bun run depersonalize --dry` to preview without writing. Afterwards, swap in your own `public/og.png`, `favicon.ico`, and `apple-touch-icon.png`, and replace the domain placeholder with your real domain. This script only touches `public/*.html` and `src/index.ts` — it doesn't touch this README, so if you're publishing your own fork, also edit or remove the Patreon line near the top of this file and the Medium link in [Demo](#demo).
+> **Making it yours:** Login HTML and `src/index.ts` include the maintainer's Google Analytics tag, Glama email, and domain. Run `bun run gen:all` to produce the login templates, then `bun run depersonalize` to strip those bits (analytics + CSP, Glama, widget support email, domain → a `your-domain.com` placeholder). Use `bun run depersonalize --dry` to preview without writing. Afterwards swap in your own `favicon.ico` and replace the domain placeholder. The script does not touch this README, so if you're publishing a fork, also edit or remove the Patreon line near the top and the Medium link in [Demo](#demo).
 
 ### 1. Supabase setup
 
@@ -138,22 +138,17 @@ Requires Bun 1.x (matches the Dockerfile's `oven/bun:1` base image; no exact min
 
 ### 2. Environment variables
 
-| Variable                | Description                                                                                                                                                    |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SUPABASE_URL`          | Your Supabase project URL                                                                                                                                      |
-| `SUPABASE_SECRET_KEY`   | Supabase service role key (bypasses RLS). Also used for Auth admin `createUser` when adding a household member                                                 |
-| `OAUTH_CLIENT_ID`       | Random string for OAuth client identification                                                                                                                  |
-| `OAUTH_CLIENT_SECRET`   | Random string for OAuth client authentication                                                                                                                  |
-| `ALLOWED_ORIGINS`       | _(optional)_ Comma-separated list of extra browser origins allowed to call `/mcp` via CORS — `localhost`/`127.0.0.1` on any port are always allowed regardless |
-| `GOOGLE_CLIENT_ID`      | _(optional)_ Google OAuth client ID for "Sign in with Google"                                                                                                  |
-| `GOOGLE_CLIENT_SECRET`  | _(optional)_ Google OAuth client secret                                                                                                                        |
-| `OFF_USER_AGENT`        | Open Food Facts User-Agent for barcode lookups, in the form `AppName (email)`                                                                                  |
-| `PATREON_CLIENT_ID`     | _(optional)_ Patreon OAuth client ID, for showing recent posts on the landing page's Support section                                                           |
-| `PATREON_CLIENT_SECRET` | _(optional)_ Patreon OAuth client secret                                                                                                                       |
-| `PATREON_CAMPAIGN_ID`   | _(optional)_ Patreon campaign ID to fetch posts from                                                                                                           |
-| `PATREON_ACCESS_TOKEN`  | _(optional)_ Creator's Access Token from Patreon's client management page — one-time bootstrap seed, see below                                                 |
-| `PATREON_REFRESH_TOKEN` | _(optional)_ Creator's Refresh Token from the same page — one-time bootstrap seed, see below                                                                   |
-| `PORT`                  | Server port (default: `8080`)                                                                                                                                  |
+| Variable               | Description                                                                                                                                                    |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SUPABASE_URL`         | Your Supabase project URL                                                                                                                                      |
+| `SUPABASE_SECRET_KEY`  | Supabase service role key (bypasses RLS). Also used for Auth admin `createUser` when adding a household member                                                 |
+| `OAUTH_CLIENT_ID`      | Random string for OAuth client identification                                                                                                                  |
+| `OAUTH_CLIENT_SECRET`  | Random string for OAuth client authentication                                                                                                                  |
+| `ALLOWED_ORIGINS`      | _(optional)_ Comma-separated list of extra browser origins allowed to call `/mcp` via CORS — `localhost`/`127.0.0.1` on any port are always allowed regardless |
+| `GOOGLE_CLIENT_ID`     | _(optional)_ Google OAuth client ID for "Sign in with Google"                                                                                                  |
+| `GOOGLE_CLIENT_SECRET` | _(optional)_ Google OAuth client secret                                                                                                                        |
+| `OFF_USER_AGENT`       | Open Food Facts User-Agent for barcode lookups, in the form `AppName (email)`                                                                                  |
+| `PORT`                 | Server port (default: `8080`)                                                                                                                                  |
 
 Generate OAuth credentials:
 
@@ -168,8 +163,6 @@ openssl rand -hex 16   # use as OAUTH_CLIENT_ID
 openssl rand -hex 32   # use as OAUTH_CLIENT_SECRET
 ```
 
-> **Patreon posts, one-time setup:** `PATREON_ACCESS_TOKEN` / `PATREON_REFRESH_TOKEN` are only ever read once, at server boot, to seed the `patreon_tokens` table if it's still empty — the server refreshes and stores its own pair from then on, so leaving these two set permanently is safe (every later boot is a no-op). You never need to touch the database by hand.
-
 ### 3. Google sign-in (optional)
 
 Email/password works out of the box. To also offer **"Continue with Google"**,
@@ -183,10 +176,10 @@ and `GET /auth/google/callback` routes — see [API Endpoints](#api-endpoints).
 ```bash
 bun install
 cp .env.example .env   # fill in your credentials — see Self-hosting above for what to put here
-bun run dev             # regenerates public/ pages, then starts with hot reload on http://localhost:8080
+bun run dev             # regenerates login templates, then starts with hot reload on http://localhost:8080
 ```
 
-The generated pages under `public/` (index, tools, privacy, terms, login, `/alternatives`, locale mirrors, `sitemap.xml`) are build artifacts, not tracked in git — they're regenerated on every Docker build, in CI, and once at each `bun run dev` start. `--watch` only restarts the `src/index.ts` process on save, so it does **not** rerun generation — after editing `src/copy/`, `src/routes.ts`, or `scripts/site-partials.ts`, run `bun run gen:all` yourself to pick up the change.
+The login templates under `public/` (`login.html` and locale mirrors) are build artifacts, not tracked in git. They are regenerated on every Docker build, in CI, and once at each `bun run dev` start. `--watch` only restarts the `src/index.ts` process on save, so it does **not** rerun generation. After editing `src/copy/login.ts` or `scripts/site-partials.ts`, run `bun run gen:all` yourself.
 
 ### Testing and quality
 
@@ -217,6 +210,7 @@ For in-chat widget development (`public/widgets/`), `bun run harness` starts a l
 | Endpoint                                      | Description                                                                 |
 | --------------------------------------------- | --------------------------------------------------------------------------- |
 | `GET /health`                                 | Health check                                                                |
+| `GET /robots.txt`                             | Crawlers: `Disallow: /`                                                     |
 | `GET /.well-known/oauth-authorization-server` | OAuth metadata discovery (root + `/mcp`-scoped variants)                    |
 | `GET /.well-known/oauth-protected-resource`   | OAuth protected-resource metadata discovery (root + `/mcp`-scoped variants) |
 | `POST /register`                              | Dynamic client registration                                                 |

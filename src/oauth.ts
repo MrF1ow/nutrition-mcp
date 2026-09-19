@@ -73,9 +73,8 @@ function escapeHtml(str: string): string {
 
 // Every locale (English implicit) whose translated login page actually
 // exists on disk right now — checked here rather than importing
-// src/copy/login.ts's LOGIN keys, matching how src/index.ts's locale
-// routes work: a locale is "available" when its file is present, not when
-// a data object claims it should be.
+// src/copy/login.ts's LOGIN keys: a locale is available when its file is
+// present, not when a data object claims it should be.
 async function availableLoginLocales(): Promise<SiteLocale[]> {
     const checks = await Promise.all(
         SITE_LOCALES.map(async (l) => {
@@ -124,13 +123,10 @@ async function renderLangSwitcher(
                             >`;
         })
         .join("\n");
-    // Hand-written twin of the static switcher in scripts/site-partials.ts
-    // (this one has to rebuild every href from the in-flight session, which
-    // pathFor cannot do), so every fix there has to be repeated here — its
-    // three labels sat in English on all nine locales until this, long after
-    // the generated pages were translated. role="group" is load-bearing, not
-    // decoration: an aria-label on a bare <div> is exposed to nothing, so
-    // without it the menu's label is inert however well translated.
+    // Login chrome emits {{LANG_SWITCHER}}; this fills it. Each href has to
+    // be authorizeUrl() for the in-flight session (state, redirect_uri,
+    // client_id), not a static locale path. role="group" is load-bearing:
+    // an aria-label on a bare <div> is exposed to nothing.
     const c = chromeFor(locale);
     return `<details class="lang-switch">
                         <summary

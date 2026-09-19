@@ -2,27 +2,22 @@
  * Generates public/login.html and its translated counterparts under
  * public/{locale}/ from the typed data in src/copy/login.ts.
  *
- * Unlike every other generated page, this one is a TEMPLATE, not a final
- * document: src/oauth.ts's renderLoginPage() reads whichever locale's
- * output this writes and fills in four placeholders at request time —
- * {{SESSION_ID}}, {{ERROR}}, {{LANG_SWITCHER}}, and
- * {{TRANSLATION_NOTICE}}. The latter two both have to be built per-request
- * rather than by scripts/site-partials.ts's ordinary nav()/translationNotice()
- * helpers: their links need to point back at THIS in-flight OAuth flow in
- * another language, which means carrying the session's state/redirect_uri/
- * client_id (see authorizeUrl() in oauth.ts) — a fixed pathFor(locale, "")
- * would send someone to the marketing homepage instead of back to their
- * login attempt. Those four tokens must reach the written file untouched;
- * nothing below runs esc()/interpolation on them.
+ * This is a TEMPLATE, not a final document: src/oauth.ts's renderLoginPage()
+ * reads whichever locale's output this writes and fills in four placeholders
+ * at request time — {{SESSION_ID}}, {{ERROR}}, {{LANG_SWITCHER}}, and
+ * {{TRANSLATION_NOTICE}}. The latter two have to be built per-request: their
+ * links need to stay in this in-flight OAuth flow in another language, which
+ * means carrying the session's state/redirect_uri/client_id (see
+ * authorizeUrl() in oauth.ts). Those four tokens must reach the written file
+ * untouched; nothing below interpolates them.
  *
  * Re-run after editing src/copy/login.ts:
  *   bun run scripts/gen-login.ts
  * The generated .html files are the served artifacts — don't hand-edit them.
  */
 
-import { HTML_LANG, pathFor, type SiteLocale } from "../src/routes.js";
+import { HTML_LANG, LOCALES, type SiteLocale } from "../src/routes.js";
 import {
-    SITE,
     esc,
     footer,
     generatedBanner,
@@ -32,6 +27,40 @@ import {
     THEME_PREPAINT,
 } from "./site-partials.js";
 import { LOGIN, type LoginDoc } from "../src/copy/login.js";
+import { rm } from "node:fs/promises";
+
+async function removeStaleMarketingHtml(): Promise<void> {
+    const files = [
+        "public/index.html",
+        "public/tools.html",
+        "public/privacy.html",
+        "public/terms.html",
+        "public/sitemap.xml",
+        "public/llms.txt",
+    ];
+    for (const locale of LOCALES) {
+        for (const name of [
+            "index.html",
+            "tools.html",
+            "privacy.html",
+            "terms.html",
+        ]) {
+            files.push(`public/${locale}/${name}`);
+        }
+    }
+    await Promise.all(files.map((f) => rm(f, { force: true })));
+    await rm("public/alternatives", { recursive: true, force: true });
+    await Promise.all(
+        LOCALES.map((locale) =>
+            rm(`public/${locale}/alternatives`, {
+                recursive: true,
+                force: true,
+            }),
+        ),
+    );
+}
+
+await removeStaleMarketingHtml();
 
 // Page-layout CSS, unchanged from the previous hand-authored login.html.
 const LOGIN_STYLE = `        <style>
@@ -95,18 +124,11 @@ const LOGIN_STYLE = `        <style>
 function renderDoc(doc: LoginDoc, locale: SiteLocale): string {
     const title = `${esc(doc.title)} — ${esc(doc.subtitle)}`;
 
-    // consentNote's {terms}/{privacy} placeholders become links to the
-    // *locale's* legal pages — pathFor, not a hardcoded /terms, so a
-    // translated login page doesn't send someone to the English policy.
+    // Legal HTML is gone. Keep the consent sentence, but the {terms}/
+    // {privacy} tokens are the localized names as text, not anchors.
     const consent = esc(doc.consentNote)
-        .replace(
-            "{terms}",
-            `<a href="${pathFor(locale, "/terms")}" target="_blank" rel="noopener">${esc(doc.termsLinkText)}</a>`,
-        )
-        .replace(
-            "{privacy}",
-            `<a href="${pathFor(locale, "/privacy")}" target="_blank" rel="noopener">${esc(doc.privacyLinkText)}</a>`,
-        );
+        .replace("{terms}", esc(doc.termsLinkText))
+        .replace("{privacy}", esc(doc.privacyLinkText));
 
     return `<!doctype html>
 <html lang="${HTML_LANG[locale]}">
@@ -129,7 +151,7 @@ ${LOGIN_STYLE}
 ${generatedBanner("scripts/gen-login.ts")}
 ${THEME_PREPAINT}
 
-${nav(locale, "", undefined, { dynamicSwitcher: true })}
+${nav(locale)}
 
         <main id="main">
             <div class="auth-stage">

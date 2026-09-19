@@ -1,16 +1,7 @@
-// Translatable strings for the site-wide header nav, mobile menu, and
-// footer — scripts/site-partials.ts's nav()/footer(), shared by every
-// generated page (landing page, /tools, /privacy, /terms, /alternatives).
-//
-// This was a real, systemic gap: nav()/footer() already localized every
-// HREF (via pathFor/hashPath) and built a full hreflang/language-switcher
-// system, but every visible LABEL — "How it works", "Tools", "Connect",
-// the whole footer — was a hardcoded English string literal, regardless of
-// locale. A translated /de/tools page still had an all-English header and
-// footer framing it, on every page, in every locale, because nav()/
-// footer() are the one piece of markup shared by literally every
-// generator and nobody had translated their labels. Found via a 7-locale
-// proofreading pass (see PR description) before this file existed.
+// Translatable strings for login chrome (scripts/site-partials.ts nav()
+// and footer(), plus oauth.ts language-switcher labels). Login is the only
+// generated public HTML. Unused nav/menu/footer-link keys remain so locale
+// files stay a complete ChromeCopy; do not wire them back into hrefs.
 //
 // "Nutrition MCP" and "GitHub" are brand/product nouns and stay in Latin
 // script in every locale — see ChromeCopy.footer.github's doc comment.

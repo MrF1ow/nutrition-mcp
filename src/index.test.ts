@@ -79,9 +79,9 @@ describe("the shutdown gate", () => {
         expect(body.error?.message).toContain("shutting down");
     });
 
-    test("runs before the OAuth router and the landing page", async () => {
+    test("runs before the OAuth router", async () => {
         setShuttingDownForTest(true);
-        for (const path of ["/", "/authorize", "/api/stats"]) {
+        for (const path of ["/", "/authorize"]) {
             const r = await app.request(`http://x${path}`);
             expect({ path, status: r.status }).toEqual({ path, status: 503 });
             expect(r.headers.get("Retry-After")).toBe("1");
@@ -164,30 +164,5 @@ describe("CORS allow-headers", () => {
             },
         });
         expect(r.headers.get("Access-Control-Allow-Origin")).toBeNull();
-    });
-});
-
-describe("GET /api/patreon-posts", () => {
-    test("returns [] when Patreon credentials are not configured", async () => {
-        const saved = {
-            id: process.env.PATREON_CLIENT_ID,
-            secret: process.env.PATREON_CLIENT_SECRET,
-            campaign: process.env.PATREON_CAMPAIGN_ID,
-        };
-        delete process.env.PATREON_CLIENT_ID;
-        delete process.env.PATREON_CLIENT_SECRET;
-        delete process.env.PATREON_CAMPAIGN_ID;
-        try {
-            const r = await app.request("http://x/api/patreon-posts");
-            expect(r.status).toBe(200);
-            expect(await r.json()).toEqual([]);
-        } finally {
-            if (saved.id !== undefined)
-                process.env.PATREON_CLIENT_ID = saved.id;
-            if (saved.secret !== undefined)
-                process.env.PATREON_CLIENT_SECRET = saved.secret;
-            if (saved.campaign !== undefined)
-                process.env.PATREON_CAMPAIGN_ID = saved.campaign;
-        }
     });
 });
