@@ -4914,7 +4914,7 @@ async function buildMcpServer(
 // (supportedVersions + capabilities + instructions) and `subscriptions/listen`
 // (refused outright below, but the SDK still reads getCapabilities() and the
 // serverInfo off the instance before refusing). Both are served from
-// newMcpServer, skipping a Supabase profile read and 38 tool registrations.
+// newMcpServer, skipping a Supabase profile read and every tool registration.
 // server/discover is the FIRST request every negotiating client sends, so under
 // Supabase pressure it was the probe that failed — for a response that contains
 // nothing a registration produces.
