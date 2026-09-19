@@ -24,7 +24,7 @@ test("generated tokens use the nt_hh_ prefix and hash round-trips", () => {
     );
 });
 
-test("OAuth wins when both lookups hit", () => {
+test("the combiner prefers OAuth if both tables were queried and both hit", () => {
     expect(
         combineBearerLookups(
             { status: "hit", id: "user-1" },
@@ -61,6 +61,27 @@ test("unknown tokens are invalid only when both tables answered miss", () => {
     expect(
         combineBearerLookups({ status: "miss" }, { status: "miss" }),
     ).toEqual({ status: "invalid" });
+});
+
+test("replacing the live hash makes the old plaintext invalid", () => {
+    const oldToken = generateHouseholdToken();
+    const newToken = generateHouseholdToken();
+    const live = new Map<string, string>();
+    live.set(householdTokenHashHex(hashHouseholdToken(oldToken)), "hh-1");
+    live.delete(householdTokenHashHex(hashHouseholdToken(oldToken)));
+    live.set(householdTokenHashHex(hashHouseholdToken(newToken)), "hh-1");
+    const householdLookup = (token: string) => {
+        const id = live.get(householdTokenHashHex(hashHouseholdToken(token)));
+        return id
+            ? { status: "hit" as const, id }
+            : { status: "miss" as const };
+    };
+    expect(
+        combineBearerLookups({ status: "miss" }, householdLookup(oldToken)),
+    ).toEqual({ status: "invalid" });
+    expect(
+        combineBearerLookups({ status: "miss" }, householdLookup(newToken)),
+    ).toEqual({ status: "valid", kind: "household", householdId: "hh-1" });
 });
 
 test("household auth has no default userId and rate-limits on householdId", () => {
