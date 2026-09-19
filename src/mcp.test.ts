@@ -46,7 +46,10 @@ import * as actualSupabase from "./supabase.js";
 // the next file the mock again. Restore from this copy.
 const realSupabase = { ...actualSupabase };
 import { DELETED_ACCOUNT_ANALYTICS_ID } from "./analytics.js";
-import { OAUTH_USER_MISMATCH } from "./auth-context.js";
+import {
+    HOUSEHOLD_CANNOT_DELETE_ACCOUNT,
+    OAUTH_USER_MISMATCH,
+} from "./auth-context.js";
 import { HOUSEHOLD_TOKEN_PREFIX } from "./household-token.js";
 import { formatFoodResult, type FoodResult } from "./foods.js";
 import {
@@ -1063,6 +1066,7 @@ describe("start_meal_import payload", () => {
         tzConfigured: true,
         widgetsEnabled: true,
         locale: "en",
+        userId: "u1",
     };
 
     // drink_unit is the whole alcohol gate for this flow: non-null means the
@@ -1092,6 +1096,7 @@ describe("start_meal_import payload", () => {
             );
             expect(parsed.import_tool_name).toBe("bulk_import_meals");
             expect(parsed.tz).toBe("Europe/Kyiv");
+            expect(parsed.user_id).toBe("u1");
             expect(parsed.max_rows_per_call).toBeGreaterThan(0);
         }
     });
@@ -1556,12 +1561,21 @@ mock.module("./supabase.js", () => ({
     existingIdempotencyKeys: async () => new Set<string>(),
     existingMealIds: async (_userId: string, ids: string[]) =>
         new Set(ids.filter((id) => db.meals.some((m) => m.id === id))),
-    getHouseholdMembership: async (userId: string) => {
+    getHouseholdMembership: async (userId: string, householdId?: string) => {
         db.membershipReads.push(userId);
-        return db.members.find((member) => member.userId === userId) ?? null;
+        return (
+            db.members.find(
+                (member) =>
+                    member.userId === userId &&
+                    (householdId == null || member.householdId === householdId),
+            ) ?? null
+        );
     },
     listHouseholdMembers: async (householdId: string) =>
-        db.members.filter((member) => member.householdId === householdId),
+        db.members
+            .filter((member) => member.householdId === householdId)
+            .slice()
+            .sort((a, b) => a.displayName.localeCompare(b.displayName)),
     rotateHouseholdMcpToken: async (args: {
         householdId: string;
         tokenHashHex: string;
@@ -4037,14 +4051,14 @@ describe("household person targeting", () => {
             expect(r.isError).toBeFalsy();
             expect(r.structuredContent?.members).toEqual([
                 {
-                    user_id: "u1",
-                    display_name: "U1",
-                    role: "owner",
-                },
-                {
                     user_id: bob,
                     display_name: "Bob",
                     role: "member",
+                },
+                {
+                    user_id: "u1",
+                    display_name: "U1",
+                    role: "owner",
                 },
             ]);
         });
@@ -4059,6 +4073,57 @@ describe("household person targeting", () => {
             expect(r.isError).toBeFalsy();
             expect(db.goals?.user_id).toBe(bob);
             expect(db.goals?.daily_calories).toBe(1800);
+        });
+    });
+
+    test("PAT log_meal for a member of another household writes nothing", async () => {
+        const other = "44444444-4444-4444-8444-444444444444";
+        await withHousehold(async (call) => {
+            db.members.push({
+                householdId: "hh-other",
+                userId: other,
+                role: "member",
+                displayName: "Other",
+            });
+            const r = await call("log_meal", {
+                description: "toast",
+                meal_type: "breakfast",
+                calories: 100,
+                protein_g: 4,
+                carbs_g: 18,
+                fat_g: 1,
+                user_id: other,
+            });
+            expect(r.isError).toBe(true);
+            expect(textOf(r)).toContain("not a household member");
+            expect(db.inserted).toHaveLength(0);
+        });
+    });
+
+    test("PAT start_meal_import names the member for the widget", async () => {
+        await withHousehold(async (call) => {
+            const r = await call("start_meal_import", { user_id: alice });
+            expect(r.isError).toBeFalsy();
+            const sc = START_IMPORT_OUTPUT_SCHEMA.parse(r.structuredContent);
+            expect(sc.user_id).toBe(alice);
+            expect(sc.import_tool_name).toBe("bulk_import_meals");
+        });
+    });
+
+    test("PAT delete_account is refused and deletes nothing", async () => {
+        await withHousehold(async (call) => {
+            const r = await call("delete_account", { confirm: true });
+            expect(r.isError).toBe(true);
+            expect(textOf(r)).toContain(HOUSEHOLD_CANNOT_DELETE_ACCOUNT);
+        });
+    });
+
+    test("non-member OAuth list_members is refused", async () => {
+        db.members = [];
+        await withTools(null, async (call) => {
+            const r = await call("list_members");
+            expect(r.isError).toBe(true);
+            expect(textOf(r)).toContain("not a household member");
         });
     });
 });
@@ -4409,6 +4474,7 @@ describe("/mcp serves one tool surface on both protocol eras", () => {
                 expect(sc.tz).toBe("Europe/Kyiv");
                 expect(sc.tz_configured).toBe(true);
                 expect(sc.import_tool_name).toBe("bulk_import_meals");
+                expect(sc.user_id).toBe("u1");
             });
         },
     );

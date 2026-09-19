@@ -1,9 +1,3 @@
-// Dutch (nl) translation of ToolsDoc for /tools. See src/copy/tools.ts for
-// the structural types (TOOLS, BADGE_META, CategoryId, BadgeKind) — those
-// stay untranslated and shared across every locale. Only this file's
-// prose is new. Tool names, parameter names, and category slugs are never
-// translated; see tools.ts's header comment for the full reasoning.
-
 import type { ToolsDoc } from "./tools.js";
 
 export const TOOLS_NL: ToolsDoc = {

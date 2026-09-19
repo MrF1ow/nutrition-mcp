@@ -1,7 +1,3 @@
-// German translation of src/copy/tools.ts's ToolsDoc. See that file's header
-// for what is structural (never translated: tool names, param names,
-// category slugs — kept in TOOLS/BADGE_META) versus prose (translated here).
-
 import type { ToolsDoc } from "./tools.js";
 
 export const TOOLS_DE: ToolsDoc = {

@@ -5,6 +5,9 @@ export type AuthContext =
 export const HOUSEHOLD_HAS_NO_DEFAULT_USER =
     "This household token has no default user. Pass user_id set to a household member.";
 
+export const HOUSEHOLD_CANNOT_DELETE_ACCOUNT =
+    "Household tokens cannot delete accounts. Sign in as the user instead.";
+
 export const OAUTH_USER_MISMATCH = "user_id must match the signed-in user";
 
 export function requireActorUserId(auth: AuthContext): string {

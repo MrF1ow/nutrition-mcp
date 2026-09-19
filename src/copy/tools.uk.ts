@@ -1,8 +1,3 @@
-// Ukrainian translation of ToolsDoc for /tools. See src/copy/tools.ts for
-// the structural (untranslated) TOOLS/BADGE_META/CATEGORY_META identity
-// this prose is keyed against, and that file's header for the trust model
-// of ToolProse.params (trusted HTML strings with occasional <b>/<code>).
-
 import type { ToolsDoc } from "./tools.js";
 
 export const TOOLS_UK: ToolsDoc = {

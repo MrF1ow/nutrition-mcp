@@ -1510,12 +1510,16 @@ export type HouseholdMembership = {
 
 export async function getHouseholdMembership(
     userId: string,
+    householdId?: string,
 ): Promise<HouseholdMembership | null> {
-    const { data, error } = await getSupabase()
+    let query = getSupabase()
         .from("household_members")
         .select("household_id, user_id, role, display_name")
-        .eq("user_id", userId)
-        .maybeSingle();
+        .eq("user_id", userId);
+    if (householdId != null) {
+        query = query.eq("household_id", householdId);
+    }
+    const { data, error } = await query.maybeSingle();
 
     if (error) {
         throw new Error(

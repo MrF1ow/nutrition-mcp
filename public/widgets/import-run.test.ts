@@ -111,7 +111,11 @@ async function freshImportWidget() {
             } | null;
             step: string;
         };
-        CFG: { max_rows_per_call: number; import_tool_name: string };
+        CFG: {
+            max_rows_per_call: number;
+            import_tool_name: string;
+            user_id?: string;
+        };
         setAPI: (a: unknown) => void;
         runImport: () => Promise<void>;
         previewStep: () => string;
@@ -214,4 +218,34 @@ test("a passing dry run proceeds to write for real (happy path unaffected)", asy
     expect(w.S.result?.chunkErrors ?? []).toHaveLength(0);
     expect(w.S.result?.created).toBe(1);
     expect(w.S.step).toBe("done");
+});
+
+test("runImport forwards CFG.user_id onto bulk_import_meals", async () => {
+    const w = await freshImportWidget();
+    w.CFG.user_id = "alice";
+    const { api, calls } = fakeApi([
+        {
+            status: "success",
+            dry_run: true,
+            warnings: [],
+            results: [{ source_line: 2, error: null }],
+        },
+        {
+            status: "success",
+            dry_run: false,
+            warnings: [],
+            results: [],
+            summary: { created: 1, deduplicated: 0, failed: 0 },
+        },
+    ]);
+    w.setAPI(api);
+    w.S.rows = [row()];
+    w.S.skipped = 0;
+    w.S.sourceApp = "";
+
+    await w.runImport();
+
+    expect(calls).toHaveLength(2);
+    expect(calls[0]!.args.user_id).toBe("alice");
+    expect(calls[1]!.args.user_id).toBe("alice");
 });

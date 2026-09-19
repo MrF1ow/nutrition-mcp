@@ -11,6 +11,7 @@ import { z } from "zod";
 import type { Context } from "hono";
 import {
     analyticsUserId,
+    HOUSEHOLD_CANNOT_DELETE_ACCOUNT,
     HOUSEHOLD_HAS_NO_DEFAULT_USER,
     OAUTH_USER_MISMATCH,
     requireActorUserId,
@@ -758,6 +759,7 @@ export const START_IMPORT_OUTPUT_SCHEMA = z.object({
     // get_nutrition_summary's outputSchema for why this is z.string() and
     // resolved server-side via getUserLocale.
     locale: z.string(),
+    user_id: z.string(),
 });
 
 export function startImportPayload(opts: {
@@ -766,6 +768,7 @@ export function startImportPayload(opts: {
     widgetsEnabled: boolean;
     alcohol: AlcoholDisplay;
     locale: string;
+    userId: string;
 }) {
     return {
         // The widget must resolve dates the same way the server will, so it is
@@ -810,6 +813,7 @@ export function startImportPayload(opts: {
         // indefensible; announced, it is the user's call to make.
         drink_unit: opts.alcohol,
         locale: opts.locale,
+        user_id: opts.userId,
     };
 }
 
@@ -1352,9 +1356,7 @@ export function registerTools(
                   .string()
                   .min(1)
                   .optional()
-                  .describe(
-                      "Must equal the signed-in user if set. A household bot token uses this to pick a member.",
-                  );
+                  .describe("Must equal the signed-in user if set.");
     const personSchema = <T extends z.ZodRawShape>(shape: T) =>
         z.object({ ...shape, user_id: userIdArg });
     async function actorUserId(requested: string | undefined): Promise<string> {
@@ -1367,7 +1369,10 @@ export function registerTools(
             );
         }
         if (resolved.membership === "required") {
-            const member = await getHouseholdMembership(resolved.userId);
+            const member = await getHouseholdMembership(
+                resolved.userId,
+                resolved.householdId,
+            );
             const check = requireMemberOfHousehold(
                 member,
                 resolved.householdId,
@@ -1386,9 +1391,9 @@ export function registerTools(
         }
         return member.householdId;
     }
-    // One context for all 38 tools. clientInfo is a getter, not a value: at
-    // registration time the SDK has not yet resolved who is calling, and on the
-    // modern leg it backfills the identity per request before dispatch.
+    // clientInfo is a getter, not a value: at registration time the SDK has not
+    // yet resolved who is calling, and on the modern leg it backfills the
+    // identity per request before dispatch.
     const analytics = {
         userId: analyticsUserId(auth),
         protocolEra,
@@ -1525,12 +1530,11 @@ export function registerTools(
             // widget renders nothing when no goals are set.
             ...uiMeta(MEAL_LOGGED_WIDGET_URI),
         },
-        async (args) => {
+        async ({ user_id, ...mealArgs }) => {
             return withAnalytics(
                 "log_meal",
                 async () => {
-                    const userId = await actorUserId(args.user_id);
-                    const { user_id: _target, ...mealArgs } = args;
+                    const userId = await actorUserId(user_id);
                     const { iso, note } = await resolveWriteTimestamp(
                         userId,
                         mealArgs.logged_at,
@@ -1624,6 +1628,7 @@ export function registerTools(
                         widgetsEnabled,
                         alcohol,
                         locale: localeFromProfile(profile) ?? "en",
+                        userId,
                     });
                     const text = widgetsEnabled
                         ? "Importer ready — pick your export file in the panel above. Nothing is saved until you confirm the preview." +
@@ -3133,12 +3138,11 @@ export function registerTools(
                     ),
             }),
         },
-        async (args) => {
+        async ({ user_id, ...waterArgs }) => {
             return withAnalytics(
                 "log_water",
                 async () => {
-                    const userId = await actorUserId(args.user_id);
-                    const { user_id: _target, ...waterArgs } = args;
+                    const userId = await actorUserId(user_id);
                     const { iso, note } = await resolveWriteTimestamp(
                         userId,
                         waterArgs.logged_at,
@@ -4615,6 +4619,9 @@ export function registerTools(
             return withAnalytics(
                 "delete_account",
                 async () => {
+                    if (auth.kind === "household") {
+                        throw new Error(HOUSEHOLD_CANNOT_DELETE_ACCOUNT);
+                    }
                     const userId = requireUser();
                     if (!confirm) {
                         return {
@@ -4638,13 +4645,14 @@ export function registerTools(
                 },
                 // deleteAllUserData wipes tool_analytics before anything else,
                 // so the row withAnalytics writes once this handler settles
-                // must not carry the id it just erased. Only the cancelled path
-                // (nothing deleted) still belongs to the real user.
+                // must not carry the id it just erased. The cancelled path
+                // keeps the request's analytics id (the OAuth user, or hh:<id>
+                // for a household token that never reaches a person).
                 {
                     ...analytics,
                     userId: confirm
                         ? DELETED_ACCOUNT_ANALYTICS_ID
-                        : requireUser(),
+                        : analytics.userId,
                 },
             );
         },
