@@ -1,6 +1,3 @@
--- PAT traffic has no JWT, so this RPC takes the household id the tool already
--- resolved. Inserts household_members, not people. Role is always member.
-
 create or replace function public.add_household_member(
     p_household_id uuid,
     p_auth_user_id uuid,
