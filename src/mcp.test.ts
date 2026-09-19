@@ -1651,6 +1651,8 @@ mock.module("./supabase.js", () => ({
         } as actualSupabase.Profile;
         return db.profile;
     },
+    getLatestWeight: async () => null,
+    getWeightInRange: async () => [],
 }));
 
 afterAll(() => {
@@ -4076,6 +4078,20 @@ describe("household person targeting", () => {
     });
 
     test("OAuth log_meal with someone else's user_id is not sudo", async () => {
+        db.members = [
+            {
+                householdId: "hh-1",
+                userId: "u1",
+                role: "owner",
+                displayName: "U1",
+            },
+            {
+                householdId: "hh-1",
+                userId: bob,
+                role: "member",
+                displayName: "Bob",
+            },
+        ];
         await withTools(null, async (call) => {
             const r = await call("log_meal", {
                 description: "toast",
@@ -4089,6 +4105,52 @@ describe("household person targeting", () => {
             expect(r.isError).toBe(true);
             expect(textOf(r)).toContain(OAUTH_USER_MISMATCH);
             expect(db.inserted).toHaveLength(0);
+        });
+    });
+
+    test("OAuth get_nutrition_summary can read a household peer", async () => {
+        db.members = [
+            {
+                householdId: "hh-1",
+                userId: "u1",
+                role: "owner",
+                displayName: "U1",
+            },
+            {
+                householdId: "hh-1",
+                userId: bob,
+                role: "member",
+                displayName: "Bob",
+            },
+        ];
+        await withTools(null, async (call) => {
+            const r = await call("get_nutrition_summary", {
+                start_date: "2026-08-01",
+                end_date: "2026-08-07",
+                user_id: bob,
+            });
+            expect(r.isError).toBeFalsy();
+            expect(r.structuredContent).toBeDefined();
+        });
+    });
+
+    test("OAuth get_nutrition_summary of a stranger is not a household member", async () => {
+        db.members = [
+            {
+                householdId: "hh-1",
+                userId: "u1",
+                role: "owner",
+                displayName: "U1",
+            },
+        ];
+        await withTools(null, async (call) => {
+            const r = await call("get_nutrition_summary", {
+                start_date: "2026-08-01",
+                end_date: "2026-08-07",
+                user_id: stranger,
+            });
+            expect(r.isError).toBe(true);
+            expect(textOf(r)).toContain("not a household member");
         });
     });
 
@@ -5289,5 +5351,82 @@ describe("/mcp records the negotiated era for the access log", () => {
         });
         expect(r.status).toBe(415);
         expect(seen).toEqual(["POST:-:-"]);
+    });
+});
+
+process.env.OAUTH_CLIENT_ID ||= "test-client-id";
+process.env.OAUTH_CLIENT_SECRET ||= "test-client-secret";
+
+const { app: siteApp } = await import("./index.js");
+const { mintSiteSession, SITE_COOKIE } = await import("./site-session.js");
+
+describe("authenticated dashboard HTTP", () => {
+    const alice = "11111111-1111-4111-8111-111111111111";
+    const bob = "22222222-2222-4222-8222-222222222222";
+    const outsider = "33333333-3333-4333-8333-333333333333";
+
+    function cookieFor(userId: string): string {
+        return `${SITE_COOKIE}=${mintSiteSession(userId)}`;
+    }
+
+    beforeEach(() => {
+        db.members = [
+            {
+                householdId: "hh-1",
+                userId: alice,
+                role: "owner",
+                displayName: "Alice",
+            },
+            {
+                householdId: "hh-1",
+                userId: bob,
+                role: "member",
+                displayName: "Bob",
+            },
+        ];
+        db.profile = { ...PROFILE_BASE, user_id: alice };
+        db.household = {
+            name: "Home",
+            fridgeLocations: ["fridge"],
+            recipeSearchPlaces: [],
+            preferences: { ...EMPTY_HOUSEHOLD_PREFERENCES },
+        };
+    });
+
+    test("a site cookie renders the viewer's dashboard widgets", async () => {
+        const r = await siteApp.request("http://x/", {
+            headers: { cookie: cookieFor(alice) },
+        });
+        expect(r.status).toBe(200);
+        const html = await r.text();
+        expect(html).toContain("<h1>Alice</h1>");
+        expect(html).toContain("widget-frame");
+        expect(html).toContain("window.__WIDGET_DATA__=");
+        expect(html).toContain('title="nutrition-summary"');
+        expect(html).not.toContain("You can look, not edit");
+        expect(html).not.toContain('action="/approve"');
+    });
+
+    test("?member= shows a household peer read-only", async () => {
+        db.profile = { ...PROFILE_BASE, user_id: bob };
+        const r = await siteApp.request(`http://x/?member=${bob}`, {
+            headers: { cookie: cookieFor(alice) },
+        });
+        expect(r.status).toBe(200);
+        const html = await r.text();
+        expect(html).toContain("<h1>Bob</h1>");
+        expect(html).toContain("Viewing Bob");
+        expect(html).toContain("You can look, not edit");
+        expect(html).toContain("widget-frame");
+    });
+
+    test("?member= of a stranger is 403", async () => {
+        const r = await siteApp.request(`http://x/?member=${outsider}`, {
+            headers: { cookie: cookieFor(alice) },
+        });
+        expect(r.status).toBe(403);
+        const html = await r.text();
+        expect(html).toContain("household membership");
+        expect(html).not.toContain("<iframe");
     });
 });
