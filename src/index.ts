@@ -7,6 +7,7 @@ import {
     createHouseholdFormHtml,
     forbiddenDashboardHtml,
     renderDashboardPage,
+    renderFridgeInventoryPage,
     renderStubPage,
 } from "./dashboard.js";
 import { parseAppearanceInput } from "./app/shell.js";
@@ -34,8 +35,22 @@ import {
     addHouseholdMemberForHousehold,
     createHouseholdForCaller,
     getHouseholdMembership,
+    liveFridgeStore,
     upsertProfile,
 } from "./supabase.js";
+import { lookupBarcode, type FoodResult } from "./foods.js";
+import { PICKER_DEMO_FOODS } from "./app/components/food-picker.js";
+import {
+    addFoodByBarcode,
+    addLocation,
+    addManualFood,
+    addSupply,
+    deleteItem,
+    deleteLocation,
+    FridgeInputError,
+    moveItem,
+    updateItemQuantity,
+} from "./fridge.js";
 
 const app = new Hono();
 
@@ -241,8 +256,181 @@ app.get("/nutrition", async (c) => {
 app.get("/fridge", async (c) => {
     const userId = siteUserId(c.req.header("cookie"));
     if (!userId) return beginSiteLogin(c, c.req.query("locale"));
-    const page = await renderStubPage(userId, "fridge");
+    const page = await renderFridgeInventoryPage(userId);
     return c.html(page.html, page.status);
+});
+
+async function fridgeActor(c: {
+    req: {
+        header: (name: string) => string | undefined;
+        query: (k: string) => string | undefined;
+    };
+}) {
+    const userId = siteUserId(c.req.header("cookie"));
+    if (!userId) return { userId: null as string | null, member: null };
+    return {
+        userId,
+        member: await getHouseholdMembership(userId),
+    };
+}
+
+function formText(body: Record<string, string | File>, key: string): string {
+    const value = body[key];
+    return typeof value === "string" ? value : "";
+}
+
+function formAmount(body: Record<string, string | File>, key: string): number {
+    return Number(formText(body, key));
+}
+
+function demoFridgeFood(barcode: string): FoodResult | null {
+    const demo = PICKER_DEMO_FOODS.find((food) => food.barcode === barcode);
+    if (!demo) return null;
+    return {
+        name: demo.name,
+        brand: demo.brand,
+        serving: null,
+        calories: null,
+        protein_g: null,
+        carbs_g: null,
+        fat_g: null,
+        fiber_g: null,
+        sugar_g: null,
+        alcohol_g: null,
+        nutriscore_grade: null,
+        nova_group: null,
+        source: `off:${demo.barcode}`,
+        source_name: "openfoodfacts",
+        barcode: demo.barcode,
+    };
+}
+
+async function fridgeBarcodeLookup(
+    barcode: string,
+): Promise<FoodResult | null> {
+    const demo = demoFridgeFood(barcode);
+    if (demo) return demo;
+    try {
+        return await lookupBarcode(barcode);
+    } catch {
+        return null;
+    }
+}
+
+async function fridgeFormError(userId: string, err: unknown) {
+    const message =
+        err instanceof FridgeInputError
+            ? err.message
+            : err instanceof Error
+              ? err.message
+              : "Could not update the fridge.";
+    const page = await renderFridgeInventoryPage(userId, message);
+    return { html: page.html, status: 400 as const };
+}
+
+app.post("/fridge/locations", async (c) => {
+    const { userId, member } = await fridgeActor(c);
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    if (member == null) return c.html(forbiddenDashboardHtml(), 403);
+    const body = await c.req.parseBody();
+    try {
+        await addLocation(
+            liveFridgeStore(),
+            member.householdId,
+            formText(body, "name"),
+        );
+    } catch (err) {
+        const page = await fridgeFormError(userId, err);
+        return c.html(page.html, page.status);
+    }
+    return c.redirect("/fridge");
+});
+
+app.post("/fridge/locations/:id/delete", async (c) => {
+    const { userId, member } = await fridgeActor(c);
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    if (member == null) return c.html(forbiddenDashboardHtml(), 403);
+    await deleteLocation(
+        liveFridgeStore(),
+        member.householdId,
+        c.req.param("id"),
+    );
+    return c.redirect("/fridge");
+});
+
+app.post("/fridge/items", async (c) => {
+    const { userId, member } = await fridgeActor(c);
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    if (member == null) return c.html(forbiddenDashboardHtml(), 403);
+    const body = await c.req.parseBody();
+    const store = liveFridgeStore();
+    const locationId = formText(body, "location_id");
+    const kind = formText(body, "kind");
+    const amount = formAmount(body, "qty_amount");
+    try {
+        if (kind === "supply") {
+            await addSupply(store, {
+                householdId: member.householdId,
+                locationId,
+                name: formText(body, "name"),
+                amount,
+                unit: formText(body, "qty_unit"),
+            });
+        } else if (formText(body, "barcode")) {
+            await addFoodByBarcode(
+                store,
+                {
+                    householdId: member.householdId,
+                    locationId,
+                    barcode: formText(body, "barcode"),
+                    amount,
+                },
+                { lookup: fridgeBarcodeLookup },
+            );
+        } else {
+            await addManualFood(store, {
+                householdId: member.householdId,
+                locationId,
+                name: formText(body, "food_name"),
+                amount,
+            });
+        }
+    } catch (err) {
+        const page = await fridgeFormError(userId, err);
+        return c.html(page.html, page.status);
+    }
+    return c.redirect("/fridge");
+});
+
+app.post("/fridge/items/:id/delete", async (c) => {
+    const { userId, member } = await fridgeActor(c);
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    if (member == null) return c.html(forbiddenDashboardHtml(), 403);
+    await deleteItem(liveFridgeStore(), member.householdId, c.req.param("id"));
+    return c.redirect("/fridge");
+});
+
+app.post("/fridge/items/:id", async (c) => {
+    const { userId, member } = await fridgeActor(c);
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    if (member == null) return c.html(forbiddenDashboardHtml(), 403);
+    const body = await c.req.parseBody();
+    const store = liveFridgeStore();
+    const itemId = c.req.param("id");
+    try {
+        await updateItemQuantity(store, member.householdId, itemId, {
+            amount: formAmount(body, "qty_amount"),
+            unit: formText(body, "qty_unit"),
+        });
+        const locationId = formText(body, "location_id");
+        if (locationId) {
+            await moveItem(store, member.householdId, itemId, locationId);
+        }
+    } catch (err) {
+        const page = await fridgeFormError(userId, err);
+        return c.html(page.html, page.status);
+    }
+    return c.redirect("/fridge");
 });
 
 app.get("/grocery", async (c) => {

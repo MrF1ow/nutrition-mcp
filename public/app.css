@@ -344,3 +344,96 @@ body {
     color: var(--text);
     font-weight: 600;
 }
+
+.empty-fridge,
+.add-item-prompt {
+    color: var(--text-dim);
+}
+
+.fridge-add-location,
+.fridge-add-supply,
+.fridge-item-edit {
+    display: grid;
+    gap: 8px;
+    max-width: 420px;
+    margin: 0 0 20px;
+}
+
+.fridge-add-location input,
+.fridge-add-supply input,
+.fridge-item-edit select,
+.fridge-add-location button,
+.fridge-add-supply button,
+.fridge-item-edit button,
+.fridge-item-delete button,
+.fridge-location-head button {
+    font: inherit;
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    min-height: 44px;
+    padding: 8px 12px;
+}
+
+.fridge-add-location button,
+.fridge-add-supply button,
+.fridge-item-edit button {
+    color: var(--accent-ink);
+    background: var(--accent);
+    border-color: var(--accent);
+    font-weight: 600;
+}
+
+.fridge-location {
+    display: grid;
+    gap: 12px;
+    margin: 0 0 28px;
+    padding: 16px;
+    border: 1px solid var(--panel-border);
+    border-radius: 14px;
+    background: var(--panel);
+}
+
+.fridge-location-head,
+.fridge-item-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.fridge-location h2,
+.fridge-location h3 {
+    margin: 0;
+}
+
+.fridge-items {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 12px;
+}
+
+.fridge-item {
+    display: grid;
+    gap: 8px;
+    padding: 12px 0;
+    border-top: 1px solid var(--panel-border);
+}
+
+.fridge-item-name {
+    margin: 0;
+    font-weight: 600;
+}
+
+.fridge-item-qty {
+    margin: 0;
+    color: var(--text-dim);
+}
+
+.error-banner {
+    color: #b42318;
+    font-weight: 600;
+}

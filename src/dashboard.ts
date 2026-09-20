@@ -12,12 +12,14 @@ import {
     getProfile,
     householdExists,
     listHouseholdMembers,
+    liveFridgeStore,
     preferredDrinkUnitFromProfile,
 } from "./supabase.js";
-import { renderFridgeStub } from "./app/fridge-stub.js";
 import { renderGroceryStub } from "./app/grocery-stub.js";
 import { renderRecipesStub } from "./app/recipes-stub.js";
 import { renderSettingsStub } from "./app/settings-stub.js";
+import { renderFridgePage } from "./app/fridge/page.js";
+import { listFridge } from "./fridge.js";
 import {
     renderNutritionPage,
     viewerChromeFromProfile,
@@ -159,9 +161,30 @@ export async function renderDashboardPage(
     };
 }
 
+export async function renderFridgeInventoryPage(
+    viewerUserId: string,
+    error?: string,
+): Promise<{ status: 200 | 403; html: string }> {
+    const gate = await memberGate(viewerUserId);
+    if ("html" in gate) return { status: gate.status, html: gate.html };
+    const profile = await getProfile(viewerUserId);
+    const snapshot = await listFridge(
+        liveFridgeStore(),
+        gate.viewer.householdId,
+    );
+    return {
+        status: 200,
+        html: renderFridgePage({
+            ...snapshot,
+            chrome: viewerChromeFromProfile(profile),
+            error,
+        }),
+    };
+}
+
 export async function renderStubPage(
     viewerUserId: string,
-    tab: Exclude<AppTabId, "nutrition">,
+    tab: Exclude<AppTabId, "nutrition" | "fridge">,
 ): Promise<{ status: 200 | 403; html: string }> {
     const gate = await memberGate(viewerUserId);
     if ("html" in gate) return { status: gate.status, html: gate.html };
@@ -171,8 +194,6 @@ export async function renderStubPage(
         ? profile.accent_swatch
         : null;
     switch (tab) {
-        case "fridge":
-            return { status: 200, html: renderFridgeStub(chrome) };
         case "grocery":
             return { status: 200, html: renderGroceryStub(chrome) };
         case "recipes":
