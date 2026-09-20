@@ -5,8 +5,10 @@ import { beginSiteLogin, createOAuthRouter } from "./oauth.js";
 import {
     createHouseholdFormHtml,
     forbiddenDashboardHtml,
+    groceryAllergenMembers,
     renderDashboardPage,
     renderFridgeInventoryPage,
+    renderGroceryListPage,
     renderHouseholdSettingsRoute,
     renderSettingsAccountPage,
     renderStubPage,
@@ -39,6 +41,7 @@ import {
     getHouseholdConfig,
     getHouseholdMembership,
     liveFridgeStore,
+    liveGroceryStore,
     liveRulesStore,
     liveSettingsStore,
     rotateHouseholdMcpToken,
@@ -46,7 +49,7 @@ import {
     updateMemberDisplayName,
     upsertProfile,
 } from "./supabase.js";
-import { lookupBarcode, type FoodResult } from "./foods.js";
+import { lookupBarcode, normalizeBarcode, type FoodResult } from "./foods.js";
 import { PICKER_DEMO_FOODS } from "./app/components/food-picker.js";
 import {
     addFoodByBarcode,
@@ -59,6 +62,15 @@ import {
     moveItem,
     updateItemQuantity,
 } from "./fridge.js";
+import {
+    addGroceryFoodByBarcode,
+    addGroceryManualFood,
+    addGrocerySupply,
+    checkGroceryLine,
+    clearCheckedLines,
+    groceryAllergenWarning,
+    GroceryInputError,
+} from "./grocery.js";
 import {
     createGroceryStore,
     renameSection,
@@ -463,8 +475,127 @@ app.post("/fridge/items/:id", async (c) => {
 app.get("/grocery", async (c) => {
     const userId = siteUserId(c.req.header("cookie"));
     if (!userId) return beginSiteLogin(c, c.req.query("locale"));
-    const page = await renderStubPage(userId, "grocery");
+    const page = await renderGroceryListPage(userId);
     return c.html(page.html, page.status);
+});
+
+async function groceryActor(c: {
+    req: {
+        header: (name: string) => string | undefined;
+        query: (k: string) => string | undefined;
+    };
+}) {
+    const userId = siteUserId(c.req.header("cookie"));
+    if (!userId) return { userId: null as string | null, member: null };
+    return {
+        userId,
+        member: await getHouseholdMembership(userId),
+    };
+}
+
+async function groceryFormError(userId: string, err: unknown) {
+    const message =
+        err instanceof GroceryInputError
+            ? err.message
+            : err instanceof Error
+              ? err.message
+              : "Could not update the grocery list.";
+    const page = await renderGroceryListPage(userId, {
+        error: message,
+    });
+    return { html: page.html, status: 400 as const };
+}
+
+app.post("/grocery/lines", async (c) => {
+    const { userId, member } = await groceryActor(c);
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    if (member == null) return c.html(forbiddenDashboardHtml(), 403);
+    const body = await c.req.parseBody();
+    const storeId = formText(body, "store_id");
+    const sectionId = formText(body, "section_id") || undefined;
+    const amount = formAmount(body, "qty_amount");
+    const grocery = liveGroceryStore();
+    const settings = liveSettingsStore();
+    const confirmed = formText(body, "confirm_allergen") === "1";
+    try {
+        const kind = formText(body, "kind");
+        if (kind === "supply") {
+            await addGrocerySupply(grocery, settings, {
+                householdId: member.householdId,
+                storeId,
+                sectionId,
+                name: formText(body, "name"),
+                amount,
+                unit: formText(body, "qty_unit"),
+            });
+        } else {
+            const members = await groceryAllergenMembers(member.householdId);
+            const previewName = formText(body, "barcode")
+                ? ((
+                      await fridgeBarcodeLookup(
+                          normalizeBarcode(formText(body, "barcode")) ??
+                              formText(body, "barcode"),
+                      )
+                  )?.name ?? formText(body, "food_name"))
+                : formText(body, "food_name");
+            const warning = groceryAllergenWarning(previewName, members);
+            if (warning?.blocking && !confirmed) {
+                const page = await renderGroceryListPage(userId, {
+                    allergenWarning: warning.text,
+                });
+                return c.html(page.html, 400);
+            }
+            if (formText(body, "barcode")) {
+                await addGroceryFoodByBarcode(
+                    grocery,
+                    settings,
+                    {
+                        householdId: member.householdId,
+                        storeId,
+                        sectionId,
+                        barcode: formText(body, "barcode"),
+                        amount,
+                    },
+                    { lookup: fridgeBarcodeLookup },
+                );
+            } else {
+                await addGroceryManualFood(grocery, settings, {
+                    householdId: member.householdId,
+                    storeId,
+                    sectionId,
+                    name: formText(body, "food_name"),
+                    amount,
+                });
+            }
+        }
+    } catch (err) {
+        const page = await groceryFormError(userId, err);
+        return c.html(page.html, page.status);
+    }
+    return c.redirect("/grocery");
+});
+
+app.post("/grocery/lines/:id/check", async (c) => {
+    const { userId, member } = await groceryActor(c);
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    if (member == null) return c.html(forbiddenDashboardHtml(), 403);
+    const body = await c.req.parseBody();
+    const checked = formText(body, "checked") !== "0";
+    await checkGroceryLine(
+        liveGroceryStore(),
+        member.householdId,
+        c.req.param("id"),
+        checked,
+    );
+    return c.redirect("/grocery");
+});
+
+app.post("/grocery/clear-checked", async (c) => {
+    const { userId, member } = await groceryActor(c);
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    if (member == null) return c.html(forbiddenDashboardHtml(), 403);
+    await clearCheckedLines(liveGroceryStore(), member.householdId);
+    return c.redirect("/grocery");
 });
 
 app.get("/recipes", async (c) => {
