@@ -15,6 +15,7 @@ import {
     listHouseholdMembers,
     liveFridgeStore,
     liveGroceryStore,
+    liveRecipesStore,
     liveRulesStore,
     liveSettingsStore,
     localeFromProfile,
@@ -22,20 +23,30 @@ import {
     preferredWeightUnitFromProfile,
     widgetsEnabledFromProfile,
 } from "./supabase.js";
-import { renderRecipesStub } from "./app/recipes-stub.js";
 import { renderFridgePage } from "./app/fridge/page.js";
 import { renderGroceryPage } from "./app/grocery/page.js";
+import {
+    renderRecipeDetailPage,
+    renderRecipesPage,
+} from "./app/recipes/page.js";
 import { renderSettingsPage } from "./app/settings/page.js";
 import { renderHouseholdSettingsPage } from "./app/settings/household.js";
 import { listFridge } from "./fridge.js";
-import { listGrocery } from "./grocery.js";
+import { groceryAllergenWarning, listGrocery } from "./grocery.js";
 import { alreadyHaveTag } from "./linking.js";
+import {
+    getRecipeView,
+    listRecipes,
+    macrosForPerson,
+    RecipeInputError,
+    recipeDislikeNote,
+} from "./recipes.js";
 import {
     renderNutritionPage,
     viewerChromeFromProfile,
     type NutritionView,
 } from "./app/nutrition.js";
-import { isAccentSwatch, escapeHtml, type AppTabId } from "./app/shell.js";
+import { isAccentSwatch, escapeHtml } from "./app/shell.js";
 
 function alcoholOf(
     profile: Parameters<typeof alcoholTrackingEnabledFromProfile>[0],
@@ -330,18 +341,107 @@ export async function renderHouseholdSettingsRoute(
     };
 }
 
-export async function renderStubPage(
+export async function renderRecipesListPage(
     viewerUserId: string,
-    tab: Exclude<AppTabId, "nutrition" | "fridge" | "settings" | "grocery">,
+    error?: string,
 ): Promise<{ status: 200 | 403; html: string }> {
     const gate = await memberGate(viewerUserId);
     if ("html" in gate) return { status: gate.status, html: gate.html };
     const profile = await getProfile(viewerUserId);
-    const chrome = viewerChromeFromProfile(profile);
-    switch (tab) {
-        case "recipes":
-            return { status: 200, html: renderRecipesStub(chrome) };
+    const [recipes, members] = await Promise.all([
+        listRecipes(liveRecipesStore(), gate.viewer.householdId),
+        listHouseholdMembers(gate.viewer.householdId),
+    ]);
+    return {
+        status: 200,
+        html: renderRecipesPage({
+            chrome: viewerChromeFromProfile(profile),
+            recipes,
+            members: members.map((member) => ({
+                userId: member.userId,
+                displayName: member.displayName,
+            })),
+            viewerId: viewerUserId,
+            error,
+        }),
+    };
+}
+
+export async function renderRecipeDetailRoute(
+    viewerUserId: string,
+    recipeId: string,
+    opts: { member?: string; error?: string } = {},
+): Promise<{ status: 200 | 403 | 404; html: string }> {
+    const gate = await memberGate(viewerUserId);
+    if ("html" in gate) return { status: gate.status, html: gate.html };
+    const householdId = gate.viewer.householdId;
+    const profile = await getProfile(viewerUserId);
+    const members = await listHouseholdMembers(householdId);
+    const filterUserId =
+        opts.member && members.some((member) => member.userId === opts.member)
+            ? opts.member
+            : viewerUserId;
+    let view;
+    try {
+        view = await getRecipeView(
+            liveRecipesStore(),
+            householdId,
+            recipeId,
+            filterUserId,
+        );
+    } catch (err) {
+        if (err instanceof RecipeInputError) {
+            const page = await renderRecipesListPage(viewerUserId, err.message);
+            return { status: 404, html: page.html };
+        }
+        throw err;
     }
+    const macros = macrosForPerson(
+        view.ingredients,
+        view.yieldPortions,
+        view.portionCount,
+    );
+    const rules = liveRulesStore();
+    const person = members.find((member) => member.userId === filterUserId);
+    const [allergens, dislikes, stores] = await Promise.all([
+        rules.listAllergens(householdId, filterUserId),
+        rules.listDislikes(householdId, filterUserId),
+        liveSettingsStore().listStores(householdId),
+    ]);
+    const warning = groceryAllergenWarning(
+        view.ingredients.map((row) => row.displayName).join(" "),
+        person ? [{ displayName: person.displayName, allergens }] : [],
+    );
+    return {
+        status: 200,
+        html: renderRecipeDetailPage({
+            chrome: viewerChromeFromProfile(profile),
+            recipe: view,
+            ingredients: view.ingredients,
+            members: members.map((member) => ({
+                userId: member.userId,
+                displayName: member.displayName,
+            })),
+            stores: stores.map((store) => ({
+                id: store.id,
+                name: store.name,
+            })),
+            viewerId: viewerUserId,
+            filterUserId,
+            portionCount: view.portionCount,
+            macros,
+            allergenWarning: warning?.blocking ? warning.text : undefined,
+            dislikeNote: person
+                ? (recipeDislikeNote(
+                      view.ingredients.map((row) => row.displayName),
+                      dislikes,
+                      person.displayName,
+                  ) ?? undefined)
+                : undefined,
+            isOwner: gate.viewer.role === "owner",
+            error: opts.error,
+        }),
+    };
 }
 
 function renderBare(title: string, body: string): string {

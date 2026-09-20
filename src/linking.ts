@@ -65,3 +65,66 @@ export function alreadyHaveTag(
         need: { amount: roundAmount(wanted - have), unit: targetUnit },
     };
 }
+
+export type RecipeGroceryIngredient = {
+    identity: FoodIdentity | SupplyIdentity;
+    displayName: string;
+    quantity: LinkedQuantity;
+};
+
+export type RecipeGroceryRemainderLine = {
+    identity: FoodIdentity | SupplyIdentity;
+    displayName: string;
+    need: LinkedQuantity;
+    remainder: LinkedQuantity | null;
+    skipped: boolean;
+    tag: AlreadyHaveTag | null;
+};
+
+export function recipeToGroceryRemainder(input: {
+    ingredients: RecipeGroceryIngredient[];
+    yieldPortions: number;
+    portionCounts: number[];
+    stock: LinkedNeed[];
+}): RecipeGroceryRemainderLine[] {
+    const portionSum = input.portionCounts.reduce((sum, n) => sum + n, 0);
+    const scale = portionSum / input.yieldPortions;
+    return input.ingredients.map((ingredient) => {
+        const need: LinkedQuantity = {
+            amount: roundAmount(ingredient.quantity.amount * scale),
+            unit: ingredient.quantity.unit,
+        };
+        const tag = alreadyHaveTag(
+            { identity: ingredient.identity, quantity: need },
+            input.stock,
+        );
+        if (need.amount <= 0 || tag?.cover === "full") {
+            return {
+                identity: ingredient.identity,
+                displayName: ingredient.displayName,
+                need,
+                remainder: null,
+                skipped: true,
+                tag,
+            };
+        }
+        if (tag?.cover === "partial") {
+            return {
+                identity: ingredient.identity,
+                displayName: ingredient.displayName,
+                need,
+                remainder: tag.need,
+                skipped: false,
+                tag,
+            };
+        }
+        return {
+            identity: ingredient.identity,
+            displayName: ingredient.displayName,
+            need,
+            remainder: need,
+            skipped: false,
+            tag: null,
+        };
+    });
+}
