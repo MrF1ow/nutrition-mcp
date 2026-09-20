@@ -634,6 +634,8 @@ export interface Profile {
     // contract as timezone above. Always coalesce through localeFromProfile /
     // getUserLocale, never read this directly.
     locale: string | null;
+    theme: "light" | "dark" | null;
+    accent_swatch: string | null;
     created_at: string;
     updated_at: string;
 }
@@ -771,6 +773,8 @@ export async function upsertProfile(
         alcohol_tracking_enabled?: boolean;
         preferred_drink_unit?: DrinkUnit | null;
         locale?: string;
+        theme?: "light" | "dark" | null;
+        accent_swatch?: string | null;
     },
 ): Promise<Profile> {
     const payload: Record<string, unknown> = {
@@ -789,6 +793,9 @@ export async function upsertProfile(
     if (patch.preferred_drink_unit !== undefined)
         payload.preferred_drink_unit = patch.preferred_drink_unit;
     if (patch.locale !== undefined) payload.locale = patch.locale;
+    if (patch.theme !== undefined) payload.theme = patch.theme;
+    if (patch.accent_swatch !== undefined)
+        payload.accent_swatch = patch.accent_swatch;
 
     const { data, error } = await getSupabase()
         .from("profiles")

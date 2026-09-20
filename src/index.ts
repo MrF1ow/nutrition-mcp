@@ -3,10 +3,13 @@ import { cors } from "hono/cors";
 import { bodyLimit } from "hono/body-limit";
 import { beginSiteLogin, createOAuthRouter } from "./oauth.js";
 import {
+    addMemberErrorHtml,
     createHouseholdFormHtml,
     forbiddenDashboardHtml,
     renderDashboardPage,
+    renderStubPage,
 } from "./dashboard.js";
+import { parseAppearanceInput } from "./app/shell.js";
 import {
     authenticateBearer,
     rateLimit,
@@ -31,6 +34,7 @@ import {
     addHouseholdMemberForHousehold,
     createHouseholdForCaller,
     getHouseholdMembership,
+    upsertProfile,
 } from "./supabase.js";
 
 const app = new Hono();
@@ -228,6 +232,56 @@ app.get("/", async (c) => {
     return c.html(page.html, page.status);
 });
 
+app.get("/nutrition", async (c) => {
+    const userId = siteUserId(c.req.header("cookie"));
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    return c.redirect("/");
+});
+
+app.get("/fridge", async (c) => {
+    const userId = siteUserId(c.req.header("cookie"));
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    const page = await renderStubPage(userId, "fridge");
+    return c.html(page.html, page.status);
+});
+
+app.get("/grocery", async (c) => {
+    const userId = siteUserId(c.req.header("cookie"));
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    const page = await renderStubPage(userId, "grocery");
+    return c.html(page.html, page.status);
+});
+
+app.get("/recipes", async (c) => {
+    const userId = siteUserId(c.req.header("cookie"));
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    const page = await renderStubPage(userId, "recipes");
+    return c.html(page.html, page.status);
+});
+
+app.get("/settings", async (c) => {
+    const userId = siteUserId(c.req.header("cookie"));
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    const page = await renderStubPage(userId, "settings");
+    return c.html(page.html, page.status);
+});
+
+app.post("/settings", async (c) => {
+    const userId = siteUserId(c.req.header("cookie"));
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    const member = await getHouseholdMembership(userId);
+    if (member == null) {
+        return c.html(forbiddenDashboardHtml(), 403);
+    }
+    const body = await c.req.parseBody();
+    const appearance = parseAppearanceInput({
+        theme: body.theme,
+        accent_swatch: body.accent_swatch,
+    });
+    await upsertProfile(userId, appearance);
+    return c.redirect("/settings");
+});
+
 app.post("/create-household", async (c) => {
     const userId = siteUserId(c.req.header("cookie"));
     if (!userId) return beginSiteLogin(c, c.req.query("locale"));
@@ -271,16 +325,14 @@ app.post("/add-household-member", async (c) => {
         username: String(body.username ?? ""),
     });
     if (!parsed.ok) {
-        const page = await renderDashboardPage(userId, undefined, parsed.error);
-        return c.html(page.html, 400);
+        return c.html(addMemberErrorHtml(parsed.error), 400);
     }
     const added = await addHouseholdMemberForHousehold(
         owner.member.householdId,
         parsed.value,
     );
     if (!added.ok) {
-        const page = await renderDashboardPage(userId, undefined, added.error);
-        return c.html(page.html, 400);
+        return c.html(addMemberErrorHtml(added.error), 400);
     }
     return c.redirect("/");
 });
@@ -303,6 +355,10 @@ app.get("/robots.txt", async (c) => {
 });
 app.get("/styles.css", async (c) => {
     const file = Bun.file("./public/styles.css");
+    return c.body(await file.text(), 200, { "Content-Type": "text/css" });
+});
+app.get("/app.css", async (c) => {
+    const file = Bun.file("./public/app.css");
     return c.body(await file.text(), 200, { "Content-Type": "text/css" });
 });
 app.get("/site.js", async (c) => {
