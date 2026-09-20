@@ -11,9 +11,13 @@ import { getSupabase } from "./supabase.js";
 import { gramsFromDrink, formatAlcohol, type DrinkUnit } from "./alcohol.js";
 
 const OFF_PRODUCT_URL = "https://world.openfoodfacts.org/api/v2/product";
+// v2 /api/v2/search is filter-only (no full-text). Name search still needs the
+// legacy CGI JSON endpoint; see Open Food Facts API docs, Search section.
+const OFF_SEARCH_URL = "https://world.openfoodfacts.org/cgi/search.pl";
+const OFF_SEARCH_PAGE_SIZE = 20;
 const REQUEST_TIMEOUT_MS = 8_000;
 
-const SOURCE_OFF = "openfoodfacts" as const;
+export const SOURCE_OFF = "openfoodfacts" as const;
 // Open Food Facts is community-edited and changes often; refresh weekly.
 const OFF_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -209,6 +213,31 @@ function normalizeOFFProduct(product: OFFProduct, barcode: string): FoodResult {
     };
 }
 
+// Open Food Facts is full of "stub" products: an entry exists (status 1,
+// sometimes even a name) but carries no nutriments at all. That is a miss
+// for our purposes — returning it would report the product as "found" with
+// every macro n/a (suppressing the caller's estimation fallback) and pin a
+// useless record in the cache for the full TTL. Treat it as not found.
+//
+// Deliberately still keyed on the four core macros only, not on the newer
+// fiber/sugar/alcohol fields. A product with sugar but no calories, protein,
+// carbs or fat is a broken record, not a usable hit, and returning it would
+// suppress exactly the estimation fallback this check exists to preserve.
+// (Adding alcohol_g here would be a no-op regardless: it is only ever
+// non-null on the per-serving basis, which requires energy-kcal_serving,
+// which makes calories non-null.)
+function usableFood(food: FoodResult): FoodResult | null {
+    if (
+        food.calories == null &&
+        food.protein_g == null &&
+        food.carbs_g == null &&
+        food.fat_g == null
+    ) {
+        return null;
+    }
+    return food;
+}
+
 // Pure HTTP fetch + normalize, no caching. Returns null when the product is not
 // in Open Food Facts; throws on network failure or an unexpected HTTP status so
 // the caller can distinguish "not found" from "couldn't reach the service".
@@ -217,7 +246,7 @@ export async function fetchProductFromOFF(
 ): Promise<FoodResult | null> {
     const url = `${OFF_PRODUCT_URL}/${barcode}.json`;
     const res = await fetch(url, {
-        headers: { "User-Agent": offUserAgent(), Accept: "application/json" },
+        headers: offHeaders(),
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
 
@@ -232,29 +261,54 @@ export async function fetchProductFromOFF(
     };
     if (!body || body.status === 0 || !body.product) return null;
 
-    const food = normalizeOFFProduct(body.product, barcode);
-    // Open Food Facts is full of "stub" products: an entry exists (status 1,
-    // sometimes even a name) but carries no nutriments at all. That is a miss
-    // for our purposes — returning it would report the product as "found" with
-    // every macro n/a (suppressing the caller's estimation fallback) and pin a
-    // useless record in the cache for the full TTL. Treat it as not found.
-    //
-    // Deliberately still keyed on the four core macros only, not on the newer
-    // fiber/sugar/alcohol fields. A product with sugar but no calories, protein,
-    // carbs or fat is a broken record, not a usable hit, and returning it would
-    // suppress exactly the estimation fallback this check exists to preserve.
-    // (Adding alcohol_g here would be a no-op regardless: it is only ever
-    // non-null on the per-serving basis, which requires energy-kcal_serving,
-    // which makes calories non-null.)
-    if (
-        food.calories == null &&
-        food.protein_g == null &&
-        food.carbs_g == null &&
-        food.fat_g == null
-    ) {
-        return null;
+    return usableFood(normalizeOFFProduct(body.product, barcode));
+}
+
+type OFFSearchProduct = OFFProduct & {
+    code?: unknown;
+    _id?: unknown;
+};
+
+function barcodeOfSearchProduct(product: OFFSearchProduct): string | null {
+    const raw = product.code ?? product._id;
+    if (typeof raw !== "string" && typeof raw !== "number") return null;
+    return normalizeBarcode(String(raw));
+}
+
+function offHeaders(): { "User-Agent": string; Accept: string } {
+    return { "User-Agent": offUserAgent(), Accept: "application/json" };
+}
+
+// Pure HTTP name search + normalize, no caching. Throws on network failure or
+// an unexpected HTTP status, same as fetchProductFromOFF.
+export async function fetchProductsByNameFromOFF(
+    query: string,
+): Promise<FoodResult[]> {
+    const params = new URLSearchParams({
+        search_terms: query,
+        search_simple: "1",
+        action: "process",
+        json: "1",
+        page_size: String(OFF_SEARCH_PAGE_SIZE),
+        page: "1",
+    });
+    const res = await fetch(`${OFF_SEARCH_URL}?${params}`, {
+        headers: offHeaders(),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (!res.ok) {
+        throw new Error(`Open Food Facts request failed: ${res.status}`);
     }
-    return food;
+    const body = (await res.json()) as { products?: OFFSearchProduct[] };
+    const products = Array.isArray(body?.products) ? body.products : [];
+    const hits: FoodResult[] = [];
+    for (const product of products) {
+        const barcode = barcodeOfSearchProduct(product);
+        if (!barcode) continue;
+        const food = usableFood(normalizeOFFProduct(product, barcode));
+        if (food) hits.push(food);
+    }
+    return hits;
 }
 
 // ---------- Cache ----------
@@ -262,7 +316,25 @@ export async function fetchProductFromOFF(
 // config, transient error) is swallowed and treated as a miss so a cache
 // problem can never break a lookup.
 
-async function getCachedFood(
+function hydrateCachedPayload(payload: FoodResult): FoodResult {
+    // Rows cached before fiber/sugar/alcohol/nutriscore/nova shipped have no
+    // such keys, and stay servable for the whole TTL after deploy.
+    // Deserialized they would be `undefined`, not `null` — and an undefined
+    // field is an ABSENT one once it reaches a structuredContent literal,
+    // which for a .nullable() (hence *required*) schema field is a
+    // validation failure rather than a null. Backfill explicitly so a cache
+    // hit and a fresh fetch are always the same shape.
+    return {
+        ...payload,
+        fiber_g: payload.fiber_g ?? null,
+        sugar_g: payload.sugar_g ?? null,
+        alcohol_g: payload.alcohol_g ?? null,
+        nutriscore_grade: payload.nutriscore_grade ?? null,
+        nova_group: payload.nova_group ?? null,
+    };
+}
+
+export async function getCachedFood(
     source: string,
     sourceId: string,
     ttlMs: number,
@@ -277,28 +349,13 @@ async function getCachedFood(
         if (error || !data) return null;
         const ageMs = Date.now() - new Date(data.fetched_at).getTime();
         if (ageMs > ttlMs) return null;
-        const payload = data.payload as FoodResult;
-        // Rows cached before fiber/sugar/alcohol/nutriscore/nova shipped have no
-        // such keys, and stay servable for the whole TTL after deploy.
-        // Deserialized they would be `undefined`, not `null` — and an undefined
-        // field is an ABSENT one once it reaches a structuredContent literal,
-        // which for a .nullable() (hence *required*) schema field is a
-        // validation failure rather than a null. Backfill explicitly so a cache
-        // hit and a fresh fetch are always the same shape.
-        return {
-            ...payload,
-            fiber_g: payload.fiber_g ?? null,
-            sugar_g: payload.sugar_g ?? null,
-            alcohol_g: payload.alcohol_g ?? null,
-            nutriscore_grade: payload.nutriscore_grade ?? null,
-            nova_group: payload.nova_group ?? null,
-        };
+        return hydrateCachedPayload(data.payload as FoodResult);
     } catch {
         return null;
     }
 }
 
-async function putCachedFood(
+export async function putCachedFood(
     source: string,
     sourceId: string,
     payload: FoodResult,
@@ -315,6 +372,32 @@ async function putCachedFood(
         );
     } catch {
         // best-effort; ignore
+    }
+}
+
+export async function searchCachedFoodsByName(
+    query: string,
+): Promise<FoodResult[]> {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return [];
+    try {
+        const { data, error } = await getSupabase()
+            .from("food_cache")
+            .select("payload, fetched_at")
+            .eq("source", SOURCE_OFF);
+        if (error || !data) return [];
+        const now = Date.now();
+        const hits: FoodResult[] = [];
+        for (const row of data) {
+            const ageMs = now - new Date(row.fetched_at).getTime();
+            if (ageMs > OFF_TTL_MS) continue;
+            const food = hydrateCachedPayload(row.payload as FoodResult);
+            const hay = `${food.name} ${food.brand ?? ""}`.toLowerCase();
+            if (hay.includes(needle)) hits.push(food);
+        }
+        return hits;
+    } catch {
+        return [];
     }
 }
 

@@ -2,6 +2,7 @@ import { test, expect, mock, beforeEach, afterEach, describe } from "bun:test";
 import {
     normalizeBarcode,
     fetchProductFromOFF,
+    fetchProductsByNameFromOFF,
     formatFoodResult,
     type FoodResult,
 } from "./foods.js";
@@ -499,6 +500,64 @@ describe("fetchProductFromOFF Nutri-Score / NOVA", () => {
         const food = await fetchProductFromOFF("3017620422003");
         expect(food!.nutriscore_grade).toBeNull();
         expect(food!.nova_group).toBeNull();
+    });
+});
+
+describe("fetchProductsByNameFromOFF", () => {
+    test("normalizes CGI search hits and sends the User-Agent", async () => {
+        const seen: { ua: string | null; url: string | null } = {
+            ua: null,
+            url: null,
+        };
+        globalThis.fetch = mock(
+            (input: string | URL | Request, init?: RequestInit) => {
+                seen.url = String(input);
+                seen.ua = new Headers(init?.headers).get("User-Agent");
+                return Promise.resolve(
+                    jsonResponse({
+                        products: [
+                            {
+                                code: "070852010016",
+                                product_name: "Good Culture Cottage Cheese",
+                                brands: "Good Culture",
+                                nutriments: { "energy-kcal_100g": 80 },
+                            },
+                            {
+                                product_name: "No barcode stub",
+                                nutriments: { "energy-kcal_100g": 10 },
+                            },
+                            {
+                                code: "00000000",
+                                product_name: "Empty macros",
+                            },
+                        ],
+                    }),
+                );
+            },
+        ) as unknown as typeof fetch;
+
+        const hits = await fetchProductsByNameFromOFF("cottage");
+        expect(seen.ua).toBe("nutrition-mcp-test (test@example.com)");
+        expect(seen.url).toContain("cgi/search.pl");
+        expect(seen.url).toContain("search_terms=cottage");
+        expect(hits).toHaveLength(1);
+        expect(hits[0]!.source).toBe("off:070852010016");
+        expect(hits[0]!.name).toBe("Good Culture Cottage Cheese");
+        expect(hits[0]!.brand).toBe("Good Culture");
+    });
+
+    test("throws on unexpected HTTP error", async () => {
+        mockFetch(() => jsonResponse({}, 500));
+        expect(fetchProductsByNameFromOFF("cottage")).rejects.toThrow(
+            /Open Food Facts request failed: 500/,
+        );
+    });
+
+    test("throws when OFF_USER_AGENT is unset", async () => {
+        delete process.env.OFF_USER_AGENT;
+        expect(fetchProductsByNameFromOFF("cottage")).rejects.toThrow(
+            /OFF_USER_AGENT is not configured/,
+        );
     });
 });
 
