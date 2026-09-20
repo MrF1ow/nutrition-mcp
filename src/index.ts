@@ -3,14 +3,16 @@ import { cors } from "hono/cors";
 import { bodyLimit } from "hono/body-limit";
 import { beginSiteLogin, createOAuthRouter } from "./oauth.js";
 import {
-    addMemberErrorHtml,
     createHouseholdFormHtml,
     forbiddenDashboardHtml,
     renderDashboardPage,
     renderFridgeInventoryPage,
+    renderHouseholdSettingsRoute,
+    renderSettingsAccountPage,
     renderStubPage,
 } from "./dashboard.js";
 import { parseAppearanceInput } from "./app/shell.js";
+import { parseNutritionPrefsInput } from "./app/settings/page.js";
 import {
     authenticateBearer,
     rateLimit,
@@ -34,8 +36,14 @@ import {
 import {
     addHouseholdMemberForHousehold,
     createHouseholdForCaller,
+    getHouseholdConfig,
     getHouseholdMembership,
     liveFridgeStore,
+    liveRulesStore,
+    liveSettingsStore,
+    rotateHouseholdMcpToken,
+    updateHouseholdConfig,
+    updateMemberDisplayName,
     upsertProfile,
 } from "./supabase.js";
 import { lookupBarcode, type FoodResult } from "./foods.js";
@@ -51,6 +59,25 @@ import {
     moveItem,
     updateItemQuantity,
 } from "./fridge.js";
+import {
+    createGroceryStore,
+    renameSection,
+    setHouseholdLocation,
+    SettingsInputError,
+} from "./settings.js";
+import {
+    addAllergen,
+    addDislike,
+    addPersonRule,
+    addStoreRule,
+    RulesInputError,
+} from "./rules.js";
+import {
+    generateHouseholdToken,
+    hashHouseholdToken,
+    householdTokenHashHex,
+} from "./household-token.js";
+import { validateTz } from "./tz.js";
 
 const app = new Hono();
 
@@ -450,7 +477,14 @@ app.get("/recipes", async (c) => {
 app.get("/settings", async (c) => {
     const userId = siteUserId(c.req.header("cookie"));
     if (!userId) return beginSiteLogin(c, c.req.query("locale"));
-    const page = await renderStubPage(userId, "settings");
+    const page = await renderSettingsAccountPage(userId);
+    return c.html(page.html, page.status);
+});
+
+app.get("/settings/household", async (c) => {
+    const userId = siteUserId(c.req.header("cookie"));
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    const page = await renderHouseholdSettingsRoute(userId);
     return c.html(page.html, page.status);
 });
 
@@ -462,11 +496,40 @@ app.post("/settings", async (c) => {
         return c.html(forbiddenDashboardHtml(), 403);
     }
     const body = await c.req.parseBody();
+    const group = formText(body, "group");
+    if (group === "nutrition") {
+        const prefs = parseNutritionPrefsInput({
+            timezone: body.timezone,
+            locale: body.locale,
+            preferred_weight_unit: body.preferred_weight_unit,
+            widgets_enabled: formText(body, "widgets_enabled") === "true",
+            alcohol_tracking_enabled:
+                formText(body, "alcohol_tracking_enabled") === "true",
+            preferred_drink_unit: body.preferred_drink_unit,
+        });
+        if (prefs.timezone) {
+            if (!validateTz(prefs.timezone)) {
+                const page = await renderSettingsAccountPage(
+                    userId,
+                    "Enter a valid IANA timezone.",
+                );
+                return c.html(page.html, 400);
+            }
+        } else {
+            delete prefs.timezone;
+        }
+        await upsertProfile(userId, prefs);
+        return c.redirect("/settings");
+    }
     const appearance = parseAppearanceInput({
         theme: body.theme,
         accent_swatch: body.accent_swatch,
     });
     await upsertProfile(userId, appearance);
+    const displayName = formText(body, "display_name").trim();
+    if (displayName) {
+        await updateMemberDisplayName(member.householdId, userId, displayName);
+    }
     return c.redirect("/settings");
 });
 
@@ -497,7 +560,7 @@ app.post("/create-household", async (c) => {
     return c.redirect("/");
 });
 
-app.post("/add-household-member", async (c) => {
+app.post("/settings/household", async (c) => {
     const userId = siteUserId(c.req.header("cookie"));
     if (!userId) return beginSiteLogin(c, c.req.query("locale"));
     const member = await getHouseholdMembership(userId);
@@ -513,16 +576,206 @@ app.post("/add-household-member", async (c) => {
         username: String(body.username ?? ""),
     });
     if (!parsed.ok) {
-        return c.html(addMemberErrorHtml(parsed.error), 400);
+        const page = await renderHouseholdSettingsRoute(userId, {
+            error: parsed.error,
+        });
+        return c.html(page.html, 400);
     }
     const added = await addHouseholdMemberForHousehold(
         owner.member.householdId,
         parsed.value,
     );
     if (!added.ok) {
-        return c.html(addMemberErrorHtml(added.error), 400);
+        const page = await renderHouseholdSettingsRoute(userId, {
+            error: added.error,
+        });
+        return c.html(page.html, 400);
     }
-    return c.redirect("/");
+    return c.redirect("/settings/household");
+});
+
+async function householdOwner(c: {
+    req: {
+        header: (name: string) => string | undefined;
+        query: (k: string) => string | undefined;
+    };
+}) {
+    const userId = siteUserId(c.req.header("cookie"));
+    if (!userId) return { userId: null as string | null, owner: null };
+    const member = await getHouseholdMembership(userId);
+    const check = requireOwner(member);
+    return {
+        userId,
+        owner: check.ok ? check.member : null,
+        member,
+    };
+}
+
+async function householdFormError(userId: string, err: unknown) {
+    const message =
+        err instanceof SettingsInputError || err instanceof RulesInputError
+            ? err.message
+            : err instanceof Error
+              ? err.message
+              : "Could not update household settings.";
+    const page = await renderHouseholdSettingsRoute(userId, { error: message });
+    return { html: page.html, status: 400 as const };
+}
+
+app.post("/settings/household/name", async (c) => {
+    const { userId, owner } = await householdOwner(c);
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    if (owner == null) return c.html(forbiddenDashboardHtml(), 403);
+    const body = await c.req.parseBody();
+    const name = formText(body, "name").trim();
+    if (!name) {
+        const page = await renderHouseholdSettingsRoute(userId, {
+            error: "Enter a household name.",
+        });
+        return c.html(page.html, 400);
+    }
+    const config = await getHouseholdConfig(owner.householdId);
+    await updateHouseholdConfig(owner.householdId, { ...config, name });
+    return c.redirect("/settings/household");
+});
+
+app.post("/settings/household/location", async (c) => {
+    const { userId, owner } = await householdOwner(c);
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    if (owner == null) return c.html(forbiddenDashboardHtml(), 403);
+    const body = await c.req.parseBody();
+    await setHouseholdLocation(
+        liveSettingsStore(),
+        owner.householdId,
+        formText(body, "location"),
+    );
+    return c.redirect("/settings/household");
+});
+
+app.post("/settings/household/rotate-token", async (c) => {
+    const { userId, owner } = await householdOwner(c);
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    if (owner == null) return c.html(forbiddenDashboardHtml(), 403);
+    const token = generateHouseholdToken();
+    await rotateHouseholdMcpToken({
+        householdId: owner.householdId,
+        tokenHashHex: householdTokenHashHex(hashHouseholdToken(token)),
+        issuedBy: owner.userId,
+    });
+    const page = await renderHouseholdSettingsRoute(userId, {
+        issuedToken: token,
+    });
+    return c.html(page.html, 200);
+});
+
+app.post("/settings/household/stores", async (c) => {
+    const { userId, owner } = await householdOwner(c);
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    if (owner == null) return c.html(forbiddenDashboardHtml(), 403);
+    const body = await c.req.parseBody();
+    try {
+        await createGroceryStore(
+            liveSettingsStore(),
+            owner.householdId,
+            formText(body, "name"),
+        );
+    } catch (err) {
+        const page = await householdFormError(userId, err);
+        return c.html(page.html, page.status);
+    }
+    return c.redirect("/settings/household");
+});
+
+app.post("/settings/household/sections/:id", async (c) => {
+    const { userId, owner } = await householdOwner(c);
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    if (owner == null) return c.html(forbiddenDashboardHtml(), 403);
+    const body = await c.req.parseBody();
+    try {
+        await renameSection(
+            liveSettingsStore(),
+            owner.householdId,
+            c.req.param("id"),
+            formText(body, "name"),
+        );
+    } catch (err) {
+        const page = await householdFormError(userId, err);
+        return c.html(page.html, page.status);
+    }
+    return c.redirect("/settings/household");
+});
+
+app.post("/settings/household/stores/:id/rules", async (c) => {
+    const { userId, owner } = await householdOwner(c);
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    if (owner == null) return c.html(forbiddenDashboardHtml(), 403);
+    const body = await c.req.parseBody();
+    try {
+        await addStoreRule(liveRulesStore(), {
+            householdId: owner.householdId,
+            storeId: c.req.param("id"),
+            body: formText(body, "body"),
+        });
+    } catch (err) {
+        const page = await householdFormError(userId, err);
+        return c.html(page.html, page.status);
+    }
+    return c.redirect("/settings/household");
+});
+
+app.post("/settings/household/members/:userId/allergens", async (c) => {
+    const { userId, owner } = await householdOwner(c);
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    if (owner == null) return c.html(forbiddenDashboardHtml(), 403);
+    const body = await c.req.parseBody();
+    try {
+        await addAllergen(liveRulesStore(), {
+            householdId: owner.householdId,
+            userId: c.req.param("userId"),
+            allergen: formText(body, "allergen"),
+            otherLabel: formText(body, "other_label"),
+        });
+    } catch (err) {
+        const page = await householdFormError(userId, err);
+        return c.html(page.html, page.status);
+    }
+    return c.redirect("/settings/household");
+});
+
+app.post("/settings/household/members/:userId/dislikes", async (c) => {
+    const { userId, owner } = await householdOwner(c);
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    if (owner == null) return c.html(forbiddenDashboardHtml(), 403);
+    const body = await c.req.parseBody();
+    try {
+        await addDislike(liveRulesStore(), {
+            householdId: owner.householdId,
+            userId: c.req.param("userId"),
+            displayName: formText(body, "display_name"),
+        });
+    } catch (err) {
+        const page = await householdFormError(userId, err);
+        return c.html(page.html, page.status);
+    }
+    return c.redirect("/settings/household");
+});
+
+app.post("/settings/household/members/:userId/rules", async (c) => {
+    const { userId, owner } = await householdOwner(c);
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    if (owner == null) return c.html(forbiddenDashboardHtml(), 403);
+    const body = await c.req.parseBody();
+    try {
+        await addPersonRule(liveRulesStore(), {
+            householdId: owner.householdId,
+            userId: c.req.param("userId"),
+            body: formText(body, "body"),
+        });
+    } catch (err) {
+        const page = await householdFormError(userId, err);
+        return c.html(page.html, page.status);
+    }
+    return c.redirect("/settings/household");
 });
 
 app.get("/logout", (c) => {
