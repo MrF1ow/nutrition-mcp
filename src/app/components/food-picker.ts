@@ -48,6 +48,15 @@ export async function runBarcodeLookupAction(
     return { barcode, food };
 }
 
+function hiddenInputs(fields: Record<string, string>): string {
+    return Object.entries(fields)
+        .map(
+            ([name, value]) =>
+                `<input type="hidden" name="${escapeHtml(name)}" value="${escapeHtml(value)}" />`,
+        )
+        .join("");
+}
+
 function pickerScript(id: string): string {
     return `<script>
 (function () {
@@ -94,7 +103,8 @@ function pickerScript(id: string): string {
     }
     var form = root.querySelector("[data-barcode-form]");
     var barcodeResults = root.querySelector("[data-barcode-results]");
-    if (form) {
+    var posts = form && String(form.getAttribute("method") || "").toLowerCase() === "post";
+    if (form && !posts) {
         form.addEventListener("submit", function (event) {
             event.preventDefault();
             var input = form.querySelector('input[name="barcode"]');
@@ -120,12 +130,50 @@ function pickerScript(id: string): string {
 </script>`;
 }
 
-export function renderFoodPicker(opts: { id?: string } = {}): string {
+export type FoodPickerOptions = {
+    id?: string;
+    action?: string;
+    method?: "get" | "post";
+    hiddenFields?: Record<string, string>;
+    includeQuantity?: boolean;
+};
+
+export function renderFoodPicker(opts: FoodPickerOptions = {}): string {
     const id = opts.id ?? "food-picker";
+    const action = opts.action ?? "#";
+    const method = opts.method ?? "get";
+    const extras = hiddenInputs(opts.hiddenFields ?? {});
+    const qty = opts.includeQuantity
+        ? renderQuantityField({
+              kind: "food",
+              idPrefix: `${id}-qty`,
+              namePrefix: "qty",
+              required: method === "post",
+          })
+        : "";
     const catalog = JSON.stringify(PICKER_DEMO_FOODS).replace(/</g, "\\u003c");
     const barcodePanel = `${id}-barcode`;
     const searchPanel = `${id}-search`;
     const manualPanel = `${id}-manual`;
+    const manualQty = renderQuantityField({
+        kind: "food",
+        idPrefix: `${id}-manual-qty`,
+        namePrefix: method === "post" ? "qty" : `${id.replace(/-/g, "_")}_qty`,
+        required: method === "post",
+    });
+    const barcodeSubmit = method === "post" ? "Add food" : "Look up";
+    const manualBlock =
+        method === "post"
+            ? `<form class="food-picker-manual" method="post" action="${escapeHtml(action)}">
+${extras}
+<label for="${escapeHtml(id)}-name">Name</label>
+<input id="${escapeHtml(id)}-name" name="food_name" type="text" required autocomplete="off" />
+${manualQty}
+<button type="submit">Add food</button>
+</form>`
+            : `<label for="${escapeHtml(id)}-name">Name</label>
+<input id="${escapeHtml(id)}-name" name="food_name" type="text" autocomplete="off" />
+${manualQty}`;
     return `<div class="food-picker" id="${escapeHtml(id)}" data-food-picker>
 <div class="food-picker-tabs" role="tablist" aria-label="Food identity">
 <button type="button" role="tab" id="${escapeHtml(id)}-tab-barcode" data-tab="barcode" aria-controls="${escapeHtml(barcodePanel)}" aria-selected="true">Barcode</button>
@@ -133,10 +181,12 @@ export function renderFoodPicker(opts: { id?: string } = {}): string {
 <button type="button" role="tab" id="${escapeHtml(id)}-tab-manual" data-tab="manual" aria-controls="${escapeHtml(manualPanel)}" aria-selected="false">Manual</button>
 </div>
 <div class="food-picker-panel" role="tabpanel" id="${escapeHtml(barcodePanel)}" data-panel="barcode" aria-labelledby="${escapeHtml(id)}-tab-barcode">
-<form class="food-picker-barcode" data-barcode-form data-lookup-path="lookupBarcode" action="#" method="get">
+<form class="food-picker-barcode" data-barcode-form data-lookup-path="lookupBarcode" action="${escapeHtml(action)}" method="${method}">
+${extras}
 <label for="${escapeHtml(id)}-barcode">Barcode</label>
 <input id="${escapeHtml(id)}-barcode" name="barcode" inputmode="numeric" pattern="[0-9]*" autocomplete="off" />
-<button type="submit">Look up</button>
+${qty}
+<button type="submit">${escapeHtml(barcodeSubmit)}</button>
 </form>
 <ul class="food-picker-results" data-barcode-results></ul>
 </div>
@@ -146,9 +196,7 @@ export function renderFoodPicker(opts: { id?: string } = {}): string {
 <ul class="food-picker-results" data-search-results></ul>
 </div>
 <div class="food-picker-panel" role="tabpanel" id="${escapeHtml(manualPanel)}" data-panel="manual" aria-labelledby="${escapeHtml(id)}-tab-manual" hidden>
-<label for="${escapeHtml(id)}-name">Name</label>
-<input id="${escapeHtml(id)}-name" name="food_name" type="text" autocomplete="off" />
-${renderQuantityField({ kind: "food", idPrefix: `${id}-manual-qty`, namePrefix: `${id.replace(/-/g, "_")}_qty` })}
+${manualBlock}
 </div>
 <script type="application/json" data-demo-foods>${catalog}</script>
 </div>

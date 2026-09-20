@@ -9,8 +9,9 @@ import {
     searchPickerFoods,
     runBarcodeLookupAction,
 } from "./food-picker.js";
-import { renderFridgeStub } from "../fridge-stub.js";
+import { renderFridgePage } from "../fridge/page.js";
 import { renderGroceryStub } from "../grocery-stub.js";
+import { ACCENT_SWATCHES } from "../shell.js";
 import type { FoodResult } from "../../foods.js";
 
 const appDir = join(import.meta.dir, "..");
@@ -40,15 +41,26 @@ function food(
     };
 }
 
-test("fridge stub and grocery stub import the same quantity-field and food-picker modules", () => {
-    const fridgeSrc = stubSource("fridge-stub.ts");
+test("fridge page and grocery stub import the same quantity-field and food-picker modules", () => {
+    const fridgeSrc = stubSource("fridge/page.ts");
     const grocerySrc = stubSource("grocery-stub.ts");
-    expect(fridgeSrc).toContain('from "./components/quantity-field.js"');
+    expect(fridgeSrc).toContain('from "../components/quantity-field.js"');
     expect(grocerySrc).toContain('from "./components/quantity-field.js"');
-    expect(fridgeSrc).toContain('from "./components/food-picker.js"');
+    expect(fridgeSrc).toContain('from "../components/food-picker.js"');
     expect(grocerySrc).toContain('from "./components/food-picker.js"');
 
-    const fridge = renderFridgeStub();
+    const fridge = renderFridgePage({
+        locations: [
+            {
+                id: "loc-1",
+                householdId: "hh-1",
+                name: "Pantry",
+                sortOrder: 0,
+            },
+        ],
+        items: [],
+        chrome: { theme: "light", accent: ACCENT_SWATCHES.sky },
+    });
     const grocery = renderGroceryStub();
     expect(fridge).toContain('class="quantity-field"');
     expect(grocery).toContain('class="quantity-field"');
