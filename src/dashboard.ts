@@ -46,6 +46,7 @@ export type DashboardView = {
     goals: unknown;
     trends: unknown;
     weight: unknown;
+    addMemberError?: string;
 };
 
 export function forbiddenDashboardHtml(): string {
@@ -55,10 +56,11 @@ export function forbiddenDashboardHtml(): string {
     );
 }
 
+function formErrorHtml(error?: string): string {
+    return error ? `<div class="error-banner">${escapeHtml(error)}</div>` : "";
+}
+
 export function createHouseholdFormHtml(error?: string): string {
-    const errorHtml = error
-        ? `<div class="error-banner">${escapeHtml(error)}</div>`
-        : "";
     return renderBare(
         "Create household",
         `<header class="dash-head">
@@ -67,7 +69,7 @@ export function createHouseholdFormHtml(error?: string): string {
             <p class="logout"><a href="/logout">Log out</a></p>
         </header>
         <form method="POST" action="/create-household" class="create-household">
-            ${errorHtml}
+            ${formErrorHtml(error)}
             <label for="household_name">Household name</label>
             <input id="household_name" name="household_name" required maxlength="80" />
             <label for="display_name">Your name</label>
@@ -75,6 +77,22 @@ export function createHouseholdFormHtml(error?: string): string {
             <button type="submit">Create household</button>
         </form>`,
     );
+}
+
+function addMemberFormHtml(error?: string): string {
+    return `<form method="POST" action="/add-household-member" class="add-member">
+            <h2 class="section-title">Add household member</h2>
+            ${formErrorHtml(error)}
+            <label for="add_display_name">Name</label>
+            <input id="add_display_name" name="display_name" required maxlength="80" />
+            <label for="add_password">Password</label>
+            <input id="add_password" name="password" type="password" required />
+            <label for="add_email">Email</label>
+            <input id="add_email" name="email" type="email" />
+            <label for="add_username">Username</label>
+            <input id="add_username" name="username" autocomplete="username" />
+            <button type="submit">Add member</button>
+        </form>`;
 }
 
 export async function renderDashboardHtml(
@@ -113,6 +131,11 @@ export async function renderDashboardHtml(
         </section>`
         : "";
 
+    const addMemberForm =
+        view.access.mode === "self" && view.access.viewer.role === "owner"
+            ? addMemberFormHtml(view.addMemberError)
+            : "";
+
     const body = `
         <header class="dash-head">
             <p class="eyebrow">Household</p>
@@ -121,6 +144,7 @@ export async function renderDashboardHtml(
             <nav class="member-switch" aria-label="Household members">${memberNav}</nav>
             <p class="logout"><a href="/logout">Log out</a></p>
         </header>
+        ${addMemberForm}
         ${cards.join("\n")}
         ${householdBlock}
     `;
@@ -130,6 +154,7 @@ export async function renderDashboardHtml(
 export async function renderDashboardPage(
     viewerUserId: string,
     requestedMember: string | undefined,
+    addMemberError?: string,
 ): Promise<{ status: 200 | 403; html: string }> {
     const viewer = await getHouseholdMembership(viewerUserId);
     if (viewer == null) {
@@ -173,6 +198,7 @@ export async function renderDashboardPage(
             goals,
             trends,
             weight,
+            addMemberError,
         }),
     };
 }
@@ -198,8 +224,8 @@ function renderBare(title: string, body: string): string {
         .widget-frame { display: block; width: min(720px, 100%); margin: 0 auto 16px; border: 0; min-height: 280px; }
         .logout { margin-top: 16px; }
         .empty { max-width: 720px; margin: 48px auto; padding: 0 16px; }
-        .create-household { max-width: 720px; margin: 0 auto 32px; padding: 0 16px; display: grid; gap: 8px; }
-        .create-household input, .create-household button { font: inherit; padding: 8px; }
+        .create-household, .add-member { max-width: 720px; margin: 0 auto 32px; padding: 0 16px; display: grid; gap: 8px; }
+        .create-household input, .create-household button, .add-member input, .add-member button { font: inherit; padding: 8px; }
         .error-banner { margin: 0 0 8px; }
         .facts { max-width: 720px; margin: 0 auto 32px; padding: 0 16px; }
         .facts-row { display: flex; justify-content: space-between; border-top: 1px solid var(--rule, #222); padding: 8px 0; }

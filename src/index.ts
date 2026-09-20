@@ -22,8 +22,16 @@ import {
     readSiteSession,
     SITE_COOKIE,
 } from "./site-session.js";
-import { HouseholdAlreadyExistsError } from "./household.js";
-import { createHouseholdForCaller } from "./supabase.js";
+import {
+    HouseholdAlreadyExistsError,
+    parseMemberInput,
+    requireOwner,
+} from "./household.js";
+import {
+    addHouseholdMemberForHousehold,
+    createHouseholdForCaller,
+    getHouseholdMembership,
+} from "./supabase.js";
 
 const app = new Hono();
 
@@ -243,6 +251,36 @@ app.post("/create-household", async (c) => {
                 ? err.message
                 : "Could not create the household.";
         return c.html(createHouseholdFormHtml(message), 400);
+    }
+    return c.redirect("/");
+});
+
+app.post("/add-household-member", async (c) => {
+    const userId = siteUserId(c.req.header("cookie"));
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    const member = await getHouseholdMembership(userId);
+    const owner = requireOwner(member);
+    if (!owner.ok) {
+        return c.html(forbiddenDashboardHtml(), 403);
+    }
+    const body = await c.req.parseBody();
+    const parsed = parseMemberInput({
+        display_name: String(body.display_name ?? ""),
+        password: String(body.password ?? ""),
+        email: String(body.email ?? ""),
+        username: String(body.username ?? ""),
+    });
+    if (!parsed.ok) {
+        const page = await renderDashboardPage(userId, undefined, parsed.error);
+        return c.html(page.html, 400);
+    }
+    const added = await addHouseholdMemberForHousehold(
+        owner.member.householdId,
+        parsed.value,
+    );
+    if (!added.ok) {
+        const page = await renderDashboardPage(userId, undefined, added.error);
+        return c.html(page.html, 400);
     }
     return c.redirect("/");
 });

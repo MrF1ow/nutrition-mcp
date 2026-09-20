@@ -5507,6 +5507,129 @@ describe("authenticated dashboard HTTP", () => {
         expect(html).toContain('title="nutrition-summary"');
         expect(html).not.toContain("You can look, not edit");
         expect(html).not.toContain('action="/approve"');
+        expect(html).toContain('action="/add-household-member"');
+        expect(html).toContain('name="display_name"');
+        expect(html).toContain('name="password"');
+        expect(html).toContain('name="email"');
+        expect(html).toContain('name="username"');
+    });
+
+    test("a member dashboard has no add form", async () => {
+        db.profile = { ...PROFILE_BASE, user_id: bob };
+        const r = await siteApp.request("http://x/", {
+            headers: { cookie: cookieFor(bob) },
+        });
+        expect(r.status).toBe(200);
+        const html = await r.text();
+        expect(html).toContain("<h1>Bob</h1>");
+        expect(html).not.toContain('action="/add-household-member"');
+    });
+
+    test("owner peer view has no add form", async () => {
+        db.profile = { ...PROFILE_BASE, user_id: bob };
+        const r = await siteApp.request(`http://x/?member=${bob}`, {
+            headers: { cookie: cookieFor(alice) },
+        });
+        expect(r.status).toBe(200);
+        const html = await r.text();
+        expect(html).toContain("Viewing Bob");
+        expect(html).not.toContain('action="/add-household-member"');
+    });
+
+    test("POST /add-household-member as owner adds a username member", async () => {
+        const r = await siteApp.request("http://x/add-household-member", {
+            method: "POST",
+            headers: {
+                cookie: cookieFor(alice),
+                "content-type": "application/x-www-form-urlencoded",
+            },
+            body: "display_name=Kid&password=password1&username=kid",
+        });
+        expect(r.status).toBe(302);
+        expect(r.headers.get("location")).toBe("/");
+        expect(db.members).toContainEqual({
+            householdId: "hh-1",
+            userId: "55555555-5555-4555-8555-555555555555",
+            role: "member",
+            displayName: "Kid",
+        });
+        const home = await siteApp.request("http://x/", {
+            headers: { cookie: cookieFor(alice) },
+        });
+        expect(await home.text()).toContain("Kid");
+    });
+
+    test("POST /add-household-member as a member is 403 and adds nobody", async () => {
+        const r = await siteApp.request("http://x/add-household-member", {
+            method: "POST",
+            headers: {
+                cookie: cookieFor(bob),
+                "content-type": "application/x-www-form-urlencoded",
+            },
+            body: "display_name=Kid&password=password1&username=kid",
+        });
+        expect(r.status).toBe(403);
+        expect(db.members.map((m) => m.displayName)).toEqual(["Alice", "Bob"]);
+        expect(db.addedLogins).toEqual([]);
+    });
+
+    test("POST /add-household-member with a short password stays on the page", async () => {
+        const r = await siteApp.request("http://x/add-household-member", {
+            method: "POST",
+            headers: {
+                cookie: cookieFor(alice),
+                "content-type": "application/x-www-form-urlencoded",
+            },
+            body: "display_name=Kid&password=short&username=kid",
+        });
+        expect(r.status).toBe(400);
+        const html = await r.text();
+        expect(html).toContain("Password must be at least 8 characters.");
+        expect(html).toContain('action="/add-household-member"');
+        expect(db.addedLogins).toEqual([]);
+        expect(db.members.map((m) => m.displayName)).toEqual(["Alice", "Bob"]);
+    });
+
+    test("POST /add-household-member logged out does not add a member", async () => {
+        const r = await siteApp.request("http://x/add-household-member", {
+            method: "POST",
+            headers: {
+                "content-type": "application/x-www-form-urlencoded",
+            },
+            body: "display_name=Kid&password=password1&username=kid",
+        });
+        expect(r.status).toBe(200);
+        const html = await r.text();
+        expect(html).toContain('action="/approve"');
+        expect(html).not.toContain('action="/add-household-member"');
+        expect(db.addedLogins).toEqual([]);
+        expect(db.members.map((m) => m.displayName)).toEqual(["Alice", "Bob"]);
+    });
+
+    test("POST /add-household-member duplicate username stays on the page", async () => {
+        await siteApp.request("http://x/add-household-member", {
+            method: "POST",
+            headers: {
+                cookie: cookieFor(alice),
+                "content-type": "application/x-www-form-urlencoded",
+            },
+            body: "display_name=Kid&password=password1&username=kid",
+        });
+        const r = await siteApp.request("http://x/add-household-member", {
+            method: "POST",
+            headers: {
+                cookie: cookieFor(alice),
+                "content-type": "application/x-www-form-urlencoded",
+            },
+            body: "display_name=Kid2&password=password1&username=kid",
+        });
+        expect(r.status).toBe(400);
+        const html = await r.text();
+        expect(html).toContain("That login is already in use.");
+        expect(html).toContain('action="/add-household-member"');
+        expect(
+            db.members.filter((m) => m.displayName.startsWith("Kid")),
+        ).toHaveLength(1);
     });
 
     test("?member= shows a household peer read-only", async () => {
