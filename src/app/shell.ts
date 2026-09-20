@@ -89,7 +89,7 @@ export function appHead(
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>${escapeHtml(title)}</title>
 <link rel="stylesheet" href="/app.css" />
-<style>:root{${accentCssVars(theme, accent)}}</style>`;
+<style>html[data-theme="${theme}"]{${accentCssVars(theme, accent)}}</style>`;
 }
 
 export function renderAppShell(chrome: AppChrome): string {

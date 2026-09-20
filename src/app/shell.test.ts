@@ -64,7 +64,19 @@ test("fridge stub uses the shell and marks Fridge active", () => {
     expect(html).toContain('href="/fridge" aria-current="page"');
     expect(html).toContain('data-theme="light"');
     expect(html).toContain("--accent:#2f8fd4");
+    expect(html).toContain('html[data-theme="light"]{--accent:#2f8fd4');
     expect(html).toContain('href="/logout"');
+});
+
+test("dark viewer swatch beats app.css sky tokens", () => {
+    const html = comingSoonPage("settings", {
+        theme: "dark",
+        accent: resolveAccent("rose"),
+    });
+    expect(html).toContain('data-theme="dark"');
+    expect(html).toContain(
+        'html[data-theme="dark"]{--accent:#fb7199;--accent-ink:#0b1220}',
+    );
 });
 
 test("appearance form values coerce to theme and allowlisted swatch", () => {
