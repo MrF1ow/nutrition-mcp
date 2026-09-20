@@ -54,6 +54,42 @@ test("self dashboard reuses widget iframes and has no peer note", async () => {
     expect(html).not.toContain('action="/approve"');
     expect(html).toContain("Home");
     expect(html).toContain(`href="/?member=${bob.userId}"`);
+    expect(html).toContain('action="/add-household-member"');
+});
+
+test("owner self dashboard posts display_name, password, and email or username", async () => {
+    const html = await renderDashboardHtml({
+        access: { ok: true, mode: "self", viewer: alice, subject: alice },
+        members: [alice],
+        household: null,
+        summary: { locale: "en" },
+        goals: { locale: "en" },
+        trends: { locale: "en" },
+        weight: { locale: "en" },
+        addMemberError: "Password must be at least 8 characters.",
+    });
+    expect(html).toContain('action="/add-household-member"');
+    expect(html).toContain('name="display_name"');
+    expect(html).toContain('name="password"');
+    expect(html).toContain('name="email"');
+    expect(html).toContain('name="username"');
+    expect(html).toContain("Password must be at least 8 characters.");
+    expect(html).not.toContain("minlength");
+});
+
+test("member self dashboard has no add form", async () => {
+    const html = await renderDashboardHtml({
+        access: { ok: true, mode: "self", viewer: bob, subject: bob },
+        members: [alice, bob],
+        household: null,
+        summary: { locale: "en" },
+        goals: { locale: "en" },
+        trends: { locale: "en" },
+        weight: { locale: "en" },
+    });
+    expect(html).toContain("<h1>Bob</h1>");
+    expect(html).not.toContain('action="/add-household-member"');
+    expect(html).not.toContain("Add household member");
 });
 
 test("peer dashboard is read-only and names the subject", async () => {
@@ -72,6 +108,7 @@ test("peer dashboard is read-only and names the subject", async () => {
     expect(html).toContain('href="/"');
     expect(html).toContain(`aria-current="page"`);
     expect(html).not.toContain('action="/approve"');
+    expect(html).not.toContain('action="/add-household-member"');
 });
 
 test("create-household form posts name fields and has no widgets", () => {
