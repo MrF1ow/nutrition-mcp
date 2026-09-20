@@ -10,8 +10,9 @@ import {
     renderFridgeInventoryPage,
     renderGroceryListPage,
     renderHouseholdSettingsRoute,
+    renderRecipeDetailRoute,
+    renderRecipesListPage,
     renderSettingsAccountPage,
-    renderStubPage,
 } from "./dashboard.js";
 import { parseAppearanceInput } from "./app/shell.js";
 import { parseNutritionPrefsInput } from "./app/settings/page.js";
@@ -40,8 +41,10 @@ import {
     createHouseholdForCaller,
     getHouseholdConfig,
     getHouseholdMembership,
+    listHouseholdMembers,
     liveFridgeStore,
     liveGroceryStore,
+    liveRecipesStore,
     liveRulesStore,
     liveSettingsStore,
     rotateHouseholdMcpToken,
@@ -59,6 +62,7 @@ import {
     deleteItem,
     deleteLocation,
     FridgeInputError,
+    listFridge,
     moveItem,
     updateItemQuantity,
 } from "./fridge.js";
@@ -71,6 +75,16 @@ import {
     groceryAllergenWarning,
     GroceryInputError,
 } from "./grocery.js";
+import {
+    addRecipeIngredientByBarcode,
+    addRecipeManualIngredient,
+    addRecipeToGrocery,
+    createRecipe,
+    deleteRecipe,
+    RecipeForbiddenError,
+    RecipeInputError,
+    setPersonPortion,
+} from "./recipes.js";
 import {
     createGroceryStore,
     renameSection,
@@ -329,12 +343,12 @@ function demoFridgeFood(barcode: string): FoodResult | null {
         name: demo.name,
         brand: demo.brand,
         serving: null,
-        calories: null,
-        protein_g: null,
-        carbs_g: null,
-        fat_g: null,
-        fiber_g: null,
-        sugar_g: null,
+        calories: 98,
+        protein_g: 11,
+        carbs_g: 3.4,
+        fat_g: 4.3,
+        fiber_g: 0,
+        sugar_g: 3.2,
         alcohol_g: null,
         nutriscore_grade: null,
         nova_group: null,
@@ -601,8 +615,206 @@ app.post("/grocery/clear-checked", async (c) => {
 app.get("/recipes", async (c) => {
     const userId = siteUserId(c.req.header("cookie"));
     if (!userId) return beginSiteLogin(c, c.req.query("locale"));
-    const page = await renderStubPage(userId, "recipes");
+    const page = await renderRecipesListPage(userId);
     return c.html(page.html, page.status);
+});
+
+async function recipeActor(c: {
+    req: {
+        header: (name: string) => string | undefined;
+        query: (k: string) => string | undefined;
+    };
+}) {
+    const userId = siteUserId(c.req.header("cookie"));
+    if (!userId) return { userId: null as string | null, member: null };
+    return {
+        userId,
+        member: await getHouseholdMembership(userId),
+    };
+}
+
+function formMemberIds(
+    body: Record<string, string | File | (string | File)[]>,
+): string[] {
+    const raw = body.member_ids;
+    if (Array.isArray(raw)) {
+        return raw.filter(
+            (value): value is string => typeof value === "string",
+        );
+    }
+    if (typeof raw === "string" && raw) return [raw];
+    return [];
+}
+
+async function recipeFormError(
+    userId: string,
+    recipeId: string | null,
+    err: unknown,
+    member?: string,
+) {
+    const message =
+        err instanceof RecipeForbiddenError || err instanceof RecipeInputError
+            ? err.message
+            : err instanceof Error
+              ? err.message
+              : "Could not update the recipe.";
+    if (recipeId) {
+        const page = await renderRecipeDetailRoute(userId, recipeId, {
+            member,
+            error: message,
+        });
+        const status =
+            err instanceof RecipeForbiddenError ? 403 : (400 as const);
+        return { html: page.html, status: status as 400 | 403 };
+    }
+    const page = await renderRecipesListPage(userId, message);
+    return { html: page.html, status: 400 as const };
+}
+
+app.post("/recipes", async (c) => {
+    const { userId, member } = await recipeActor(c);
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    if (member == null) return c.html(forbiddenDashboardHtml(), 403);
+    const body = await c.req.parseBody();
+    try {
+        const recipe = await createRecipe(liveRecipesStore(), {
+            householdId: member.householdId,
+            creatorId: userId,
+            name: formText(body, "name"),
+            yieldPortions: formAmount(body, "yield_portions"),
+        });
+        return c.redirect(`/recipes/${recipe.id}`);
+    } catch (err) {
+        const page = await recipeFormError(userId, null, err);
+        return c.html(page.html, page.status);
+    }
+});
+
+app.get("/recipes/:id", async (c) => {
+    const userId = siteUserId(c.req.header("cookie"));
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    const page = await renderRecipeDetailRoute(userId, c.req.param("id"), {
+        member: c.req.query("member"),
+    });
+    return c.html(page.html, page.status);
+});
+
+app.post("/recipes/:id/delete", async (c) => {
+    const { userId, member } = await recipeActor(c);
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    if (member == null) return c.html(forbiddenDashboardHtml(), 403);
+    const recipeId = c.req.param("id");
+    try {
+        await deleteRecipe(liveRecipesStore(), member.householdId, recipeId, {
+            userId,
+            isOwner: member.role === "owner",
+        });
+    } catch (err) {
+        const page = await recipeFormError(userId, recipeId, err);
+        return c.html(page.html, page.status);
+    }
+    return c.redirect("/recipes");
+});
+
+app.post("/recipes/:id/ingredients", async (c) => {
+    const { userId, member } = await recipeActor(c);
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    if (member == null) return c.html(forbiddenDashboardHtml(), 403);
+    const recipeId = c.req.param("id");
+    const body = await c.req.parseBody();
+    const amount = formAmount(body, "qty_amount");
+    try {
+        if (formText(body, "barcode")) {
+            await addRecipeIngredientByBarcode(
+                liveRecipesStore(),
+                {
+                    householdId: member.householdId,
+                    recipeId,
+                    barcode: formText(body, "barcode"),
+                    amount,
+                },
+                { lookup: fridgeBarcodeLookup },
+            );
+        } else {
+            await addRecipeManualIngredient(liveRecipesStore(), {
+                householdId: member.householdId,
+                recipeId,
+                name: formText(body, "food_name"),
+                amount,
+            });
+        }
+    } catch (err) {
+        const page = await recipeFormError(userId, recipeId, err);
+        return c.html(page.html, page.status);
+    }
+    return c.redirect(`/recipes/${recipeId}`);
+});
+
+app.post("/recipes/:id/portions", async (c) => {
+    const { userId, member } = await recipeActor(c);
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    if (member == null) return c.html(forbiddenDashboardHtml(), 403);
+    const recipeId = c.req.param("id");
+    const body = await c.req.parseBody();
+    try {
+        await setPersonPortion(liveRecipesStore(), {
+            householdId: member.householdId,
+            recipeId,
+            userId,
+            portionCount: formAmount(body, "portion_count"),
+        });
+    } catch (err) {
+        const page = await recipeFormError(userId, recipeId, err);
+        return c.html(page.html, page.status);
+    }
+    return c.redirect(`/recipes/${recipeId}`);
+});
+
+app.post("/recipes/:id/add-to-grocery", async (c) => {
+    const { userId, member } = await recipeActor(c);
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    if (member == null) return c.html(forbiddenDashboardHtml(), 403);
+    const recipeId = c.req.param("id");
+    const body = await c.req.parseBody({ all: true });
+    const selected = formMemberIds(body);
+    const storeId = formText(body as Record<string, string | File>, "store_id");
+    try {
+        const householdMembers = await listHouseholdMembers(member.householdId);
+        const allowed = new Set(householdMembers.map((row) => row.userId));
+        const memberIds = selected.filter((id) => allowed.has(id));
+        if (memberIds.length === 0) {
+            throw new RecipeInputError("Select who this grocery run is for.");
+        }
+        const recipes = liveRecipesStore();
+        const portionCounts = await Promise.all(
+            memberIds.map(async (id) => {
+                const portion = await recipes.getPortion(
+                    member.householdId,
+                    recipeId,
+                    id,
+                );
+                return portion?.portionCount ?? 1;
+            }),
+        );
+        const fridge = await listFridge(liveFridgeStore(), member.householdId);
+        await addRecipeToGrocery({
+            recipes,
+            grocery: liveGroceryStore(),
+            settings: liveSettingsStore(),
+            fridgeItems: fridge.items.map((item) => ({
+                identity: item.identity,
+                quantity: item.quantity,
+            })),
+            householdId: member.householdId,
+            recipeId,
+            storeId,
+            portionCounts,
+        });
+    } catch (err) {
+        const page = await recipeFormError(userId, recipeId, err);
+        return c.html(page.html, page.status);
+    }
+    return c.redirect("/grocery");
 });
 
 app.get("/settings", async (c) => {

@@ -58,6 +58,7 @@ import {
 } from "./household.js";
 import { createMemoryFridgeStore } from "./fridge.js";
 import { createMemoryGroceryStore } from "./grocery.js";
+import { createMemoryRecipesStore } from "./recipes.js";
 import { createGroceryStore, createMemorySettingsStore } from "./settings.js";
 import { addAllergen, createMemoryRulesStore } from "./rules.js";
 import {
@@ -1470,6 +1471,7 @@ const db = {
     household: null as HouseholdConfig | null,
     fridgeStore: createMemoryFridgeStore(),
     groceryStore: createMemoryGroceryStore(),
+    recipesStore: createMemoryRecipesStore(),
     settingsStore: createMemorySettingsStore(),
     rulesStore: createMemoryRulesStore(),
 };
@@ -1689,6 +1691,7 @@ mock.module("./supabase.js", () => ({
     getWeightInRange: async () => [],
     liveFridgeStore: () => db.fridgeStore,
     liveGroceryStore: () => db.groceryStore,
+    liveRecipesStore: () => db.recipesStore,
     liveSettingsStore: () => db.settingsStore,
     liveRulesStore: () => db.rulesStore,
     updateMemberDisplayName: async (
@@ -1741,6 +1744,7 @@ beforeEach(() => {
     ];
     db.fridgeStore = createMemoryFridgeStore();
     db.groceryStore = createMemoryGroceryStore();
+    db.recipesStore = createMemoryRecipesStore();
     db.settingsStore = createMemorySettingsStore();
     db.rulesStore = createMemoryRulesStore();
 });
@@ -5812,7 +5816,7 @@ describe("authenticated dashboard HTTP", () => {
         expect(html).not.toContain("<h1>Fridge</h1>");
     });
 
-    test("GET /grocery lists by store and GET /recipes still stubs", async () => {
+    test("GET /grocery lists by store and GET /recipes is the cookbook", async () => {
         const grocery = await siteApp.request("http://x/grocery", {
             headers: { cookie: cookieFor(alice) },
         });
@@ -5830,7 +5834,88 @@ describe("authenticated dashboard HTTP", () => {
         const recipesHtml = await recipes.text();
         expect(recipesHtml).toContain("<h1>Recipes</h1>");
         expect(recipesHtml).toContain('href="/recipes" aria-current="page"');
-        expect(recipesHtml).toContain("Coming soon.");
+        expect(recipesHtml).not.toContain("Coming soon.");
+        expect(recipesHtml).toContain('action="/recipes"');
+        expect(recipesHtml).toContain("Add a recipe.");
+    });
+
+    test("POST /recipes creates, member delete is refused, owner deletes member recipe", async () => {
+        const create = await siteApp.request("http://x/recipes", {
+            method: "POST",
+            headers: {
+                cookie: cookieFor(alice),
+                "content-type": "application/x-www-form-urlencoded",
+            },
+            body: "name=Mac&yield_portions=4",
+        });
+        expect(create.status).toBe(302);
+        const loc = create.headers.get("location") ?? "";
+        expect(loc.startsWith("/recipes/")).toBe(true);
+        const recipeId = loc.slice("/recipes/".length);
+        const addIng = await siteApp.request(
+            `http://x/recipes/${recipeId}/ingredients`,
+            {
+                method: "POST",
+                headers: {
+                    cookie: cookieFor(alice),
+                    "content-type": "application/x-www-form-urlencoded",
+                },
+                body: "food_name=Pasta&qty_amount=400",
+            },
+        );
+        expect(addIng.status).toBe(302);
+        const detail = await siteApp.request(`http://x/recipes/${recipeId}`, {
+            headers: { cookie: cookieFor(alice) },
+        });
+        const html = await detail.text();
+        expect(html).toContain("Pasta");
+        expect(html).toContain("100 g");
+        expect(html).toContain("Macros incomplete");
+
+        const refuse = await siteApp.request(
+            `http://x/recipes/${recipeId}/delete`,
+            {
+                method: "POST",
+                headers: { cookie: cookieFor(bob) },
+            },
+        );
+        expect(refuse.status).toBe(403);
+        expect(await refuse.text()).toContain(
+            "Only the creator or household owner",
+        );
+        expect(await db.recipesStore.listRecipes("hh-1")).toHaveLength(1);
+
+        const bobCreate = await siteApp.request("http://x/recipes", {
+            method: "POST",
+            headers: {
+                cookie: cookieFor(bob),
+                "content-type": "application/x-www-form-urlencoded",
+            },
+            body: "name=Salad&yield_portions=1",
+        });
+        const bobId = (bobCreate.headers.get("location") ?? "").slice(
+            "/recipes/".length,
+        );
+        const ownerDel = await siteApp.request(
+            `http://x/recipes/${bobId}/delete`,
+            {
+                method: "POST",
+                headers: { cookie: cookieFor(alice) },
+            },
+        );
+        expect(ownerDel.status).toBe(302);
+        const left = await db.recipesStore.listRecipes("hh-1");
+        expect(left.map((row) => row.id)).toEqual([recipeId]);
+    });
+
+    test("GET /recipes is 403 for a non-member", async () => {
+        const r = await siteApp.request("http://x/recipes", {
+            headers: { cookie: cookieFor(outsider) },
+        });
+        expect(r.status).toBe(403);
+        const html = await r.text();
+        expect(html).toContain("household membership");
+        expect(html).not.toContain("<h1>Recipes</h1>");
     });
 
     test("POST /grocery/lines adds a supply and checking it does not insert fridge stock", async () => {
