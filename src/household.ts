@@ -87,6 +87,10 @@ export type RequireMemberResult =
     | { ok: true; member: HouseholdMember }
     | { ok: false; error: "not_a_member" };
 
+export type RequireOwnerResult =
+    | { ok: true; member: HouseholdMember }
+    | { ok: false; error: "not_a_member" | "not_owner" };
+
 export class HouseholdAlreadyExistsError extends Error {
     readonly code = "household_already_exists" as const;
 
@@ -212,6 +216,18 @@ export function requireMemberOfHousehold(
         return { ok: false, error: "not_a_member" };
     }
     return { ok: true, member };
+}
+
+export function requireOwner(
+    member: HouseholdMember | null | undefined,
+    householdId: string | null = null,
+): RequireOwnerResult {
+    const check = requireMemberOfHousehold(member, householdId);
+    if (!check.ok) return check;
+    if (check.member.role !== "owner") {
+        return { ok: false, error: "not_owner" };
+    }
+    return { ok: true, member: check.member };
 }
 
 export type ResolveActorError = "missing_target" | "oauth_mismatch";

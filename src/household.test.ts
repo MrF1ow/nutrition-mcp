@@ -8,6 +8,7 @@ import {
     listMembers,
     requireMember,
     requireMemberOfHousehold,
+    requireOwner,
     resolveActorUserId,
     dashboardAccess,
     type Household,
@@ -352,6 +353,53 @@ test("requireMemberOfHousehold rejects a member of a different household", () =>
         error: "not_a_member",
     });
     expect(requireMemberOfHousehold(null, "hh-1")).toEqual({
+        ok: false,
+        error: "not_a_member",
+    });
+});
+
+test("requireOwner accepts the owner", () => {
+    const aliceHome: HouseholdMember = {
+        householdId: "hh-1",
+        userId: alice,
+        role: "owner",
+        displayName: "Alice",
+    };
+    expect(requireOwner(aliceHome)).toEqual({
+        ok: true,
+        member: aliceHome,
+    });
+    expect(requireOwner(aliceHome, "hh-1")).toEqual({
+        ok: true,
+        member: aliceHome,
+    });
+});
+
+test("requireOwner refuses a member with not_owner", () => {
+    const bobHome: HouseholdMember = {
+        householdId: "hh-1",
+        userId: bob,
+        role: "member",
+        displayName: "Bob",
+    };
+    expect(requireOwner(bobHome)).toEqual({
+        ok: false,
+        error: "not_owner",
+    });
+});
+
+test("requireOwner refuses a stranger with not_a_member", () => {
+    expect(requireOwner(null)).toEqual({
+        ok: false,
+        error: "not_a_member",
+    });
+    const aliceHome: HouseholdMember = {
+        householdId: "hh-1",
+        userId: alice,
+        role: "owner",
+        displayName: "Alice",
+    };
+    expect(requireOwner(aliceHome, "hh-other")).toEqual({
         ok: false,
         error: "not_a_member",
     });

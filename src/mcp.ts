@@ -19,6 +19,7 @@ import {
 } from "./auth-context.js";
 import {
     requireMemberOfHousehold,
+    requireOwner,
     resolveActorUserId,
     householdConfigToWire,
     mergeHouseholdConfig,
@@ -1418,6 +1419,19 @@ export function registerTools(
             throw new Error("not a household member");
         }
         return member.householdId;
+    }
+    async function callerOwnerHouseholdId(): Promise<string> {
+        if (auth.kind === "household") return auth.householdId;
+        const member = await getHouseholdMembership(auth.userId);
+        const check = requireOwner(member);
+        if (!check.ok) {
+            throw new Error(
+                check.error === "not_a_member"
+                    ? "not a household member"
+                    : "only the household owner may call this",
+            );
+        }
+        return check.member.householdId;
     }
     // clientInfo is a getter, not a value: at registration time the SDK has not
     // yet resolved who is calling, and on the modern leg it backfills the
@@ -4586,7 +4600,7 @@ export function registerTools(
         {
             title: "Add Household Member",
             description:
-                "Create an Auth login and household_members row. Pass display_name, password, and either email or username. Username becomes {username}@household.invalid. Any current member or the household bot may call this. The new row is always role member. Returns user_id for later person tools. Does not send invite email.",
+                "Create an Auth login and household_members row. Pass display_name, password, and either email or username. Username becomes {username}@household.invalid. Only the household owner or the household bot may call this. The new row is always role member. Returns user_id for later person tools. Does not send invite email.",
             annotations: {
                 readOnlyHint: false,
                 destructiveHint: false,
@@ -4607,7 +4621,7 @@ export function registerTools(
                 async () => {
                     const parsed = parseMemberInput(args);
                     if (!parsed.ok) throw new Error(parsed.error);
-                    const householdId = await callerHouseholdId();
+                    const householdId = await callerOwnerHouseholdId();
                     const added = await addHouseholdMemberForHousehold(
                         householdId,
                         parsed.value,
@@ -4701,7 +4715,7 @@ export function registerTools(
         {
             title: "Update Household Config",
             description:
-                "Merge household name, fridge locations, recipe search places, or shared preferences. A household bot token and any household member may call this. Places are labels only, not a recipe table.",
+                "Merge household name, fridge locations, recipe search places, or shared preferences. Only the household owner or the household bot may call this. Places are labels only, not a recipe table.",
             annotations: {
                 readOnlyHint: false,
                 destructiveHint: false,
@@ -4736,7 +4750,7 @@ export function registerTools(
                 async () => {
                     const parsed = parseHouseholdConfigPatch(args);
                     if (!parsed.ok) throw new Error(parsed.error);
-                    const householdId = await callerHouseholdId();
+                    const householdId = await callerOwnerHouseholdId();
                     const current = await getHouseholdConfig(householdId);
                     const config = householdConfigToWire(
                         await updateHouseholdConfig(
@@ -4764,7 +4778,7 @@ export function registerTools(
         {
             title: "Update Fridge Locations",
             description:
-                "Replace the household fridge and freezer location list. A household bot token and any household member may call this.",
+                "Replace the household fridge and freezer location list. Only the household owner or the household bot may call this.",
             annotations: {
                 readOnlyHint: false,
                 destructiveHint: false,
@@ -4782,7 +4796,7 @@ export function registerTools(
                 async () => {
                     const parsed = parseFridgeLocationsInput(args);
                     if (!parsed.ok) throw new Error(parsed.error);
-                    const householdId = await callerHouseholdId();
+                    const householdId = await callerOwnerHouseholdId();
                     const current = await getHouseholdConfig(householdId);
                     const written = await updateHouseholdConfig(
                         householdId,
@@ -4821,7 +4835,7 @@ export function registerTools(
         {
             title: "Rotate Household Token",
             description:
-                "Issue a new household bot token (prefix nt_hh_). The plaintext is returned once; only its SHA-256 hash is stored. Any household member may rotate. A household PAT may rotate and invalidates itself.",
+                "Issue a new household bot token (prefix nt_hh_). The plaintext is returned once; only its SHA-256 hash is stored. Only the household owner may rotate. A household PAT may rotate and invalidates itself.",
             annotations: {
                 readOnlyHint: false,
                 destructiveHint: false,
@@ -4834,7 +4848,7 @@ export function registerTools(
             return withAnalytics(
                 "rotate_household_token",
                 async () => {
-                    const householdId = await callerHouseholdId();
+                    const householdId = await callerOwnerHouseholdId();
                     const issuedBy = auth.kind === "user" ? auth.userId : null;
                     const token = generateHouseholdToken();
                     const issued_at = await rotateHouseholdMcpToken({
