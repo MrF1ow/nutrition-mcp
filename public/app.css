@@ -433,6 +433,104 @@ body {
     color: var(--text-dim);
 }
 
+.empty-grocery,
+.grocery-line-qty {
+    color: var(--text-dim);
+}
+
+.grocery-store {
+    display: grid;
+    gap: 12px;
+    margin: 0 0 28px;
+    padding: 16px;
+    border: 1px solid var(--panel-border);
+    border-radius: 14px;
+    background: var(--panel);
+}
+
+.grocery-store h2,
+.grocery-store h3,
+.grocery-section h3 {
+    margin: 0;
+}
+
+.grocery-lines {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 12px;
+}
+
+.grocery-line {
+    display: grid;
+    gap: 8px;
+    padding: 12px 0;
+    border-top: 1px solid var(--panel-border);
+}
+
+.grocery-line.is-checked .grocery-line-name {
+    text-decoration: line-through;
+    color: var(--text-dim);
+}
+
+.grocery-line-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.grocery-line-name {
+    margin: 0;
+    font-weight: 600;
+}
+
+.grocery-line-qty {
+    margin: 0;
+}
+
+.grocery-add-supply,
+.grocery-clear-checked,
+.grocery-line-check {
+    display: grid;
+    gap: 8px;
+    max-width: 420px;
+}
+
+.grocery-add-supply input,
+.grocery-add-supply select,
+.grocery-add-supply button,
+.grocery-clear-checked button,
+.grocery-line-check button,
+.grocery-store select {
+    font: inherit;
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    min-height: 44px;
+    padding: 8px 12px;
+}
+
+.grocery-add-supply button,
+.grocery-clear-checked button {
+    color: var(--accent-ink);
+    background: var(--accent);
+    border-color: var(--accent);
+    font-weight: 600;
+}
+
+.allergen-warning,
+.allergen-unknown {
+    font-weight: 600;
+}
+
+.allergen-warning {
+    color: #b42318;
+}
+
 .error-banner {
     color: #b42318;
     font-weight: 600;

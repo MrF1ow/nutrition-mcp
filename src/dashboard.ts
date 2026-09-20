@@ -14,6 +14,7 @@ import {
     householdExists,
     listHouseholdMembers,
     liveFridgeStore,
+    liveGroceryStore,
     liveRulesStore,
     liveSettingsStore,
     localeFromProfile,
@@ -21,12 +22,14 @@ import {
     preferredWeightUnitFromProfile,
     widgetsEnabledFromProfile,
 } from "./supabase.js";
-import { renderGroceryStub } from "./app/grocery-stub.js";
 import { renderRecipesStub } from "./app/recipes-stub.js";
 import { renderFridgePage } from "./app/fridge/page.js";
+import { renderGroceryPage } from "./app/grocery/page.js";
 import { renderSettingsPage } from "./app/settings/page.js";
 import { renderHouseholdSettingsPage } from "./app/settings/household.js";
 import { listFridge } from "./fridge.js";
+import { listGrocery } from "./grocery.js";
+import { alreadyHaveTag } from "./linking.js";
 import {
     renderNutritionPage,
     viewerChromeFromProfile,
@@ -169,6 +172,89 @@ export async function renderFridgeInventoryPage(
     };
 }
 
+export async function renderGroceryListPage(
+    viewerUserId: string,
+    opts: { error?: string; allergenWarning?: string } = {},
+): Promise<{ status: 200 | 403; html: string }> {
+    const gate = await memberGate(viewerUserId);
+    if ("html" in gate) return { status: gate.status, html: gate.html };
+    const householdId = gate.viewer.householdId;
+    const profile = await getProfile(viewerUserId);
+    const [snapshot, fridge, members] = await Promise.all([
+        listGrocery(liveGroceryStore(), liveSettingsStore(), householdId),
+        listFridge(liveFridgeStore(), householdId),
+        listHouseholdMembers(householdId),
+    ]);
+    const rules = liveRulesStore();
+    const memberAllergens = await Promise.all(
+        members.map(async (member) => ({
+            displayName: member.displayName,
+            allergens: await rules.listAllergens(householdId, member.userId),
+        })),
+    );
+    const storeRules = await Promise.all(
+        snapshot.stores.map(async (store) => ({
+            storeId: store.id,
+            rules: await rules.listStoreRules(store.id),
+        })),
+    );
+    const rulesByStore = new Map(
+        storeRules.map((row) => [row.storeId, row.rules]),
+    );
+    const stores = snapshot.stores.map((store) => {
+        const storeLines = snapshot.lines.filter(
+            (line) => line.storeId === store.id,
+        );
+        const sections = snapshot.sections
+            .filter(
+                (section) =>
+                    section.storeId === store.id &&
+                    (!section.hidden ||
+                        storeLines.some(
+                            (line) => line.sectionId === section.id,
+                        )),
+            )
+            .map((section) => ({
+                ...section,
+                lines: storeLines
+                    .filter((line) => line.sectionId === section.id)
+                    .map((line) => ({
+                        ...line,
+                        alreadyHave: alreadyHaveTag(line, fridge.items),
+                    })),
+            }));
+        return {
+            ...store,
+            sections,
+            rules: rulesByStore.get(store.id) ?? [],
+        };
+    });
+    const unknownAllergen = memberAllergens.some(
+        (row) => row.allergens.length > 0,
+    );
+    return {
+        status: 200,
+        html: renderGroceryPage({
+            chrome: viewerChromeFromProfile(profile),
+            stores,
+            error: opts.error,
+            allergenWarning: opts.allergenWarning,
+            unknownAllergen: unknownAllergen && !opts.allergenWarning,
+        }),
+    };
+}
+
+export async function groceryAllergenMembers(householdId: string) {
+    const members = await listHouseholdMembers(householdId);
+    const rules = liveRulesStore();
+    return Promise.all(
+        members.map(async (member) => ({
+            displayName: member.displayName,
+            allergens: await rules.listAllergens(householdId, member.userId),
+        })),
+    );
+}
+
 export async function renderSettingsAccountPage(
     viewerUserId: string,
     error?: string,
@@ -246,15 +332,13 @@ export async function renderHouseholdSettingsRoute(
 
 export async function renderStubPage(
     viewerUserId: string,
-    tab: Exclude<AppTabId, "nutrition" | "fridge" | "settings">,
+    tab: Exclude<AppTabId, "nutrition" | "fridge" | "settings" | "grocery">,
 ): Promise<{ status: 200 | 403; html: string }> {
     const gate = await memberGate(viewerUserId);
     if ("html" in gate) return { status: gate.status, html: gate.html };
     const profile = await getProfile(viewerUserId);
     const chrome = viewerChromeFromProfile(profile);
     switch (tab) {
-        case "grocery":
-            return { status: 200, html: renderGroceryStub(chrome) };
         case "recipes":
             return { status: 200, html: renderRecipesStub(chrome) };
     }
