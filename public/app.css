@@ -88,3 +88,108 @@ body {
 .coming-soon {
     color: var(--text-dim);
 }
+
+.app-bar {
+    display: flex;
+    justify-content: flex-end;
+    padding: 12px 16px 0;
+}
+
+.app-bar a {
+    color: var(--text-dim);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.dash-head {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0 0 12px;
+}
+
+.dash-head h1 {
+    margin: 0;
+    font-size: 22px;
+}
+
+.member-switch {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.member-switch a {
+    color: var(--text-dim);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 5px 10px;
+    border: 1px solid var(--panel-border);
+    border-radius: 999px;
+    background: var(--panel);
+}
+
+.member-switch a[aria-current="page"] {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: var(--accent-soft);
+}
+
+.peer-note {
+    margin: 0;
+    color: var(--text-dim);
+    font-size: 13px;
+}
+
+.widget-frame {
+    display: block;
+    width: 100%;
+    margin: 0 0 16px;
+    border: 0;
+    min-height: 280px;
+}
+
+.appearance {
+    display: grid;
+    gap: 16px;
+    margin-top: 16px;
+}
+
+.appearance fieldset {
+    border: 1px solid var(--panel-border);
+    border-radius: 14px;
+    padding: 12px;
+    background: var(--panel);
+}
+
+.appearance button {
+    font: inherit;
+    font-weight: 600;
+    color: var(--accent-ink);
+    background: var(--accent);
+    border: 0;
+    border-radius: 10px;
+    padding: 10px 14px;
+}
+
+.swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.swatch {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+}
+
+.swatch-chip {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 1px solid var(--panel-border);
+}

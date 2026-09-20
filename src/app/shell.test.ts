@@ -3,6 +3,7 @@ import {
     APP_TABS,
     bottomNav,
     comingSoonPage,
+    parseAppearanceInput,
     resolveAccent,
     resolveTheme,
 } from "./shell.js";
@@ -63,4 +64,14 @@ test("fridge stub uses the shell and marks Fridge active", () => {
     expect(html).toContain('href="/fridge" aria-current="page"');
     expect(html).toContain('data-theme="light"');
     expect(html).toContain("--accent:#2f8fd4");
+    expect(html).toContain('href="/logout"');
+});
+
+test("appearance form values coerce to theme and allowlisted swatch", () => {
+    expect(
+        parseAppearanceInput({ theme: "dark", accent_swatch: "rose" }),
+    ).toEqual({ theme: "dark", accent_swatch: "rose" });
+    expect(
+        parseAppearanceInput({ theme: "nope", accent_swatch: "chartreuse" }),
+    ).toEqual({ theme: "light", accent_swatch: null });
 });

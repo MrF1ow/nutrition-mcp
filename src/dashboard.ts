@@ -1,10 +1,4 @@
-import {
-    dashboardAccess,
-    householdConfigToWire,
-    type DashboardAccess,
-    type HouseholdConfigWire,
-    type HouseholdMember,
-} from "./household.js";
+import { dashboardAccess, type HouseholdMember } from "./household.js";
 import {
     getGoalProgressPayload,
     getNutritionSummaryPayload,
@@ -14,22 +8,22 @@ import {
 } from "./dashboard-data.js";
 import {
     alcoholTrackingEnabledFromProfile,
-    getHouseholdConfig,
     getHouseholdMembership,
     getProfile,
     householdExists,
     listHouseholdMembers,
     preferredDrinkUnitFromProfile,
 } from "./supabase.js";
-import { getWidgetHtml, withWidgetData } from "./widgets.js";
-
-function escapeHtml(str: string): string {
-    return str
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
-}
+import { renderFridgeStub } from "./app/fridge-stub.js";
+import { renderGroceryStub } from "./app/grocery-stub.js";
+import { renderRecipesStub } from "./app/recipes-stub.js";
+import { renderSettingsStub } from "./app/settings-stub.js";
+import {
+    renderNutritionPage,
+    viewerChromeFromProfile,
+    type NutritionView,
+} from "./app/nutrition.js";
+import { isAccentSwatch, escapeHtml, type AppTabId } from "./app/shell.js";
 
 function alcoholOf(
     profile: Parameters<typeof alcoholTrackingEnabledFromProfile>[0],
@@ -38,16 +32,7 @@ function alcoholOf(
     return preferredDrinkUnitFromProfile(profile) ?? "us";
 }
 
-export type DashboardView = {
-    access: Extract<DashboardAccess, { ok: true }>;
-    members: HouseholdMember[];
-    household: HouseholdConfigWire | null;
-    summary: unknown;
-    goals: unknown;
-    trends: unknown;
-    weight: unknown;
-    addMemberError?: string;
-};
+export type DashboardView = NutritionView;
 
 export function forbiddenDashboardHtml(): string {
     return renderBare(
@@ -95,75 +80,44 @@ function addMemberFormHtml(error?: string): string {
         </form>`;
 }
 
+export function addMemberErrorHtml(error: string): string {
+    return renderBare("Add household member", addMemberFormHtml(error));
+}
+
 export async function renderDashboardHtml(
     view: DashboardView,
 ): Promise<string> {
-    const cards = await Promise.all([
-        widgetCard("nutrition-summary", view.summary),
-        widgetCard("goal-progress", view.goals),
-        widgetCard("trends", view.trends),
-        widgetCard("weight-trends", view.weight),
-    ]);
+    return renderNutritionPage(view);
+}
 
-    const memberNav = view.members
-        .map((m) => {
-            const current = m.userId === view.access.subject.userId;
-            const href =
-                m.userId === view.access.viewer.userId
-                    ? "/"
-                    : `/?member=${encodeURIComponent(m.userId)}`;
-            const label = escapeHtml(m.displayName);
-            const attrs = current ? ' aria-current="page"' : "";
-            return `<a href="${escapeHtml(href)}"${attrs}>${label}</a>`;
-        })
-        .join("");
+type MemberGate =
+    | { status: 200; viewer: HouseholdMember }
+    | { status: 403; html: string }
+    | { status: 200; html: string; create: true };
 
-    const peerNote =
-        view.access.mode === "peer"
-            ? `<p class="peer-note">Viewing ${escapeHtml(view.access.subject.displayName)}. You can look, not edit. Only they (or a household bot) can change these records.</p>`
-            : "";
-
-    const householdBlock = view.household
-        ? `<section class="facts">
-            <h2 class="section-title">Household</h2>
-            <div class="facts-row"><span>Name</span><span>${escapeHtml(view.household.name)}</span></div>
-            <div class="facts-row"><span>Fridge</span><span>${escapeHtml(view.household.fridge_locations.join(", ") || "—")}</span></div>
-        </section>`
-        : "";
-
-    const addMemberForm =
-        view.access.mode === "self" && view.access.viewer.role === "owner"
-            ? addMemberFormHtml(view.addMemberError)
-            : "";
-
-    const body = `
-        <header class="dash-head">
-            <p class="eyebrow">Household</p>
-            <h1>${escapeHtml(view.access.subject.displayName)}</h1>
-            ${peerNote}
-            <nav class="member-switch" aria-label="Household members">${memberNav}</nav>
-            <p class="logout"><a href="/logout">Log out</a></p>
-        </header>
-        ${addMemberForm}
-        ${cards.join("\n")}
-        ${householdBlock}
-    `;
-    return renderBare("Household", body);
+async function memberGate(viewerUserId: string): Promise<MemberGate> {
+    const viewer = await getHouseholdMembership(viewerUserId);
+    if (viewer == null) {
+        if (!(await householdExists())) {
+            return {
+                status: 200,
+                html: createHouseholdFormHtml(),
+                create: true,
+            };
+        }
+        return { status: 403, html: forbiddenDashboardHtml() };
+    }
+    return { status: 200, viewer };
 }
 
 export async function renderDashboardPage(
     viewerUserId: string,
     requestedMember: string | undefined,
-    addMemberError?: string,
 ): Promise<{ status: 200 | 403; html: string }> {
-    const viewer = await getHouseholdMembership(viewerUserId);
-    if (viewer == null) {
-        if (!(await householdExists())) {
-            return { status: 200, html: createHouseholdFormHtml() };
-        }
-        return { status: 403, html: forbiddenDashboardHtml() };
-    }
-    let subject = viewer;
+    const gate = await memberGate(viewerUserId);
+    if ("html" in gate) return { status: gate.status, html: gate.html };
+
+    let subject = gate.viewer;
     if (requestedMember && requestedMember !== viewerUserId) {
         const requested = await getHouseholdMembership(requestedMember);
         if (requested == null) {
@@ -171,15 +125,18 @@ export async function renderDashboardPage(
         }
         subject = requested;
     }
-    const access = dashboardAccess(viewer, subject);
+    const access = dashboardAccess(gate.viewer, subject);
     if (!access.ok) {
         return { status: 403, html: forbiddenDashboardHtml() };
     }
 
-    const profile = await getProfile(access.subject.userId);
-    const alcohol = alcoholOf(profile);
+    const viewerProfile = await getProfile(access.viewer.userId);
+    const subjectProfile =
+        access.subject.userId === access.viewer.userId
+            ? viewerProfile
+            : await getProfile(access.subject.userId);
+    const alcohol = alcoholOf(subjectProfile);
     const members = await listHouseholdMembers(access.viewer.householdId);
-    const config = await getHouseholdConfig(access.viewer.householdId);
 
     const [summary, goals, trends, weight] = await Promise.all([
         getNutritionSummaryPayload(access.subject.userId, alcohol, 7),
@@ -193,19 +150,36 @@ export async function renderDashboardPage(
         html: await renderDashboardHtml({
             access,
             members,
-            household: config ? householdConfigToWire(config) : null,
             summary,
             goals,
             trends,
             weight,
-            addMemberError,
+            chrome: viewerChromeFromProfile(viewerProfile),
         }),
     };
 }
 
-async function widgetCard(key: string, data: unknown): Promise<string> {
-    const html = withWidgetData(await getWidgetHtml(key), data);
-    return `<iframe class="widget-frame" title="${escapeHtml(key)}" srcdoc="${escapeHtml(html)}"></iframe>`;
+export async function renderStubPage(
+    viewerUserId: string,
+    tab: Exclude<AppTabId, "nutrition">,
+): Promise<{ status: 200 | 403; html: string }> {
+    const gate = await memberGate(viewerUserId);
+    if ("html" in gate) return { status: gate.status, html: gate.html };
+    const profile = await getProfile(viewerUserId);
+    const chrome = viewerChromeFromProfile(profile);
+    const swatch = isAccentSwatch(profile?.accent_swatch)
+        ? profile.accent_swatch
+        : null;
+    switch (tab) {
+        case "fridge":
+            return { status: 200, html: renderFridgeStub(chrome) };
+        case "grocery":
+            return { status: 200, html: renderGroceryStub(chrome) };
+        case "recipes":
+            return { status: 200, html: renderRecipesStub(chrome) };
+        case "settings":
+            return { status: 200, html: renderSettingsStub(chrome, swatch) };
+    }
 }
 
 function renderBare(title: string, body: string): string {
@@ -218,40 +192,15 @@ function renderBare(title: string, body: string): string {
     <link rel="stylesheet" href="/styles.css" />
     <style>
         .dash-head { margin: 24px auto 16px; max-width: 720px; padding: 0 16px; }
-        .member-switch { display: flex; flex-wrap: wrap; gap: 12px; margin: 12px 0; }
-        .member-switch a[aria-current="page"] { font-weight: 700; }
-        .peer-note { margin: 8px 0 0; }
-        .widget-frame { display: block; width: min(720px, 100%); margin: 0 auto 16px; border: 0; min-height: 280px; }
         .logout { margin-top: 16px; }
         .empty { max-width: 720px; margin: 48px auto; padding: 0 16px; }
         .create-household, .add-member { max-width: 720px; margin: 0 auto 32px; padding: 0 16px; display: grid; gap: 8px; }
         .create-household input, .create-household button, .add-member input, .add-member button { font: inherit; padding: 8px; }
         .error-banner { margin: 0 0 8px; }
-        .facts { max-width: 720px; margin: 0 auto 32px; padding: 0 16px; }
-        .facts-row { display: flex; justify-content: space-between; border-top: 1px solid var(--rule, #222); padding: 8px 0; }
     </style>
 </head>
 <body>
 ${body}
-<script>
-document.querySelectorAll(".widget-frame").forEach((frame) => {
-    const fit = () => {
-        try {
-            const doc = frame.contentDocument;
-            if (!doc) return;
-            frame.style.height = Math.ceil(doc.documentElement.scrollHeight) + "px";
-        } catch (_) {}
-    };
-    frame.addEventListener("load", fit);
-    window.addEventListener("message", (e) => {
-        if (e.source !== frame.contentWindow) return;
-        const d = e.data;
-        if (d && d.method && String(d.method).endsWith("size-changed") && d.params && d.params.height) {
-            frame.style.height = d.params.height + "px";
-        }
-    });
-});
-</script>
 </body>
 </html>`;
 }

@@ -1410,6 +1410,8 @@ const PROFILE_BASE: actualSupabase.Profile = {
     alcohol_tracking_enabled: false,
     preferred_drink_unit: null,
     locale: null,
+    theme: null,
+    accent_swatch: null,
     created_at: "2026-01-01T00:00:00.000Z",
     updated_at: "2026-01-01T00:00:00.000Z",
 };
@@ -5507,11 +5509,11 @@ describe("authenticated dashboard HTTP", () => {
         expect(html).toContain('title="nutrition-summary"');
         expect(html).not.toContain("You can look, not edit");
         expect(html).not.toContain('action="/approve"');
-        expect(html).toContain('action="/add-household-member"');
-        expect(html).toContain('name="display_name"');
-        expect(html).toContain('name="password"');
-        expect(html).toContain('name="email"');
-        expect(html).toContain('name="username"');
+        expect(html).not.toContain('action="/add-household-member"');
+        expect(html).not.toContain('class="facts"');
+        expect(html).toContain('class="bottom-nav"');
+        expect(html).toContain('href="/fridge"');
+        expect(html).toContain("--accent:#2f8fd4");
     });
 
     test("a member dashboard has no add form", async () => {
@@ -5630,6 +5632,63 @@ describe("authenticated dashboard HTTP", () => {
         expect(
             db.members.filter((m) => m.displayName.startsWith("Kid")),
         ).toHaveLength(1);
+    });
+
+    test("GET /fridge returns the stub with Fridge active", async () => {
+        const r = await siteApp.request("http://x/fridge", {
+            headers: { cookie: cookieFor(alice) },
+        });
+        expect(r.status).toBe(200);
+        const html = await r.text();
+        expect(html).toContain("<h1>Fridge</h1>");
+        expect(html).toContain("Coming soon.");
+        expect(html).toContain('href="/fridge" aria-current="page"');
+        expect(html).not.toContain('class="facts"');
+    });
+
+    test("GET /grocery, /recipes, and /settings return stubs", async () => {
+        for (const [path, heading] of [
+            ["/grocery", "Groceries"],
+            ["/recipes", "Recipes"],
+            ["/settings", "Settings"],
+        ] as const) {
+            const r = await siteApp.request(`http://x${path}`, {
+                headers: { cookie: cookieFor(alice) },
+            });
+            expect(r.status).toBe(200);
+            const html = await r.text();
+            expect(html).toContain(`<h1>${heading}</h1>`);
+            expect(html).toContain(`href="${path}" aria-current="page"`);
+        }
+    });
+
+    test("GET /nutrition redirects to /", async () => {
+        const r = await siteApp.request("http://x/nutrition", {
+            headers: { cookie: cookieFor(alice) },
+        });
+        expect(r.status).toBe(302);
+        expect(r.headers.get("location")).toBe("/");
+    });
+
+    test("POST /settings persists dark theme for the next GET", async () => {
+        const save = await siteApp.request("http://x/settings", {
+            method: "POST",
+            headers: {
+                cookie: cookieFor(alice),
+                "content-type": "application/x-www-form-urlencoded",
+            },
+            body: "theme=dark&accent_swatch=rose",
+        });
+        expect(save.status).toBe(302);
+        expect(save.headers.get("location")).toBe("/settings");
+        expect(db.profile?.theme).toBe("dark");
+        expect(db.profile?.accent_swatch).toBe("rose");
+        const r = await siteApp.request("http://x/settings", {
+            headers: { cookie: cookieFor(alice) },
+        });
+        const html = await r.text();
+        expect(html).toContain('data-theme="dark"');
+        expect(html).toContain("--accent:#fb7199");
     });
 
     test("?member= shows a household peer read-only", async () => {

@@ -26,11 +26,14 @@ export type AccentTokens = {
     dark: string;
 };
 
-export type AppChrome = {
-    title: string;
-    active: AppTabId;
+export type ViewerChrome = {
     theme: Theme;
     accent: AccentTokens;
+};
+
+export type AppChrome = ViewerChrome & {
+    title: string;
+    active: AppTabId;
     body: string;
 };
 
@@ -51,13 +54,17 @@ export function resolveTheme(theme: string | null | undefined): Theme {
     return theme === "dark" ? "dark" : "light";
 }
 
+export function accentColor(theme: Theme, accent: AccentTokens): string {
+    return theme === "dark" ? accent.dark : accent.light;
+}
+
 export function accentCssVars(theme: Theme, accent: AccentTokens): string {
-    const color = theme === "dark" ? accent.dark : accent.light;
+    const color = accentColor(theme, accent);
     const ink = theme === "dark" ? "#0b1220" : "#ffffff";
     return `--accent:${color};--accent-ink:${ink}`;
 }
 
-function escapeHtml(str: string): string {
+export function escapeHtml(str: string): string {
     return str
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
@@ -92,19 +99,58 @@ export function renderAppShell(chrome: AppChrome): string {
 ${appHead(chrome.title, chrome.theme, chrome.accent)}
 </head>
 <body>
+<header class="app-bar"><a href="/logout">Log out</a></header>
 <main class="app-main">${chrome.body}</main>
 ${bottomNav(chrome.active)}
+<script>
+document.querySelectorAll(".widget-frame").forEach((frame) => {
+    const fit = () => {
+        try {
+            const doc = frame.contentDocument;
+            if (!doc) return;
+            frame.style.height = Math.ceil(doc.documentElement.scrollHeight) + "px";
+        } catch (_) {}
+    };
+    frame.addEventListener("load", fit);
+    window.addEventListener("message", (e) => {
+        if (e.source !== frame.contentWindow) return;
+        const d = e.data;
+        if (d && d.method && String(d.method).endsWith("size-changed") && d.params && d.params.height) {
+            frame.style.height = d.params.height + "px";
+        }
+    });
+});
+</script>
 </body>
 </html>`;
 }
 
-export function comingSoonPage(tab: Exclude<AppTabId, "nutrition">): string {
+export function parseAppearanceInput(input: {
+    theme?: unknown;
+    accent_swatch?: unknown;
+}): { theme: Theme; accent_swatch: AccentSwatch | null } {
+    const theme = input.theme === "dark" ? "dark" : "light";
+    const raw =
+        typeof input.accent_swatch === "string" ? input.accent_swatch : "";
+    return {
+        theme,
+        accent_swatch: isAccentSwatch(raw) ? raw : null,
+    };
+}
+
+export function comingSoonPage(
+    tab: Exclude<AppTabId, "nutrition">,
+    chrome: ViewerChrome = {
+        theme: "light",
+        accent: ACCENT_SWATCHES.sky,
+    },
+): string {
     const label = APP_TABS.find((t) => t.id === tab)!.label;
     return renderAppShell({
         title: label,
         active: tab,
-        theme: "light",
-        accent: ACCENT_SWATCHES.sky,
+        theme: chrome.theme,
+        accent: chrome.accent,
         body: `<h1>${escapeHtml(label)}</h1><p class="coming-soon">Coming soon.</p>`,
     });
 }

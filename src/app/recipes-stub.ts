@@ -1,5 +1,5 @@
-import { comingSoonPage } from "./shell.js";
+import { comingSoonPage, type ViewerChrome } from "./shell.js";
 
-export function renderRecipesStub(): string {
-    return comingSoonPage("recipes");
+export function renderRecipesStub(chrome?: ViewerChrome): string {
+    return comingSoonPage("recipes", chrome);
 }
