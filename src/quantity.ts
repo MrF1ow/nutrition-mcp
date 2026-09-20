@@ -52,8 +52,13 @@ export function parseQuantity(raw: string): Quantity {
     if (!match) {
         throw new Error(`Invalid quantity: ${raw}`);
     }
-    const amount = Number(match[1]);
-    const unit = match[2].trim();
+    const amountRaw = match[1];
+    const unitRaw = match[2];
+    if (amountRaw === undefined || unitRaw === undefined) {
+        throw new Error(`Invalid quantity: ${raw}`);
+    }
+    const amount = Number(amountRaw);
+    const unit = unitRaw.trim();
     if (!Number.isFinite(amount)) {
         throw new Error(`Invalid quantity amount: ${raw}`);
     }
