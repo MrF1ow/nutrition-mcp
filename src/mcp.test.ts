@@ -4460,7 +4460,7 @@ describe("household config tools", () => {
         });
     });
 
-    test("member OAuth fridge write sticks", async () => {
+    test("owner OAuth fridge write sticks", async () => {
         await withTools(null, async (call) => {
             const r = await call("update_fridge_locations", {
                 locations: ["crisper"],
@@ -4468,6 +4468,44 @@ describe("household config tools", () => {
             expect(r.isError).toBeFalsy();
         });
         expect(db.household?.fridgeLocations).toEqual(["crisper"]);
+    });
+
+    test("member OAuth fridge write is refused", async () => {
+        db.members = [
+            {
+                householdId: "hh-1",
+                userId: "u1",
+                role: "member",
+                displayName: "U1",
+            },
+        ];
+        await withTools(null, async (call) => {
+            const r = await call("update_fridge_locations", {
+                locations: ["crisper"],
+            });
+            expect(r.isError).toBe(true);
+            expect(textOf(r)).toContain("owner");
+        });
+        expect(db.household?.fridgeLocations).toEqual([]);
+    });
+
+    test("member OAuth config write is refused", async () => {
+        db.members = [
+            {
+                householdId: "hh-1",
+                userId: "u1",
+                role: "member",
+                displayName: "U1",
+            },
+        ];
+        await withTools(null, async (call) => {
+            const r = await call("update_household_config", {
+                name: "Taken",
+            });
+            expect(r.isError).toBe(true);
+            expect(textOf(r)).toContain("owner");
+        });
+        expect(db.household?.name).toBe("Home");
     });
 
     test("invalid recipe place kind errors and leaves config unchanged", async () => {
@@ -4560,7 +4598,7 @@ describe("household config tools", () => {
 });
 
 describe("rotate_household_token from member OAuth", () => {
-    test("any member may rotate", async () => {
+    test("only the owner may rotate", async () => {
         await withTools(null, async (call) => {
             const r = await call("rotate_household_token");
             expect(r.isError).toBeFalsy();
@@ -4574,6 +4612,23 @@ describe("rotate_household_token from member OAuth", () => {
         });
     });
 
+    test("a member is refused", async () => {
+        db.members = [
+            {
+                householdId: "hh-1",
+                userId: "u1",
+                role: "member",
+                displayName: "U1",
+            },
+        ];
+        await withTools(null, async (call) => {
+            const r = await call("rotate_household_token");
+            expect(r.isError).toBe(true);
+            expect(textOf(r)).toContain("owner");
+            expect(db.tokenRotations).toHaveLength(0);
+        });
+    });
+
     test("a non-member is refused", async () => {
         db.members = [];
         await withTools(null, async (call) => {
@@ -4581,6 +4636,29 @@ describe("rotate_household_token from member OAuth", () => {
             expect(r.isError).toBe(true);
             expect(textOf(r)).toContain("not a household member");
             expect(db.tokenRotations).toHaveLength(0);
+        });
+    });
+});
+
+describe("add_household_member from member OAuth", () => {
+    test("a member is refused", async () => {
+        db.members = [
+            {
+                householdId: "hh-1",
+                userId: "u1",
+                role: "member",
+                displayName: "U1",
+            },
+        ];
+        await withTools(null, async (call) => {
+            const r = await call("add_household_member", {
+                display_name: "Sam",
+                username: "sam",
+                password: "password1",
+            });
+            expect(r.isError).toBe(true);
+            expect(textOf(r)).toContain("owner");
+            expect(db.addedLogins).toHaveLength(0);
         });
     });
 });
