@@ -96,3 +96,23 @@ export function pickWriteUnit(
 export function toStoredInteger(value: number): number {
     return Math.round(value);
 }
+
+export type InventoryVolumeUnit = "ml" | "fl oz" | "cup";
+
+export function toMillilitres(
+    value: number,
+    unit: InventoryVolumeUnit,
+): number {
+    if (!Number.isFinite(value)) {
+        throw new Error(`Invalid volume value: ${value}`);
+    }
+    if (unit === "ml") return value;
+    if (unit === "fl oz") return value * ML_PER_FL_OZ;
+    return value * ML_PER_CUP;
+}
+
+export function fromMillilitres(ml: number, unit: InventoryVolumeUnit): number {
+    if (unit === "ml") return ml;
+    if (unit === "fl oz") return ml / ML_PER_FL_OZ;
+    return ml / ML_PER_CUP;
+}
