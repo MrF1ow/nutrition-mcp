@@ -1,6 +1,6 @@
 # Closed household lifecycle plan
 
-A self-hosted household is one deploy and one Supabase project. The first person signs up, then creates that household as owner. Later people exist only when the owner adds them. Public registration closes after the first Auth user. Auto-join does not ship. Do these PRs in order. PR-1, PR-2, PR-3, then PR-4.
+A self-hosted household is one deploy and one Supabase project. The first person signs up with email and password, then creates that household as owner. Later people exist only when the owner adds them. Public registration closes after the first Auth user. Google signup is deleted. Auto-join does not ship. Do these PRs in order. PR-1, PR-2, PR-3, then PR-4.
 
 ## How to read this
 
@@ -15,7 +15,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 ### Arm the program
 
 - [ ] State the protocol and this plan to the operator, then stop. Start execution only on the operator's explicit go.
-- [ ] On the operator's go, arm a `/goal` with this exact text. "Plan `docs/handoff/closed-household-plan.md`. PRs PR-1, PR-2, PR-3, PR-4 in that order. Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Root appends. Operator lands. Done when the first Auth user creates the household as owner, public registration is closed, only the owner can rotate the household token and add members, and a stranger who finds the URL cannot join."
+- [ ] On the operator's go, arm a `/goal` with this exact text. "Plan `docs/handoff/closed-household-plan.md`. PRs PR-1, PR-2, PR-3, PR-4 in that order. Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Root appends. Operator lands. Done when Google signup is gone, the first Auth user creates the household as owner, public registration is closed, only the owner can rotate the household token and add members, and a stranger who finds the URL cannot join."
 - [ ] Read these from trunk at program start. Re-read them at every tick.
     - [ ] `git show origin/main:pstack/skills/poteto-mode/playbooks/autopilot-stack.md`
     - [ ] `git show origin/main:pstack/skills/swarm/SKILL.md`
@@ -37,7 +37,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
     - [ ] PR-2 after PR-1.
     - [ ] PR-3 after PR-2.
     - [ ] PR-4 after PR-3.
-- [ ] Hold the file boundaries. PR-1 touches login, the Google callback, `src/oauth.ts`, `src/dashboard.ts` create-household, `src/supabase.ts` create helper and Auth count, `src/household.ts` create helper, a new migration that also revokes `bootstrap_household` from `authenticated`, and the tests for those. PR-2 touches `src/mcp.ts` household admin tools, owner checks in `src/household.ts`, `README.md`, and tests. PR-2 does not add a SQL migration. PR-3 touches the site dashboard add-member form, `src/dashboard.test.ts`, and `authenticated dashboard HTTP` in `src/mcp.test.ts`. PR-4 replaces join-as-member `bootstrapHousehold` and the SQL function body.
+- [ ] Hold the file boundaries. PR-1 deletes Google login, then closes email signup and adds create-household. It touches `src/oauth.ts`, `src/supabase.ts`, login copy and `scripts/gen-login.ts`, `.env.example`, `README.md`, `docs/google-auth-setup.md`, dashboard create-household, household create helper, a new migration that also revokes `bootstrap_household` from `authenticated`, and the tests for those. PR-2 touches `src/mcp.ts` household admin tools, owner checks in `src/household.ts`, `README.md` rotate copy, and tests. PR-2 does not add a SQL migration. PR-3 touches the site dashboard add-member form, `src/dashboard.test.ts`, and `authenticated dashboard HTTP` in `src/mcp.test.ts`. PR-4 replaces join-as-member `bootstrapHousehold` and the SQL function body.
 - [ ] Hold the review gate. PR-1, PR-2, and PR-3 change an interaction. They wait for the operator's review in chat with screenshots and a video before merge.
 
 ### PR mechanics, for every PR
@@ -64,57 +64,61 @@ Each live lane runs on its own cloud VM at the PR head. Drive the site through `
 - [ ] Deliver site input only through `control-ui`. Deliver MCP only as HTTP POST to `/mcp` with a Bearer token. Read-only diagnostics are `GET /health` and the JSON-RPC error body.
 - [ ] Save every screenshot to `/tmp/swarm-<pr-id>/worker-<n>/<slug>.png` and return the paths with the report.
 
-## Close signup and create the household (PR-1)
+## Remove Google, close signup, and create the household (PR-1)
 
 **Depends on.** None. Branch from `main`.
 
 **Files.**
 
-- [ ] Edit `src/oauth.ts`. Count Auth users through a service-role helper before `signUpUser`. Allow `signUpUser` only when that count is zero. After the first user exists, `/approve` calls only `signInUser`. A wrong password must not fall through to signup. Do not add a join helper on this path. Login on trunk has no auto-join.
-- [ ] Edit `src/oauth.ts` Google callback. Before `signInWithGoogleIdToken`, if Auth already has a user, refuse a Google email that is not already an Auth user. New Google accounts must not be created after signup closes.
-- [ ] Edit `src/copy/login.ts` and locale files. Drop the automatic-account `newHereNote` after a user exists. Keep a sign-in-only note.
+- [ ] Delete Google login first. Remove `GET /authorize/google` and `GET /auth/google/callback` from `src/oauth.ts` and from `OAUTH_PATHS`. Remove `googleNonce` from the session type.
+- [ ] Delete `signInWithGoogleIdToken` from `src/supabase.ts`.
+- [ ] Edit `src/copy/login.ts` and locale files. Delete `googleButton`, `googleCancelled`, and `googleFailed`. Drop the automatic-account `newHereNote` after a user exists. Keep a sign-in-only note.
+- [ ] Edit `scripts/gen-login.ts`. Delete the Continue with Google control. Run `bun run gen:all`.
+- [ ] Delete `docs/google-auth-setup.md`. Remove `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` from `.env.example` and from `README.md`.
+- [ ] Edit `src/oauth.ts` `/approve`. Count Auth users through a service-role helper before `signUpUser`. Allow `signUpUser` only when that count is zero. After the first user exists, `/approve` calls only `signInUser`. A wrong password must not fall through to signup. Do not add a join helper on this path. Login on trunk has no auto-join.
 - [ ] Edit `src/dashboard.ts`. Trunk returns `forbiddenDashboardHtml` when `getHouseholdMembership` is null. If the cookie user has no membership and no household exists, show a create-household form instead of that 403. If a household exists and the user is not a member, keep the 403 empty state.
 - [ ] Edit `src/household.ts`. Add `createHousehold` that inserts the singleton household and the caller as owner in one step, and fails if a household already exists. Leave `bootstrapHousehold` in this PR. PR-4 deletes the join-as-member behavior.
 - [ ] Edit `src/supabase.ts`. Add a service-role call that creates the household plus the owner in one transaction. Add `authUserCount` via `auth.admin.listUsers` with `perPage` 1. Do not insert a member when a household already exists. Do not add `ensureHouseholdMembership`.
 - [ ] Create `supabase/migrations/YYYYMMDDHHMMSS_create_household.sql` with `supabase migration new create_household`. The function takes the caller user id, household name, and display name. It runs in one transaction. The same migration `REVOKE`s execute on `public.bootstrap_household` from `authenticated`.
-- [ ] Edit `src/oauth.test.ts`, `src/dashboard.test.ts`, `src/household.test.ts`, `src/mcp.test.ts`, and `src/public-site.test.ts` for the new behavior.
-- [ ] Run `bun run gen:all` after login copy edits.
-- [ ] Do not gate `POST /register`. That path is MCP client registration.
+- [ ] Edit `src/oauth.test.ts`, `src/alt-pages.test.ts`, `src/dashboard.test.ts`, `src/household.test.ts`, `src/mcp.test.ts`, and `src/public-site.test.ts`. Drop the Google href pin and the nonce-for-Google test.
+- [ ] Do not gate `POST /register`. That path is MCP client registration. Do not remove Google Fonts or the gtag CSP hosts. Those are not signup.
 
 **Build.**
 
+- [ ] Delete Google signup and Google sign-in from login. Do not keep a gated Google create path.
 - [ ] Do not add join-as-member on login or on `GET /`. Login on trunk has no auto-join. SQL `bootstrap_household` and `bootstrapHousehold` still join as member until later PRs. Discard any local uncommitted `ensureHouseholdMembership` patch.
 - [ ] Add `create_household` RPC and the site form that calls it for the first Auth user.
-- [ ] Reject public `signUpUser` and new Google Auth users once any Auth user exists. Sign-in of existing users stays.
+- [ ] Reject public `signUpUser` once any Auth user exists. Sign-in of existing email users stays.
 - [ ] `authenticated` cannot execute `bootstrap_household`.
 
 **You see.**
 
+- [ ] Login HTML has email and password only. There is no Continue with Google control.
 - [ ] First visit to `/` still shows login. After the first signup, a create-household form appears instead of widgets.
 - [ ] After create, the dashboard shows the owner display name and one household.
 - [ ] A second email on `/approve` does not create an Auth user and does not insert `household_members`.
-- [ ] A new Google continue after the first user exists does not create an Auth user.
+- [ ] `GET /authorize/google` and `GET /auth/google/callback` are 404, not `google_not_configured`.
 - [ ] Log line for the refused signup names `signup_closed` or the same error string the page shows.
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
 - [ ] `src/oauth.test.ts` gains a case that a second signup is refused, including a wrong-password sign-in that must not create a user.
-- [ ] `src/oauth.test.ts` gains a case that Google provisioning is refused when Auth already has a user.
+- [ ] `src/oauth.test.ts` and `src/alt-pages.test.ts` no longer expect `/authorize/google`, `googleButton`, or `OAUTH_PATHS` Google routes.
 - [ ] `src/household.test.ts` gains a case that a second `createHousehold` fails.
-- [ ] `src/mcp.test.ts` `authenticated dashboard HTTP` gains a case that a non-member sees 403 when a household already exists. Do not add an auto-join mock as the spec. Run `bun test src/oauth.test.ts src/household.test.ts src/dashboard.test.ts src/mcp.test.ts src/public-site.test.ts`.
+- [ ] `src/mcp.test.ts` `authenticated dashboard HTTP` gains a case that a non-member sees 403 when a household already exists. Do not add an auto-join mock as the spec. Run `bun test src/oauth.test.ts src/alt-pages.test.ts src/household.test.ts src/dashboard.test.ts src/mcp.test.ts src/public-site.test.ts`.
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.6-fast-xhigh` at the PR head, per the boot recipe.
 
 - [ ] Lane 1. Regression lane against trunk. Run a second email through `/approve` at trunk and at head. Trunk signs that email up. Record that. Gate that head refuses signup and writes no `household_members` row. Save `pr1-l1-regression.png`. Pass when head is refused and trunk is recorded.
 - [ ] Lane 2. Empty project. Register the first email at `/`. Save `pr1-l2-first-signup.png`. Pass when login succeeds and the create-household form is visible.
 - [ ] Lane 3. Submit create-household with a name and a display name. Save `pr1-l3-created.png`. Pass when the dashboard shows that display name as owner.
-- [ ] Lane 4. Open `/` in a fresh profile after the household exists. Save `pr1-l4-login-only.png`. Pass when the page is sign-in and does not promise automatic account creation.
+- [ ] Lane 4. Open `/` in a fresh profile after the household exists. Save `pr1-l4-login-only.png`. Pass when the page is sign-in, has no Continue with Google control, and does not promise automatic account creation.
 - [ ] Lane 5. POST `/approve` with a new email after the first user exists. Save `pr1-l5-second-signup.png`. Pass when status is 400 and Auth user count stays 1.
 - [ ] Lane 6. Sign in as the founder again. Save `pr1-l6-signin.png`. Pass when the dashboard loads without a second household row.
 - [ ] Lane 7. Call `create_household` a second time as the founder. Save `pr1-l7-second-create.png`. Pass when the call fails and `households` still has one row.
 - [ ] Lane 8. MCP OAuth for a new client_id after the household exists, with a new email. Save `pr1-l8-mcp-signup.png`. Pass when signup is refused and no member row appears.
 - [ ] Lane 9. Authenticated PostgREST RPC `bootstrap_household` with a user JWT after create-household. Save `pr1-l9-bootstrap.png`. Pass when execute is revoked or the call does not insert a member.
-- [ ] Lane 10. Google continue after the first user exists. Save `pr1-l10-google.png`. Pass when a new Google account is refused, or the body is `google_not_configured` when Google env is unset.
+- [ ] Lane 10. `GET /authorize/google` and `GET /auth/google/callback` at head, with and without `GOOGLE_*` set. Save `pr1-l10-google-gone.png`. Pass when both routes are 404.
 
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
@@ -125,8 +129,8 @@ Each live lane runs on its own cloud VM at the PR head. Drive the site through `
 
 **Review gate.** The operator reviews before merge.
 
-- [ ] Copy lane 2, lane 3, and lane 5 screenshots into `docs/handoff/media/pr1-review-signup.png`, `docs/handoff/media/pr1-review-created.png`, and `docs/handoff/media/pr1-review-closed.png`.
-- [ ] Record a 30 to 60 second video of first signup, create-household, and a refused second signup. Save it as `docs/handoff/media/pr1-review.mp4`.
+- [ ] Copy lane 2, lane 4, and lane 5 screenshots into `docs/handoff/media/pr1-review-signup.png`, `docs/handoff/media/pr1-review-login-only.png`, and `docs/handoff/media/pr1-review-closed.png`.
+- [ ] Record a 30 to 60 second video of first signup, create-household, and a refused second signup. Show that login has no Google control. Save it as `docs/handoff/media/pr1-review.mp4`.
 - [ ] Post the screenshots and the video in chat. Stop at merge-ready. Wait for the operator's click.
 
 **Merge.**
@@ -321,17 +325,17 @@ Each live lane runs on its own cloud VM at the PR head. Drive the site through `
 
 ## Appendix A. Prototype evidence
 
-No prototype branch. Product calls were settled in chat. Unproven items are the exact create-household field copy and whether the Google button stays on the login page after signup closes. New Google accounts are refused in PR-1.
+No prototype branch. Product calls were settled in chat. The remaining unproven item is the exact create-household field copy. Google signup is deleted in PR-1, not gated.
 
 ## Appendix B. Alternatives rejected
 
-Auto-join on login lost because a public URL would enroll strangers. Closing registration only after a household row exists lost because two people could register before either created the household. Invite tokens lost because the owner already creates Auth users through `add_household_member`. Autopilot-full lost because the operator wants to land the stack.
+Auto-join on login lost because a public URL would enroll strangers. Closing registration only after a household row exists lost because two people could register before either created the household. Invite tokens lost because the owner already creates Auth users through `add_household_member`. Gated Google signup lost because a refuse-new-accounts branch still leaves a public identity provider on the login page. Autopilot-full lost because the operator wants to land the stack.
 
 ## Appendix C. Risks
 
 PR-1 without PR-2 still lets a later member add people through MCP until PR-2 lands. Watch that the operator lands PR-2 next. A dedicated Supabase project is required for live lanes so production Auth users are not used. Trunk `GET /` is 403 until create-household exists. Local uncommitted auto-join on the operator machine will fight PR-1. Discard it.
 
-`/approve` on trunk signs up on any sign-in throw, including a wrong password. PR-1 must call `signUpUser` only when Auth is empty. `signInWithGoogleIdToken` provisions new users on trunk. Close that path in the same PR. `POST /register` is MCP client registration. Do not gate it.
+`/approve` on trunk signs up on any sign-in throw, including a wrong password. PR-1 must call `signUpUser` only when Auth is empty. `signInWithGoogleIdToken` provisions new users on trunk. Delete that function and the Google routes in the same PR. Do not keep sign-in-only Google. Nobody in this household is created through Google. `POST /register` is MCP client registration. Do not gate it.
 
 SQL `bootstrap_household` is granted to `authenticated` on trunk and joins as member. PR-1 revokes that grant. PR-4 removes the join body. Login on trunk has no auto-join. The TS helper `bootstrapHousehold` still joins as member until PR-4.
 
@@ -341,4 +345,4 @@ Login password UI is `minlength=6`. `addHouseholdMember` requires 8. Keep those 
 
 ## Appendix D. Links and reading list
 
-Read `src/oauth.ts`, `src/dashboard.ts`, `src/household.ts`, `src/mcp.ts`, `src/supabase.ts`, and `supabase/migrations/20260919*.sql` before editing. PR-1 and PR-2 get `pstack/skills/how/SKILL.md` and `pstack/skills/interrogate/SKILL.md` before merge-ready. Keep a local `decisions.tsv` per `pstack/skills/show-me-your-work/SKILL.md`. Do not commit the trail.
+Read `src/oauth.ts`, `src/copy/login.ts`, `scripts/gen-login.ts`, `docs/google-auth-setup.md`, `src/dashboard.ts`, `src/household.ts`, `src/mcp.ts`, `src/supabase.ts`, and `supabase/migrations/20260919*.sql` before editing. PR-1 and PR-2 get `pstack/skills/how/SKILL.md` and `pstack/skills/interrogate/SKILL.md` before merge-ready. Keep a local `decisions.tsv` per `pstack/skills/show-me-your-work/SKILL.md`. Do not commit the trail.
