@@ -8,17 +8,24 @@ import {
 } from "./dashboard-data.js";
 import {
     alcoholTrackingEnabledFromProfile,
+    getHouseholdConfig,
     getHouseholdMembership,
     getProfile,
     householdExists,
     listHouseholdMembers,
     liveFridgeStore,
+    liveRulesStore,
+    liveSettingsStore,
+    localeFromProfile,
     preferredDrinkUnitFromProfile,
+    preferredWeightUnitFromProfile,
+    widgetsEnabledFromProfile,
 } from "./supabase.js";
 import { renderGroceryStub } from "./app/grocery-stub.js";
 import { renderRecipesStub } from "./app/recipes-stub.js";
-import { renderSettingsStub } from "./app/settings-stub.js";
 import { renderFridgePage } from "./app/fridge/page.js";
+import { renderSettingsPage } from "./app/settings/page.js";
+import { renderHouseholdSettingsPage } from "./app/settings/household.js";
 import { listFridge } from "./fridge.js";
 import {
     renderNutritionPage,
@@ -64,26 +71,6 @@ export function createHouseholdFormHtml(error?: string): string {
             <button type="submit">Create household</button>
         </form>`,
     );
-}
-
-function addMemberFormHtml(error?: string): string {
-    return `<form method="POST" action="/add-household-member" class="add-member">
-            <h2 class="section-title">Add household member</h2>
-            ${formErrorHtml(error)}
-            <label for="add_display_name">Name</label>
-            <input id="add_display_name" name="display_name" required maxlength="80" />
-            <label for="add_password">Password</label>
-            <input id="add_password" name="password" type="password" required />
-            <label for="add_email">Email</label>
-            <input id="add_email" name="email" type="email" />
-            <label for="add_username">Username</label>
-            <input id="add_username" name="username" autocomplete="username" />
-            <button type="submit">Add member</button>
-        </form>`;
-}
-
-export function addMemberErrorHtml(error: string): string {
-    return renderBare("Add household member", addMemberFormHtml(error));
 }
 
 export async function renderDashboardHtml(
@@ -182,9 +169,9 @@ export async function renderFridgeInventoryPage(
     };
 }
 
-export async function renderStubPage(
+export async function renderSettingsAccountPage(
     viewerUserId: string,
-    tab: Exclude<AppTabId, "nutrition" | "fridge">,
+    error?: string,
 ): Promise<{ status: 200 | 403; html: string }> {
     const gate = await memberGate(viewerUserId);
     if ("html" in gate) return { status: gate.status, html: gate.html };
@@ -193,13 +180,83 @@ export async function renderStubPage(
     const swatch = isAccentSwatch(profile?.accent_swatch)
         ? profile.accent_swatch
         : null;
+    return {
+        status: 200,
+        html: renderSettingsPage({
+            chrome,
+            selectedSwatch: swatch,
+            displayName: gate.viewer.displayName,
+            timezone: profile?.timezone ?? "",
+            locale: localeFromProfile(profile) ?? "en",
+            weightUnit: preferredWeightUnitFromProfile(profile) ?? "",
+            widgetsEnabled: widgetsEnabledFromProfile(profile),
+            alcoholTrackingEnabled: alcoholTrackingEnabledFromProfile(profile),
+            drinkUnit: preferredDrinkUnitFromProfile(profile) ?? "",
+            error,
+        }),
+    };
+}
+
+export async function renderHouseholdSettingsRoute(
+    viewerUserId: string,
+    opts: { error?: string; issuedToken?: string } = {},
+): Promise<{ status: 200 | 403; html: string }> {
+    const gate = await memberGate(viewerUserId);
+    if ("html" in gate) return { status: gate.status, html: gate.html };
+    const profile = await getProfile(viewerUserId);
+    const householdId = gate.viewer.householdId;
+    const [config, members, location, stores] = await Promise.all([
+        getHouseholdConfig(householdId),
+        listHouseholdMembers(householdId),
+        liveSettingsStore().getLocation(householdId),
+        liveSettingsStore().listStores(householdId),
+    ]);
+    const settings = liveSettingsStore();
+    const rules = liveRulesStore();
+    const storeViews = await Promise.all(
+        stores.map(async (store) => ({
+            ...store,
+            sections: await settings.listSections(store.id),
+            rules: await rules.listStoreRules(store.id),
+        })),
+    );
+    const memberRules = await Promise.all(
+        members.map(async (member) => ({
+            member,
+            rules: await rules.listPersonRules(householdId, member.userId),
+            allergens: await rules.listAllergens(householdId, member.userId),
+            dislikes: await rules.listDislikes(householdId, member.userId),
+        })),
+    );
+    return {
+        status: 200,
+        html: renderHouseholdSettingsPage({
+            chrome: viewerChromeFromProfile(profile),
+            householdName: config.name,
+            location: location ?? "",
+            members,
+            stores: storeViews,
+            memberRules,
+            isOwner: gate.viewer.role === "owner",
+            error: opts.error,
+            issuedToken: opts.issuedToken,
+        }),
+    };
+}
+
+export async function renderStubPage(
+    viewerUserId: string,
+    tab: Exclude<AppTabId, "nutrition" | "fridge" | "settings">,
+): Promise<{ status: 200 | 403; html: string }> {
+    const gate = await memberGate(viewerUserId);
+    if ("html" in gate) return { status: gate.status, html: gate.html };
+    const profile = await getProfile(viewerUserId);
+    const chrome = viewerChromeFromProfile(profile);
     switch (tab) {
         case "grocery":
             return { status: 200, html: renderGroceryStub(chrome) };
         case "recipes":
             return { status: 200, html: renderRecipesStub(chrome) };
-        case "settings":
-            return { status: 200, html: renderSettingsStub(chrome, swatch) };
     }
 }
 
