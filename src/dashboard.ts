@@ -17,6 +17,7 @@ import {
     getHouseholdConfig,
     getHouseholdMembership,
     getProfile,
+    householdExists,
     listHouseholdMembers,
     preferredDrinkUnitFromProfile,
 } from "./supabase.js";
@@ -51,6 +52,28 @@ export function forbiddenDashboardHtml(): string {
     return renderBare(
         "Household",
         '<p class="empty">You need a household membership to view this dashboard.</p>',
+    );
+}
+
+export function createHouseholdFormHtml(error?: string): string {
+    const errorHtml = error
+        ? `<div class="error-banner">${escapeHtml(error)}</div>`
+        : "";
+    return renderBare(
+        "Create household",
+        `<header class="dash-head">
+            <p class="eyebrow">Household</p>
+            <h1>Create household</h1>
+            <p class="logout"><a href="/logout">Log out</a></p>
+        </header>
+        <form method="POST" action="/create-household" class="create-household">
+            ${errorHtml}
+            <label for="household_name">Household name</label>
+            <input id="household_name" name="household_name" required maxlength="80" />
+            <label for="display_name">Your name</label>
+            <input id="display_name" name="display_name" required maxlength="80" />
+            <button type="submit">Create household</button>
+        </form>`,
     );
 }
 
@@ -109,12 +132,19 @@ export async function renderDashboardPage(
     requestedMember: string | undefined,
 ): Promise<{ status: 200 | 403; html: string }> {
     const viewer = await getHouseholdMembership(viewerUserId);
+    if (viewer == null) {
+        if (!(await householdExists())) {
+            return { status: 200, html: createHouseholdFormHtml() };
+        }
+        return { status: 403, html: forbiddenDashboardHtml() };
+    }
     let subject = viewer;
     if (requestedMember && requestedMember !== viewerUserId) {
-        subject = await getHouseholdMembership(requestedMember);
-        if (subject == null) {
+        const requested = await getHouseholdMembership(requestedMember);
+        if (requested == null) {
             return { status: 403, html: forbiddenDashboardHtml() };
         }
+        subject = requested;
     }
     const access = dashboardAccess(viewer, subject);
     if (!access.ok) {
@@ -168,6 +198,9 @@ function renderBare(title: string, body: string): string {
         .widget-frame { display: block; width: min(720px, 100%); margin: 0 auto 16px; border: 0; min-height: 280px; }
         .logout { margin-top: 16px; }
         .empty { max-width: 720px; margin: 48px auto; padding: 0 16px; }
+        .create-household { max-width: 720px; margin: 0 auto 32px; padding: 0 16px; display: grid; gap: 8px; }
+        .create-household input, .create-household button { font: inherit; padding: 8px; }
+        .error-banner { margin: 0 0 8px; }
         .facts { max-width: 720px; margin: 0 auto 32px; padding: 0 16px; }
         .facts-row { display: flex; justify-content: space-between; border-top: 1px solid var(--rule, #222); padding: 8px 0; }
     </style>

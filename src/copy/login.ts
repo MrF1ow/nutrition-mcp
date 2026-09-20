@@ -25,8 +25,6 @@ import { LOGIN_JA, LOGIN_ERRORS_JA } from "./login.ja.js";
 export interface LoginDoc {
     title: string;
     subtitle: string;
-    googleButton: string;
-    dividerText: string;
     emailLabel: string;
     passwordLabel: string;
     continueButton: string;
@@ -40,26 +38,13 @@ export interface LoginDoc {
     afterConnectNote: string;
 }
 
-/**
- * The two hardcoded Google-flow error strings from src/oauth.ts are
- * translated here too (a small, fully controlled set) — but an error
- * surfaced from Supabase Auth itself (e.g. "Invalid login credentials") is
- * NOT: it's third-party response text with no stable error code to key a
- * translation table on, and guessing at its wording would silently break
- * the moment Supabase changes it. Those errors stay in English across
- * every locale; translating them reliably would need a real error-code
- * mapping layer, which is out of scope for translating the page copy.
- */
 export interface LoginErrors {
-    googleCancelled: string;
-    googleFailed: string;
+    signupClosed: string;
 }
 
 const EN: LoginDoc = {
     title: "Nutrition MCP",
     subtitle: "Sign in to connect",
-    googleButton: "Continue with Google",
-    dividerText: "or use email",
     emailLabel: "Email",
     passwordLabel: "Password",
     continueButton: "Continue",
@@ -67,8 +52,7 @@ const EN: LoginDoc = {
         "By continuing you confirm you're at least 16 and agree to the {terms} and {privacy}.",
     termsLinkText: "Terms of Service",
     privacyLinkText: "Privacy Policy",
-    newHereNote:
-        "New here? Just enter your email and password — an account will be created automatically.",
+    newHereNote: "Sign in with the email and password for this household.",
     afterConnectNote:
         "After successful connection in your client, save your password somewhere and close this browser tab.",
 };
@@ -87,8 +71,7 @@ export const LOGIN: Record<SiteLocale, LoginDoc> = {
 
 export const LOGIN_ERRORS: Record<SiteLocale, LoginErrors> = {
     en: {
-        googleCancelled: "Google sign-in was cancelled. Please try again.",
-        googleFailed: "Google sign-in failed. Please try again.",
+        signupClosed: "Sign-up is closed. Sign in with an existing account.",
     },
     de: LOGIN_ERRORS_DE,
     es: LOGIN_ERRORS_ES,

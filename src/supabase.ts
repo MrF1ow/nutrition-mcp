@@ -9,6 +9,7 @@ import {
     addHouseholdMember,
     householdConfigFromRow,
     householdConfigToColumns,
+    HouseholdAlreadyExistsError,
     type AddMemberResult,
     type AddMemberRpc,
     type AuthUserAdmin,
@@ -79,20 +80,16 @@ export async function signInUser(
     return data.user.id;
 }
 
-export async function signInWithGoogleIdToken(
-    idToken: string,
-    nonce: string,
-): Promise<string> {
-    // Use a throw-away client so the session never lands on the shared singleton.
-    const { data, error } = await buildClient().auth.signInWithIdToken({
-        provider: "google",
-        token: idToken,
-        nonce,
+export async function authUserCount(): Promise<number> {
+    const { data, error } = await getSupabase().auth.admin.listUsers({
+        page: 1,
+        perPage: 1,
     });
-
     if (error) throw new Error(error.message);
-    if (!data.user) throw new Error("Google sign-in failed");
-    return data.user.id;
+    if ("total" in data && typeof data.total === "number") {
+        return data.total;
+    }
+    return data.users.length;
 }
 
 // ---------- Idempotency ----------
@@ -1538,6 +1535,40 @@ export async function getHouseholdMembership(
     }
     if (!data) return null;
     return membershipFromRow(data);
+}
+
+export async function householdExists(): Promise<boolean> {
+    const { data, error } = await getSupabase()
+        .from("households")
+        .select("id")
+        .limit(1)
+        .maybeSingle();
+    if (error) {
+        throw new Error(`Failed to load household: ${error.message}`);
+    }
+    return data != null;
+}
+
+export async function createHouseholdForCaller(
+    userId: string,
+    name: string,
+    displayName: string,
+): Promise<string> {
+    const { data, error } = await getSupabase().rpc("create_household", {
+        p_user_id: userId,
+        p_name: name,
+        p_display_name: displayName,
+    });
+    if (error) {
+        if (error.message.toLowerCase().includes("household already exists")) {
+            throw new HouseholdAlreadyExistsError();
+        }
+        throw new Error(error.message);
+    }
+    if (typeof data !== "string" || data.length === 0) {
+        throw new Error("Could not create the household.");
+    }
+    return data;
 }
 
 function membershipFromRow(data: {

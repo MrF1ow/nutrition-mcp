@@ -1,6 +1,6 @@
 import { test, expect } from "bun:test";
 import { withWidgetData } from "./widgets.js";
-import { renderDashboardHtml } from "./dashboard.js";
+import { createHouseholdFormHtml, renderDashboardHtml } from "./dashboard.js";
 import type { HouseholdMember } from "./household.js";
 
 const alice: HouseholdMember = {
@@ -72,4 +72,14 @@ test("peer dashboard is read-only and names the subject", async () => {
     expect(html).toContain('href="/"');
     expect(html).toContain(`aria-current="page"`);
     expect(html).not.toContain('action="/approve"');
+});
+
+test("create-household form posts name fields and has no widgets", () => {
+    const html = createHouseholdFormHtml();
+    expect(html).toContain('action="/create-household"');
+    expect(html).toContain('name="household_name"');
+    expect(html).toContain('name="display_name"');
+    expect(html).toContain("<h1>Create household</h1>");
+    expect(html).not.toContain("<iframe");
+    expect(html).toContain('href="/logout"');
 });

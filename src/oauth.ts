@@ -6,7 +6,7 @@ import {
     consumeAuthCode,
     signUpUser,
     signInUser,
-    signInWithGoogleIdToken,
+    authUserCount,
     storeRefreshToken,
     consumeRefreshToken,
     registerClient,
@@ -20,7 +20,7 @@ import {
     TRANSLATION_NOTICE,
     type SiteLocale,
 } from "./routes.js";
-import { LOGIN_ERRORS, type LoginErrors } from "./copy/login.js";
+import { LOGIN_ERRORS } from "./copy/login.js";
 import { chromeFor } from "./copy/chrome.js";
 import { mintSiteSession, siteCookieHeader } from "./site-session.js";
 
@@ -31,13 +31,9 @@ interface OAuthSession {
     redirectUri: string;
     codeChallenge?: string;
     clientId: string;
-    // Raw nonce for an in-flight Google sign-in; the hashed form is sent to
-    // Google and the raw value is handed to signInWithIdToken on callback.
-    googleNonce?: string;
     // Chosen once when the session is created (or via the switcher) and
-    // reused for every re-render of this same flow (a password or
-    // Google-sign-in failure) so an error doesn't silently snap the page
-    // back to English.
+    // reused for every re-render of this same flow (a password failure)
+    // so an error doesn't silently snap the page back to English.
     locale: SiteLocale;
     purpose: "mcp" | "site";
 }
@@ -221,14 +217,36 @@ async function finishAuthorization(
     return c.redirect(redirectUrl.toString());
 }
 
+export async function resolveApproveUser(args: {
+    email: string;
+    password: string;
+    authUserCount: () => Promise<number>;
+    signInUser: (email: string, password: string) => Promise<string>;
+    signUpUser: (email: string, password: string) => Promise<string>;
+    signupClosedMessage: string;
+}): Promise<string> {
+    const count = await args.authUserCount();
+    if (count === 0) {
+        try {
+            return await args.signInUser(args.email, args.password);
+        } catch {
+            return await args.signUpUser(args.email, args.password);
+        }
+    }
+    try {
+        return await args.signInUser(args.email, args.password);
+    } catch {
+        console.warn("signup_closed");
+        throw new Error(args.signupClosedMessage);
+    }
+}
+
 // Every path this router serves. Kept in sync with the oauth.get/oauth.post
 // registrations below — a route added there but missing here is unthrottled.
 export const OAUTH_PATHS = [
     "/register",
     "/authorize",
     "/approve",
-    "/authorize/google",
-    "/auth/google/callback",
     "/token",
 ] as const;
 
@@ -330,7 +348,6 @@ export function createOAuthRouter() {
         const sessionId = body.session_id as string;
         const email = (body.email as string)?.trim().toLowerCase();
         const password = body.password as string;
-        const action = body.action as string;
 
         if (!sessionId || !email || !password) {
             return c.json({ error: "invalid_request" }, 400);
@@ -344,12 +361,15 @@ export function createOAuthRouter() {
 
         let userId: string;
         try {
-            // Try sign-in first; if user doesn't exist, sign them up
-            try {
-                userId = await signInUser(email, password);
-            } catch {
-                userId = await signUpUser(email, password);
-            }
+            userId = await resolveApproveUser({
+                email,
+                password,
+                authUserCount,
+                signInUser,
+                signUpUser,
+                signupClosedMessage:
+                    LOGIN_ERRORS[entry.session.locale].signupClosed,
+            });
         } catch (err: unknown) {
             const message =
                 err instanceof Error ? err.message : "Authentication failed";
@@ -360,144 +380,6 @@ export function createOAuthRouter() {
         }
 
         return finishAuthorization(c, sessionId, entry.session, userId);
-    });
-
-    // Google sign-in — step 1: redirect the user to Google's consent screen.
-    // We run the Google OAuth dance ourselves (rather than Supabase's PKCE
-    // redirect flow) so nothing needs to persist across requests beyond the
-    // existing in-memory session.
-    oauth.get("/authorize/google", async (c) => {
-        const googleClientId = process.env.GOOGLE_CLIENT_ID;
-        const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
-        if (!googleClientId || !googleClientSecret) {
-            return c.json({ error: "google_not_configured" }, 500);
-        }
-
-        const sessionId = c.req.query("session_id");
-        if (!sessionId) {
-            return c.json({ error: "invalid_request" }, 400);
-        }
-
-        cleanExpiredSessions();
-        const entry = sessions.get(sessionId);
-        if (!entry || entry.expiresAt < Date.now()) {
-            sessions.delete(sessionId);
-            return c.json({ error: "session_expired" }, 400);
-        }
-
-        // Fresh nonce per attempt. Supabase expects the SHA-256 *hex* digest sent
-        // to the provider and the raw value handed to signInWithIdToken.
-        const rawNonce = crypto.randomUUID();
-        const hashedNonce = crypto
-            .createHash("sha256")
-            .update(rawNonce)
-            .digest("hex");
-        entry.session.googleNonce = rawNonce;
-
-        const googleUrl = new URL(
-            "https://accounts.google.com/o/oauth2/v2/auth",
-        );
-        googleUrl.searchParams.set("client_id", googleClientId);
-        googleUrl.searchParams.set(
-            "redirect_uri",
-            `${getBaseUrl(c)}/auth/google/callback`,
-        );
-        googleUrl.searchParams.set("response_type", "code");
-        googleUrl.searchParams.set("scope", "openid email profile");
-        googleUrl.searchParams.set("state", sessionId);
-        googleUrl.searchParams.set("nonce", hashedNonce);
-        googleUrl.searchParams.set("prompt", "select_account");
-
-        return c.redirect(googleUrl.toString());
-    });
-
-    // Google sign-in — step 2: Google redirects back here. Exchange the code for
-    // an ID token (back-channel), trade it with Supabase for a user, then mint
-    // our authorization code exactly like the password path.
-    oauth.get("/auth/google/callback", async (c) => {
-        const sessionId = c.req.query("state");
-        if (!sessionId) {
-            return c.json({ error: "invalid_request" }, 400);
-        }
-
-        cleanExpiredSessions();
-        const entry = sessions.get(sessionId);
-        if (!entry || entry.expiresAt < Date.now()) {
-            sessions.delete(sessionId);
-            return c.json({ error: "session_expired" }, 400);
-        }
-
-        // Surface user-cancelled / denied consent without treating it as a
-        // crash. Translated via LOGIN_ERRORS in the session's own locale
-        // rather than a raw message, so every call site below gets the
-        // right language for free. No English fallback: LOGIN_ERRORS is a
-        // total Record<SiteLocale, LoginErrors> now, so every locale a
-        // session can carry has an entry and missing one is a typecheck
-        // failure, not a runtime undefined.
-        const renderError = async (kind: keyof LoginErrors) => {
-            entry.session.googleNonce = undefined;
-            const message = LOGIN_ERRORS[entry.session.locale][kind];
-            return c.html(
-                await renderLoginPage(sessionId, entry.session, message),
-                400,
-            );
-        };
-
-        if (c.req.query("error")) {
-            return renderError("googleCancelled");
-        }
-
-        const code = c.req.query("code");
-        const rawNonce = entry.session.googleNonce;
-        // googleNonce is only set by /authorize/google, so its absence means this
-        // callback didn't originate from a flow we started.
-        if (!code || !rawNonce) {
-            return renderError("googleFailed");
-        }
-
-        const googleClientId = process.env.GOOGLE_CLIENT_ID;
-        const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
-        if (!googleClientId || !googleClientSecret) {
-            return c.json({ error: "google_not_configured" }, 500);
-        }
-
-        try {
-            const tokenRes = await fetch(
-                "https://oauth2.googleapis.com/token",
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/x-www-form-urlencoded",
-                    },
-                    body: new URLSearchParams({
-                        code,
-                        client_id: googleClientId,
-                        client_secret: googleClientSecret,
-                        // Must byte-match the redirect_uri sent in /authorize/google.
-                        redirect_uri: `${getBaseUrl(c)}/auth/google/callback`,
-                        grant_type: "authorization_code",
-                    }),
-                },
-            );
-
-            if (!tokenRes.ok) {
-                return renderError("googleFailed");
-            }
-
-            const tokenData = (await tokenRes.json()) as { id_token?: string };
-            if (!tokenData.id_token) {
-                return renderError("googleFailed");
-            }
-
-            const userId = await signInWithGoogleIdToken(
-                tokenData.id_token,
-                rawNonce,
-            );
-
-            return finishAuthorization(c, sessionId, entry.session, userId);
-        } catch {
-            return renderError("googleFailed");
-        }
     });
 
     // Token endpoint

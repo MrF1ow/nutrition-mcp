@@ -17,8 +17,6 @@ test("every locale has a built login page, in its own language", async () => {
         const html = collapse(await Bun.file(path).text());
         for (const line of [
             doc.subtitle,
-            doc.googleButton,
-            doc.dividerText,
             doc.emailLabel,
             doc.passwordLabel,
             doc.continueButton,
@@ -49,6 +47,10 @@ test("every locale has a built login page, in its own language", async () => {
         expect(html).not.toMatch(/class="brand"[^>]*href="\/"/);
         expect(html).toContain("{{LANG_SWITCHER}}");
         expect(html).toContain("theme-switch");
+        expect(html).not.toContain("/authorize/google");
+        expect(html).not.toContain("auth-btn-google");
+        expect(html).not.toContain("created automatically");
+        expect(html).not.toContain("Konto wird automatisch");
     }
 });
 
@@ -72,15 +74,12 @@ test("every login page keeps its four runtime placeholders", async () => {
     }
 });
 
-test("every locale's Google sign-in errors are translated", () => {
+test("every locale's closed-signup error is translated", () => {
     for (const locale of SITE_LOCALES) {
         if (locale === "en") continue;
-        const errors = LOGIN_ERRORS[locale];
-        for (const kind of ["googleCancelled", "googleFailed"] as const) {
-            expect(
-                `${locale}.${kind}: ${errors[kind] === LOGIN_ERRORS.en[kind]}`,
-            ).toBe(`${locale}.${kind}: false`);
-        }
+        expect(
+            `${locale}.signupClosed: ${LOGIN_ERRORS[locale].signupClosed === LOGIN_ERRORS.en.signupClosed}`,
+        ).toBe(`${locale}.signupClosed: false`);
     }
 });
 
