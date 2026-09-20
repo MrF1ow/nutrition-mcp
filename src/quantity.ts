@@ -12,11 +12,14 @@ export type VolumeUnit = "ml" | "fl oz" | "cup";
 export type CountUnit = "each";
 export type QuantityUnit = MassUnit | VolumeUnit | CountUnit;
 
-export type Quantity = {
+export type MassQuantity = { amount: number; unit: MassUnit };
+export type VolumeQuantity = { amount: number; unit: VolumeUnit };
+export type CountQuantity = {
     amount: number;
-    unit: QuantityUnit;
+    unit: CountUnit;
     gramsPerEach?: number;
 };
+export type Quantity = MassQuantity | VolumeQuantity | CountQuantity;
 
 const MASS_UNITS = new Set<string>(["g", "oz", "lb"]);
 const VOLUME_UNITS = new Set<string>(["ml", "fl oz", "cup"]);
@@ -57,7 +60,10 @@ export function parseQuantity(raw: string): Quantity {
     if (!isQuantityUnit(unit)) {
         throw new Error(`Unknown quantity unit: ${unit}`);
     }
-    return { amount, unit };
+    const dim = dimensionOf(unit);
+    if (dim === "mass") return { amount, unit: unit as MassUnit };
+    if (dim === "volume") return { amount, unit: unit as VolumeUnit };
+    return { amount, unit: "each" };
 }
 
 export function formatQuantity(q: Quantity): string {
@@ -75,11 +81,15 @@ export function convertQuantity(q: Quantity, to: QuantityUnit): Quantity {
     const fromDim = dimensionOf(q.unit);
     const toDim = dimensionOf(to);
     if (fromDim !== toDim) {
-        throw new Error(`Cannot convert ${q.unit} (${fromDim}) to ${to} (${toDim})`);
+        throw new Error(
+            `Cannot convert ${q.unit} (${fromDim}) to ${to} (${toDim})`,
+        );
     }
-    if (fromDim === "count" && q.unit === to) {
-        return { amount: q.amount, unit: to, gramsPerEach: q.gramsPerEach };
+    if (q.unit === "each" && to === "each") {
+        return { amount: q.amount, unit: "each", gramsPerEach: q.gramsPerEach };
     }
     const canonical = q.amount * TO_CANONICAL[q.unit];
-    return { amount: roundAmount(canonical / TO_CANONICAL[to]), unit: to };
+    const amount = roundAmount(canonical / TO_CANONICAL[to]);
+    if (toDim === "mass") return { amount, unit: to as MassUnit };
+    return { amount, unit: to as VolumeUnit };
 }
