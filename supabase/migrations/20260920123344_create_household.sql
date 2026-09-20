@@ -58,6 +58,8 @@ end;
 $$;
 
 revoke all on function public.create_household(uuid, text, text) from public;
+revoke all on function public.create_household(uuid, text, text) from anon;
+revoke all on function public.create_household(uuid, text, text) from authenticated;
 grant execute on function public.create_household(uuid, text, text) to service_role;
 
 revoke execute on function public.bootstrap_household(text, text) from authenticated;
