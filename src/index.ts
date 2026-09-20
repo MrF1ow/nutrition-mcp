@@ -1,7 +1,12 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { bodyLimit } from "hono/body-limit";
-import { createOAuthRouter, beginSiteLogin } from "./oauth.js";
+import { beginSiteLogin, createOAuthRouter } from "./oauth.js";
+import {
+    createHouseholdFormHtml,
+    forbiddenDashboardHtml,
+    renderDashboardPage,
+} from "./dashboard.js";
 import {
     authenticateBearer,
     rateLimit,
@@ -12,12 +17,13 @@ import { startExportCleanup } from "./export.js";
 import { registerDiscoveryRoutes } from "./discovery.js";
 import { maskIp } from "./net.js";
 import { warmWidgets } from "./widgets.js";
-import { renderDashboardPage } from "./dashboard.js";
 import {
     clearSiteCookieHeader,
     readSiteSession,
     SITE_COOKIE,
 } from "./site-session.js";
+import { HouseholdAlreadyExistsError } from "./household.js";
+import { createHouseholdForCaller } from "./supabase.js";
 
 const app = new Hono();
 
@@ -212,6 +218,33 @@ app.get("/", async (c) => {
     if (!userId) return beginSiteLogin(c, c.req.query("locale"));
     const page = await renderDashboardPage(userId, c.req.query("member"));
     return c.html(page.html, page.status);
+});
+
+app.post("/create-household", async (c) => {
+    const userId = siteUserId(c.req.header("cookie"));
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    const body = await c.req.parseBody();
+    const name = String(body.household_name ?? "").trim();
+    const displayName = String(body.display_name ?? "").trim();
+    if (!name || !displayName) {
+        return c.html(
+            createHouseholdFormHtml("Enter a household name and your name."),
+            400,
+        );
+    }
+    try {
+        await createHouseholdForCaller(userId, name, displayName);
+    } catch (err) {
+        if (err instanceof HouseholdAlreadyExistsError) {
+            return c.html(forbiddenDashboardHtml(), 403);
+        }
+        const message =
+            err instanceof Error
+                ? err.message
+                : "Could not create the household.";
+        return c.html(createHouseholdFormHtml(message), 400);
+    }
+    return c.redirect("/");
 });
 
 app.get("/logout", (c) => {

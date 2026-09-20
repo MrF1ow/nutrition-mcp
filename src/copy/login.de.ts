@@ -1,4 +1,4 @@
-import type { LoginDoc } from "./login.js";
+import type { LoginDoc, LoginErrors } from "./login.js";
 
 export const LOGIN_DE: LoginDoc = {
     title: "Nutrition MCP",
@@ -11,7 +11,12 @@ export const LOGIN_DE: LoginDoc = {
     termsLinkText: "Nutzungsbedingungen",
     privacyLinkText: "Datenschutzerklärung",
     newHereNote:
-        "Neu hier? Gib einfach deine E-Mail-Adresse und ein Passwort ein — ein Konto wird automatisch erstellt.",
+        "Melde dich mit der E-Mail-Adresse und dem Passwort für diesen Haushalt an.",
     afterConnectNote:
         "Speichere dein Passwort nach erfolgreicher Verbindung in deinem Client an einem sicheren Ort und schließe diesen Browser-Tab.",
+};
+
+export const LOGIN_ERRORS_DE: LoginErrors = {
+    signupClosed:
+        "Die Registrierung ist geschlossen. Melde dich mit einem bestehenden Konto an.",
 };

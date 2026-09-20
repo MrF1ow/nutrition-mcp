@@ -6,6 +6,7 @@ import {
     consumeAuthCode,
     signUpUser,
     signInUser,
+    authUserCount,
     storeRefreshToken,
     consumeRefreshToken,
     registerClient,
@@ -19,6 +20,7 @@ import {
     TRANSLATION_NOTICE,
     type SiteLocale,
 } from "./routes.js";
+import { LOGIN_ERRORS } from "./copy/login.js";
 import { chromeFor } from "./copy/chrome.js";
 import { mintSiteSession, siteCookieHeader } from "./site-session.js";
 
@@ -215,6 +217,30 @@ async function finishAuthorization(
     return c.redirect(redirectUrl.toString());
 }
 
+export async function resolveApproveUser(args: {
+    email: string;
+    password: string;
+    authUserCount: () => Promise<number>;
+    signInUser: (email: string, password: string) => Promise<string>;
+    signUpUser: (email: string, password: string) => Promise<string>;
+    signupClosedMessage: string;
+}): Promise<string> {
+    const count = await args.authUserCount();
+    if (count === 0) {
+        try {
+            return await args.signInUser(args.email, args.password);
+        } catch {
+            return await args.signUpUser(args.email, args.password);
+        }
+    }
+    try {
+        return await args.signInUser(args.email, args.password);
+    } catch {
+        console.warn("signup_closed");
+        throw new Error(args.signupClosedMessage);
+    }
+}
+
 // Every path this router serves. Kept in sync with the oauth.get/oauth.post
 // registrations below — a route added there but missing here is unthrottled.
 export const OAUTH_PATHS = [
@@ -322,7 +348,6 @@ export function createOAuthRouter() {
         const sessionId = body.session_id as string;
         const email = (body.email as string)?.trim().toLowerCase();
         const password = body.password as string;
-        const action = body.action as string;
 
         if (!sessionId || !email || !password) {
             return c.json({ error: "invalid_request" }, 400);
@@ -336,12 +361,15 @@ export function createOAuthRouter() {
 
         let userId: string;
         try {
-            // Try sign-in first; if user doesn't exist, sign them up
-            try {
-                userId = await signInUser(email, password);
-            } catch {
-                userId = await signUpUser(email, password);
-            }
+            userId = await resolveApproveUser({
+                email,
+                password,
+                authUserCount,
+                signInUser,
+                signUpUser,
+                signupClosedMessage:
+                    LOGIN_ERRORS[entry.session.locale].signupClosed,
+            });
         } catch (err: unknown) {
             const message =
                 err instanceof Error ? err.message : "Authentication failed";

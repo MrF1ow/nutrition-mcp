@@ -1,4 +1,4 @@
-import type { LoginDoc } from "./login.js";
+import type { LoginDoc, LoginErrors } from "./login.js";
 
 export const LOGIN_UK: LoginDoc = {
     title: "Nutrition MCP",
@@ -13,7 +13,11 @@ export const LOGIN_UK: LoginDoc = {
     termsLinkText: "Умовами використання",
     privacyLinkText: "Політикою приватності",
     newHereNote:
-        "Уперше тут? Просто введи свою електронну пошту та пароль — обліковий запис створиться автоматично.",
+        "Увійди з електронною поштою та паролем цього домогосподарства.",
     afterConnectNote:
         "Після успішного підключення у твоєму клієнті збережи пароль у надійному місці й закрий цю вкладку браузера.",
+};
+
+export const LOGIN_ERRORS_UK: LoginErrors = {
+    signupClosed: "Реєстрацію закрито. Увійди з наявним обліковим записом.",
 };

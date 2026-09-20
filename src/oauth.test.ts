@@ -1,6 +1,11 @@
 import { test, expect } from "bun:test";
 import { Hono } from "hono";
-import { OAUTH_PATHS, createOAuthRouter, renderLoginPage } from "./oauth.js";
+import {
+    OAUTH_PATHS,
+    createOAuthRouter,
+    renderLoginPage,
+    resolveApproveUser,
+} from "./oauth.js";
 import { _resetBuckets } from "./rate-limit.js";
 
 // createOAuthRouter() refuses to build without these; the values are never
@@ -91,6 +96,79 @@ test("renderLoginPage serves the requested locale's template when it exists", as
 
     const de = await renderLoginPage("s1", fakeSession("de"));
     expect(de).toContain('<html lang="de">');
+});
+
+test("first Auth user may sign up after a failed sign-in", async () => {
+    let signUps = 0;
+    const userId = await resolveApproveUser({
+        email: "founder@example.com",
+        password: "secret12",
+        authUserCount: async () => 0,
+        signInUser: async () => {
+            throw new Error("Invalid login credentials");
+        },
+        signUpUser: async (email, password) => {
+            signUps += 1;
+            expect(email).toBe("founder@example.com");
+            expect(password).toBe("secret12");
+            return "11111111-1111-4111-8111-111111111111";
+        },
+        signupClosedMessage:
+            "Sign-up is closed. Sign in with an existing account.",
+    });
+    expect(userId).toBe("11111111-1111-4111-8111-111111111111");
+    expect(signUps).toBe(1);
+});
+
+test("a second signup is refused, including a wrong-password sign-in", async () => {
+    let signUps = 0;
+    const warns: string[] = [];
+    const originalWarn = console.warn;
+    console.warn = (...args: unknown[]) => {
+        warns.push(String(args[0]));
+    };
+    try {
+        await expect(
+            resolveApproveUser({
+                email: "stranger@example.com",
+                password: "wrong-password",
+                authUserCount: async () => 1,
+                signInUser: async () => {
+                    throw new Error("Invalid login credentials");
+                },
+                signUpUser: async () => {
+                    signUps += 1;
+                    return "should-not-create";
+                },
+                signupClosedMessage:
+                    "Sign-up is closed. Sign in with an existing account.",
+            }),
+        ).rejects.toThrow(
+            "Sign-up is closed. Sign in with an existing account.",
+        );
+    } finally {
+        console.warn = originalWarn;
+    }
+    expect(signUps).toBe(0);
+    expect(warns).toContain("signup_closed");
+});
+
+test("existing users still sign in after signup closes", async () => {
+    let signUps = 0;
+    const userId = await resolveApproveUser({
+        email: "founder@example.com",
+        password: "secret12",
+        authUserCount: async () => 1,
+        signInUser: async () => "11111111-1111-4111-8111-111111111111",
+        signUpUser: async () => {
+            signUps += 1;
+            return "should-not-create";
+        },
+        signupClosedMessage:
+            "Sign-up is closed. Sign in with an existing account.",
+    });
+    expect(userId).toBe("11111111-1111-4111-8111-111111111111");
+    expect(signUps).toBe(0);
 });
 
 // ---------- OAuth rate-limit scoping ----------

@@ -328,6 +328,32 @@ export function bootstrapHousehold(
     return householdId;
 }
 
+export function createHousehold(
+    store: HouseholdStore,
+    userId: string,
+    name: string,
+    displayName: string,
+): string {
+    if (store.getHousehold() != null) {
+        throw new HouseholdAlreadyExistsError();
+    }
+    const householdId = crypto.randomUUID();
+    store.insertHousehold({
+        id: householdId,
+        name,
+        fridgeLocations: [],
+        recipeSearchPlaces: [],
+        preferences: { ...EMPTY_HOUSEHOLD_PREFERENCES },
+    });
+    store.insertMember({
+        householdId,
+        userId,
+        role: "owner",
+        displayName,
+    });
+    return householdId;
+}
+
 export function isRecipePlaceKind(value: string): value is RecipePlaceKind {
     return (RECIPE_PLACE_KINDS as readonly string[]).includes(value);
 }

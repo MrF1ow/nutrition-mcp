@@ -53,6 +53,7 @@ import {
 import { HOUSEHOLD_TOKEN_PREFIX } from "./household-token.js";
 import {
     EMPTY_HOUSEHOLD_PREFERENCES,
+    HouseholdAlreadyExistsError,
     type HouseholdConfig,
 } from "./household.js";
 import {
@@ -1581,6 +1582,29 @@ mock.module("./supabase.js", () => ({
                     (householdId == null || member.householdId === householdId),
             ) ?? null
         );
+    },
+    householdExists: async () => db.household != null,
+    createHouseholdForCaller: async (
+        userId: string,
+        name: string,
+        displayName: string,
+    ) => {
+        if (db.household != null) {
+            throw new HouseholdAlreadyExistsError();
+        }
+        db.household = {
+            name,
+            fridgeLocations: [],
+            recipeSearchPlaces: [],
+            preferences: { ...EMPTY_HOUSEHOLD_PREFERENCES },
+        };
+        db.members.push({
+            householdId: "hh-1",
+            userId,
+            role: "owner",
+            displayName,
+        });
+        return "hh-1";
     },
     listHouseholdMembers: async (householdId: string) =>
         db.members
@@ -5428,5 +5452,53 @@ describe("authenticated dashboard HTTP", () => {
         const html = await r.text();
         expect(html).toContain("household membership");
         expect(html).not.toContain("<iframe");
+    });
+
+    test("a non-member sees 403 when a household already exists", async () => {
+        const r = await siteApp.request("http://x/", {
+            headers: { cookie: cookieFor(outsider) },
+        });
+        expect(r.status).toBe(403);
+        const html = await r.text();
+        expect(html).toContain("household membership");
+        expect(html).not.toContain('action="/create-household"');
+        expect(html).not.toContain("<iframe");
+    });
+
+    test("a memberless user sees create-household when none exists", async () => {
+        db.members = [];
+        db.household = null;
+        const r = await siteApp.request("http://x/", {
+            headers: { cookie: cookieFor(alice) },
+        });
+        expect(r.status).toBe(200);
+        const html = await r.text();
+        expect(html).toContain('action="/create-household"');
+        expect(html).toContain("Create household");
+        expect(html).not.toContain("<iframe");
+    });
+
+    test("POST /create-household as the first user creates the owner", async () => {
+        db.members = [];
+        db.household = null;
+        const r = await siteApp.request("http://x/create-household", {
+            method: "POST",
+            headers: {
+                cookie: cookieFor(alice),
+                "content-type": "application/x-www-form-urlencoded",
+            },
+            body: "household_name=Home&display_name=Alice",
+        });
+        expect(r.status).toBe(302);
+        expect(r.headers.get("location")).toBe("/");
+        expect(db.household).toMatchObject({ name: "Home" });
+        expect(db.members).toEqual([
+            {
+                householdId: "hh-1",
+                userId: alice,
+                role: "owner",
+                displayName: "Alice",
+            },
+        ]);
     });
 });

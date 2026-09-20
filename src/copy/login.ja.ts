@@ -1,4 +1,4 @@
-import type { LoginDoc } from "./login.js";
+import type { LoginDoc, LoginErrors } from "./login.js";
 
 export const LOGIN_JA: LoginDoc = {
     title: "Nutrition MCP",
@@ -11,7 +11,12 @@ export const LOGIN_JA: LoginDoc = {
     termsLinkText: "利用規約",
     privacyLinkText: "プライバシーポリシー",
     newHereNote:
-        "初めてですか？メールアドレスとパスワードを入力するだけで、アカウントが自動的に作成されます。",
+        "この世帯のメールアドレスとパスワードでサインインしてください。",
     afterConnectNote:
         "クライアントでの接続が完了したら、パスワードを安全な場所に保存して、このブラウザタブを閉じてください。",
+};
+
+export const LOGIN_ERRORS_JA: LoginErrors = {
+    signupClosed:
+        "新規登録は終了しています。既存のアカウントでサインインしてください。",
 };

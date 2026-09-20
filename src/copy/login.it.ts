@@ -1,4 +1,4 @@
-import type { LoginDoc } from "./login.js";
+import type { LoginDoc, LoginErrors } from "./login.js";
 
 export const LOGIN_IT: LoginDoc = {
     title: "Nutrition MCP",
@@ -10,8 +10,12 @@ export const LOGIN_IT: LoginDoc = {
         "Continuando, confermi di avere almeno 16 anni e accetti i {terms} e l'{privacy}.",
     termsLinkText: "Termini di servizio",
     privacyLinkText: "Informativa sulla privacy",
-    newHereNote:
-        "Prima volta qui? Inserisci la tua email e una password — l'account verrà creato automaticamente.",
+    newHereNote: "Accedi con l'email e la password di questa famiglia.",
     afterConnectNote:
         "Una volta completato il collegamento nel tuo client, salva la password in un posto sicuro e chiudi questa scheda del browser.",
+};
+
+export const LOGIN_ERRORS_IT: LoginErrors = {
+    signupClosed:
+        "Le registrazioni sono chiuse. Accedi con un account esistente.",
 };

@@ -1,6 +1,7 @@
 import { test, expect } from "bun:test";
 import {
     bootstrapHousehold,
+    createHousehold,
     createMemoryHouseholdStore,
     getHouseholdId,
     HouseholdAlreadyExistsError,
@@ -118,6 +119,27 @@ test("a second household insert is rejected after the singleton exists", () => {
         ),
     ).toThrow(HouseholdAlreadyExistsError);
     expect(store.getHousehold()?.name).toBe("Home");
+});
+
+test("createHousehold inserts the owner and fails if a household exists", () => {
+    const store = createMemoryHouseholdStore();
+    const householdId = createHousehold(store, alice, "Home", "Alice");
+
+    expect(getHouseholdId(store, alice)).toBe(householdId);
+    expect(requireMember(store, alice)).toEqual({
+        ok: true,
+        member: {
+            householdId,
+            userId: alice,
+            role: "owner",
+            displayName: "Alice",
+        },
+    });
+    expect(() => createHousehold(store, bob, "Other", "Bob")).toThrow(
+        HouseholdAlreadyExistsError,
+    );
+    expect(getHouseholdId(store, bob)).toBe(null);
+    expect(store.getHousehold()?.id).toBe(householdId);
 });
 
 test("requireMember for a stranger fails with a typed error", () => {
