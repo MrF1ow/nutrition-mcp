@@ -76,6 +76,8 @@ describe("marketing HTTP is gone", () => {
         expect(body).toContain('href="/"');
         expect(body).toContain("/?locale=");
         expect(body).not.toContain("response_type=code");
+        expect(body).not.toContain("/authorize/google");
+        expect(body).not.toContain("Continue with Google");
     });
 
     test("GET / with a bad site cookie is still login HTML", async () => {

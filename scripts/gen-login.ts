@@ -167,21 +167,6 @@ ${nav(locale)}
 
                         {{ERROR}}
 
-                        <a
-                            class="auth-btn auth-btn-google"
-                            href="/authorize/google?session_id={{SESSION_ID}}"
-                        >
-                            <i
-                                class="fa-brands fa-google auth-btn-google-icon"
-                                aria-hidden="true"
-                            ></i>
-                            ${esc(doc.googleButton)}
-                        </a>
-
-                        <div class="auth-divider">
-                            <span>${esc(doc.dividerText)}</span>
-                        </div>
-
                         <form method="POST" action="/approve" class="auth-form">
                             <input
                                 type="hidden"

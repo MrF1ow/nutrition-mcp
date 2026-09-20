@@ -1,6 +1,6 @@
 import { test, expect } from "bun:test";
 import { SITE_LOCALES } from "./routes.js";
-import { LOGIN, LOGIN_ERRORS } from "./copy/login.js";
+import { LOGIN } from "./copy/login.js";
 
 const collapse = (s: string) => s.replace(/\s+/g, " ").trim();
 
@@ -17,8 +17,6 @@ test("every locale has a built login page, in its own language", async () => {
         const html = collapse(await Bun.file(path).text());
         for (const line of [
             doc.subtitle,
-            doc.googleButton,
-            doc.dividerText,
             doc.emailLabel,
             doc.passwordLabel,
             doc.continueButton,
@@ -49,6 +47,8 @@ test("every locale has a built login page, in its own language", async () => {
         expect(html).not.toMatch(/class="brand"[^>]*href="\/"/);
         expect(html).toContain("{{LANG_SWITCHER}}");
         expect(html).toContain("theme-switch");
+        expect(html).not.toContain("/authorize/google");
+        expect(html).not.toContain("auth-btn-google");
     }
 });
 
@@ -68,18 +68,6 @@ test("every login page keeps its four runtime placeholders", async () => {
             expect(`${path} ${token}: ${html.includes(token)}`).toBe(
                 `${path} ${token}: true`,
             );
-        }
-    }
-});
-
-test("every locale's Google sign-in errors are translated", () => {
-    for (const locale of SITE_LOCALES) {
-        if (locale === "en") continue;
-        const errors = LOGIN_ERRORS[locale];
-        for (const kind of ["googleCancelled", "googleFailed"] as const) {
-            expect(
-                `${locale}.${kind}: ${errors[kind] === LOGIN_ERRORS.en[kind]}`,
-            ).toBe(`${locale}.${kind}: false`);
         }
     }
 });

@@ -1,10 +1,8 @@
-import type { LoginDoc, LoginErrors } from "./login.js";
+import type { LoginDoc } from "./login.js";
 
 export const LOGIN_ES: LoginDoc = {
     title: "Nutrition MCP",
     subtitle: "Inicia sesión para conectar tu cliente",
-    googleButton: "Continuar con Google",
-    dividerText: "o usa tu correo",
     emailLabel: "Correo electrónico",
     passwordLabel: "Contraseña",
     continueButton: "Continuar",
@@ -16,10 +14,4 @@ export const LOGIN_ES: LoginDoc = {
         "¿Primera vez por aquí? Escribe tu correo y una contraseña — la cuenta se creará automáticamente.",
     afterConnectNote:
         "Cuando la conexión se haya completado en tu cliente, guarda tu contraseña en un lugar seguro y cierra esta pestaña del navegador.",
-};
-
-export const LOGIN_ERRORS_ES: LoginErrors = {
-    googleCancelled:
-        "Se canceló el inicio de sesión con Google. Inténtalo de nuevo.",
-    googleFailed: "El inicio de sesión con Google falló. Inténtalo de nuevo.",
 };

@@ -1,5 +1,4 @@
 import { test, expect } from "bun:test";
-import crypto from "node:crypto";
 import { Hono } from "hono";
 import { OAUTH_PATHS, createOAuthRouter, renderLoginPage } from "./oauth.js";
 import { _resetBuckets } from "./rate-limit.js";
@@ -8,17 +7,6 @@ import { _resetBuckets } from "./rate-limit.js";
 // exercised by the rate-limit tests below.
 process.env.OAUTH_CLIENT_ID ||= "test-client-id";
 process.env.OAUTH_CLIENT_SECRET ||= "test-client-secret";
-
-// Guards the nonce representation: Supabase expects the SHA-256 *hex* digest sent
-// to Google (not base64url). A regression to base64URLEncode would break sign-in.
-test("nonce is hashed as lowercase hex SHA-256", () => {
-    const hashed = crypto.createHash("sha256").update("abc").digest("hex");
-    expect(hashed).toBe(
-        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
-    );
-    expect(hashed).toHaveLength(64);
-    expect(hashed).toMatch(/^[0-9a-f]{64}$/);
-});
 
 // Minimal fake session — every renderLoginPage call needs one now that the
 // language switcher's links are reconstructed from its fields.
@@ -36,12 +24,9 @@ test("renderLoginPage substitutes every {{SESSION_ID}} occurrence", async () => 
     const sessionId = "session-abc-123";
     const html = await renderLoginPage(sessionId, fakeSession());
 
-    // The password form's hidden field and the Google button's href both use the
-    // placeholder, so a single .replace() (first-match only) would leave one
-    // behind and break the Google link.
     expect(html).not.toContain("{{SESSION_ID}}");
     expect(html).toContain(`value="${sessionId}"`);
-    expect(html).toContain(`/authorize/google?session_id=${sessionId}`);
+    expect(html).not.toContain("/authorize/google");
 });
 
 test("renderLoginPage renders the error banner only when given an error", async () => {
@@ -108,51 +93,6 @@ test("renderLoginPage serves the requested locale's template when it exists", as
     expect(de).toContain('<html lang="de">');
 });
 
-// A Google-callback failure re-renders the login page in the session's own
-// locale, with a translated error message (LOGIN_ERRORS in
-// src/copy/login.ts) — not just a translated page around an English error.
-// Driven through the real router (not a direct renderLoginPage call) so it
-// also exercises /authorize's locale selection and the session lookup, the
-// two things that have to work together for this to be true end to end.
-test("a Google sign-in failure re-renders the error in the session's locale", async () => {
-    _resetBuckets();
-    const { app } = buildTestApp();
-
-    // OAUTH_CLIENT_ID's `||=` fallback above only applies if nothing set it
-    // first — Bun auto-loads .env, so a real value there wins, exactly like
-    // it would for the actual server. Read whatever it resolved to rather
-    // than hardcoding "test-client-id", or this 400s with invalid_client
-    // outside an environment where that env var happens to be unset.
-    const authorizeRes = await fire(
-        app,
-        "GET",
-        `/authorize?response_type=code&client_id=${encodeURIComponent(process.env.OAUTH_CLIENT_ID!)}&redirect_uri=https://example.com/cb&state=xyz&locale=de`,
-        "198.51.100.1",
-    );
-    expect(authorizeRes.status).toBe(200);
-    const html = await authorizeRes.text();
-    const sessionId = html.match(
-        /name="session_id"\s+value="([0-9a-f-]+)"/,
-    )?.[1];
-    expect(sessionId).toBeTruthy();
-
-    // No `code` param — the callback's own "didn't originate from a flow we
-    // started" guard fires without needing to mock Google's token endpoint.
-    const callbackRes = await fire(
-        app,
-        "GET",
-        `/auth/google/callback?state=${sessionId}`,
-        "198.51.100.1",
-    );
-    expect(callbackRes.status).toBe(400);
-    const errorHtml = await callbackRes.text();
-    expect(errorHtml).toContain("error-banner");
-    expect(errorHtml).toContain(
-        "Die Anmeldung mit Google ist fehlgeschlagen. Bitte versuche es erneut.",
-    );
-    expect(errorHtml).not.toContain("Google sign-in failed");
-});
-
 // ---------- OAuth rate-limit scoping ----------
 
 // The HTTP method each OAuth path is registered with, so the table-driven test
@@ -161,8 +101,6 @@ const OAUTH_METHODS: Record<(typeof OAUTH_PATHS)[number], string> = {
     "/register": "POST",
     "/authorize": "GET",
     "/approve": "POST",
-    "/authorize/google": "GET",
-    "/auth/google/callback": "GET",
     "/token": "POST",
 };
 

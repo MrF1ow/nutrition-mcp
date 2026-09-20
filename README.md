@@ -17,7 +17,6 @@ A remote MCP server for personal nutrition tracking — log meals with calories,
     - [0. Get the code](#0-get-the-code)
     - [1. Supabase setup](#1-supabase-setup)
     - [2. Environment variables](#2-environment-variables)
-    - [3. Google sign-in (optional)](#3-google-sign-in-optional)
 - [Development](#development)
     - [Testing and quality](#testing-and-quality)
 - [Connect to Claude.ai](#connect-to-claudeai)
@@ -138,17 +137,15 @@ Requires Bun 1.x (matches the Dockerfile's `oven/bun:1` base image; no exact min
 
 ### 2. Environment variables
 
-| Variable               | Description                                                                                                                                                    |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SUPABASE_URL`         | Your Supabase project URL                                                                                                                                      |
-| `SUPABASE_SECRET_KEY`  | Supabase service role key (bypasses RLS). Also used for Auth admin `createUser` when adding a household member                                                 |
-| `OAUTH_CLIENT_ID`      | Random string for OAuth client identification                                                                                                                  |
-| `OAUTH_CLIENT_SECRET`  | Random string for OAuth client authentication                                                                                                                  |
-| `ALLOWED_ORIGINS`      | _(optional)_ Comma-separated list of extra browser origins allowed to call `/mcp` via CORS — `localhost`/`127.0.0.1` on any port are always allowed regardless |
-| `GOOGLE_CLIENT_ID`     | _(optional)_ Google OAuth client ID for "Sign in with Google"                                                                                                  |
-| `GOOGLE_CLIENT_SECRET` | _(optional)_ Google OAuth client secret                                                                                                                        |
-| `OFF_USER_AGENT`       | Open Food Facts User-Agent for barcode lookups, in the form `AppName (email)`                                                                                  |
-| `PORT`                 | Server port (default: `8080`)                                                                                                                                  |
+| Variable              | Description                                                                                                                                                    |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SUPABASE_URL`        | Your Supabase project URL                                                                                                                                      |
+| `SUPABASE_SECRET_KEY` | Supabase service role key (bypasses RLS). Also used for Auth admin `createUser` when adding a household member                                                 |
+| `OAUTH_CLIENT_ID`     | Random string for OAuth client identification                                                                                                                  |
+| `OAUTH_CLIENT_SECRET` | Random string for OAuth client authentication                                                                                                                  |
+| `ALLOWED_ORIGINS`     | _(optional)_ Comma-separated list of extra browser origins allowed to call `/mcp` via CORS — `localhost`/`127.0.0.1` on any port are always allowed regardless |
+| `OFF_USER_AGENT`      | Open Food Facts User-Agent for barcode lookups, in the form `AppName (email)`                                                                                  |
+| `PORT`                | Server port (default: `8080`)                                                                                                                                  |
 
 Generate OAuth credentials:
 
@@ -162,14 +159,6 @@ or manually:
 openssl rand -hex 16   # use as OAUTH_CLIENT_ID
 openssl rand -hex 32   # use as OAUTH_CLIENT_SECRET
 ```
-
-### 3. Google sign-in (optional)
-
-Email/password works out of the box. To also offer **"Continue with Google"**,
-follow [`docs/google-auth-setup.md`](docs/google-auth-setup.md) to create a
-Google OAuth client, enable the Google provider in Supabase, and set
-`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`. This adds the `GET /authorize/google`
-and `GET /auth/google/callback` routes — see [API Endpoints](#api-endpoints).
 
 ## Development
 
@@ -215,8 +204,6 @@ For in-chat widget development (`public/widgets/`), `bun run harness` starts a l
 | `GET /.well-known/oauth-protected-resource`   | OAuth protected-resource metadata discovery (root + `/mcp`-scoped variants) |
 | `POST /register`                              | Dynamic client registration                                                 |
 | `GET /authorize`                              | OAuth authorization (shows login page)                                      |
-| `GET /authorize/google`                       | Redirects to Google's OAuth consent screen ("Continue with Google")         |
-| `GET /auth/google/callback`                   | Google OAuth callback — exchanges the code, completes sign-in               |
 | `POST /approve`                               | Login/register handler                                                      |
 | `POST /token`                                 | Token exchange                                                              |
 | `GET /favicon.ico`                            | Server icon                                                                 |

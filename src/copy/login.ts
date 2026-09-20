@@ -5,28 +5,26 @@
 // reachable only via GET /authorize with a client's redirect_uri/state/
 // client_id, and has zero SEO surface.
 //
-// LOGIN and LOGIN_ERRORS are full `Record<SiteLocale, ...>`s. Adding a
-// locale to src/routes.ts's LOCALES without adding its login copy here is a
+// LOGIN is a full `Record<SiteLocale, LoginDoc>`. Adding a locale to
+// src/routes.ts's LOCALES without adding its login copy here is a
 // `bun run typecheck` failure. src/oauth.ts still decides availability by
 // asking whether public/{locale}/login.html exists on disk rather than by
 // importing this module. Keep the two in step by re-running
 // scripts/gen-login.ts after touching this file.
 
 import type { SiteLocale } from "../routes.js";
-import { LOGIN_DE, LOGIN_ERRORS_DE } from "./login.de.js";
-import { LOGIN_ES, LOGIN_ERRORS_ES } from "./login.es.js";
-import { LOGIN_FR, LOGIN_ERRORS_FR } from "./login.fr.js";
-import { LOGIN_NL, LOGIN_ERRORS_NL } from "./login.nl.js";
-import { LOGIN_PL, LOGIN_ERRORS_PL } from "./login.pl.js";
-import { LOGIN_IT, LOGIN_ERRORS_IT } from "./login.it.js";
-import { LOGIN_UK, LOGIN_ERRORS_UK } from "./login.uk.js";
-import { LOGIN_JA, LOGIN_ERRORS_JA } from "./login.ja.js";
+import { LOGIN_DE } from "./login.de.js";
+import { LOGIN_ES } from "./login.es.js";
+import { LOGIN_FR } from "./login.fr.js";
+import { LOGIN_NL } from "./login.nl.js";
+import { LOGIN_PL } from "./login.pl.js";
+import { LOGIN_IT } from "./login.it.js";
+import { LOGIN_UK } from "./login.uk.js";
+import { LOGIN_JA } from "./login.ja.js";
 
 export interface LoginDoc {
     title: string;
     subtitle: string;
-    googleButton: string;
-    dividerText: string;
     emailLabel: string;
     passwordLabel: string;
     continueButton: string;
@@ -40,26 +38,9 @@ export interface LoginDoc {
     afterConnectNote: string;
 }
 
-/**
- * The two hardcoded Google-flow error strings from src/oauth.ts are
- * translated here too (a small, fully controlled set) — but an error
- * surfaced from Supabase Auth itself (e.g. "Invalid login credentials") is
- * NOT: it's third-party response text with no stable error code to key a
- * translation table on, and guessing at its wording would silently break
- * the moment Supabase changes it. Those errors stay in English across
- * every locale; translating them reliably would need a real error-code
- * mapping layer, which is out of scope for translating the page copy.
- */
-export interface LoginErrors {
-    googleCancelled: string;
-    googleFailed: string;
-}
-
 const EN: LoginDoc = {
     title: "Nutrition MCP",
     subtitle: "Sign in to connect",
-    googleButton: "Continue with Google",
-    dividerText: "or use email",
     emailLabel: "Email",
     passwordLabel: "Password",
     continueButton: "Continue",
@@ -83,19 +64,4 @@ export const LOGIN: Record<SiteLocale, LoginDoc> = {
     it: LOGIN_IT,
     uk: LOGIN_UK,
     ja: LOGIN_JA,
-};
-
-export const LOGIN_ERRORS: Record<SiteLocale, LoginErrors> = {
-    en: {
-        googleCancelled: "Google sign-in was cancelled. Please try again.",
-        googleFailed: "Google sign-in failed. Please try again.",
-    },
-    de: LOGIN_ERRORS_DE,
-    es: LOGIN_ERRORS_ES,
-    fr: LOGIN_ERRORS_FR,
-    nl: LOGIN_ERRORS_NL,
-    pl: LOGIN_ERRORS_PL,
-    it: LOGIN_ERRORS_IT,
-    uk: LOGIN_ERRORS_UK,
-    ja: LOGIN_ERRORS_JA,
 };
