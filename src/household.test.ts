@@ -1,6 +1,6 @@
 import { test, expect } from "bun:test";
 import {
-    bootstrapHousehold,
+    addHouseholdMember,
     createHousehold,
     createMemoryHouseholdStore,
     getHouseholdId,
@@ -33,10 +33,23 @@ function extraHousehold(id: string): Household {
     };
 }
 
-test("first bootstrap creates one household and an owner", () => {
-    const store = createMemoryHouseholdStore();
+function addMember(
+    store: ReturnType<typeof createMemoryHouseholdStore>,
+    householdId: string,
+    userId: string,
+    displayName: string,
+): void {
+    store.insertMember({
+        householdId,
+        userId,
+        role: "member",
+        displayName,
+    });
+}
 
-    const householdId = bootstrapHousehold(store, alice, "Home", "Alice");
+test("createHousehold inserts the owner and fails if a household exists", () => {
+    const store = createMemoryHouseholdStore();
+    const householdId = createHousehold(store, alice, "Home", "Alice");
 
     expect(householdId).toMatch(
         /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
@@ -70,15 +83,41 @@ test("first bootstrap creates one household and an owner", () => {
             displayName: "Alice",
         },
     });
+    expect(() => createHousehold(store, bob, "Other", "Bob")).toThrow(
+        HouseholdAlreadyExistsError,
+    );
+    expect(getHouseholdId(store, bob)).toBe(null);
+    expect(store.getHousehold()?.id).toBe(householdId);
 });
 
-test("second user bootstrap joins as member on the same household id", () => {
+test("addHouseholdMember after createHousehold inserts a member", async () => {
     const store = createMemoryHouseholdStore();
-    const householdId = bootstrapHousehold(store, alice, "Home", "Alice");
+    const householdId = createHousehold(store, alice, "Home", "Alice");
 
-    const joinedId = bootstrapHousehold(store, bob, "Ignored name", "Bob");
+    const result = await addHouseholdMember(
+        {
+            auth: {
+                async createUser() {
+                    return { ok: true, userId: bob };
+                },
+                async deleteUser() {},
+            },
+            rpc: {
+                async insertMember({ householdId, userId, displayName }) {
+                    addMember(store, householdId, userId, displayName);
+                    return { ok: true, userId };
+                },
+            },
+        },
+        householdId,
+        {
+            displayName: "Bob",
+            login: { kind: "username", username: "bob" },
+            password: "password1",
+        },
+    );
 
-    expect(joinedId).toBe(householdId);
+    expect(result).toEqual({ ok: true, userId: bob });
     expect(getHouseholdId(store, bob)).toBe(householdId);
     expect(requireMember(store, bob)).toEqual({
         ok: true,
@@ -89,30 +128,26 @@ test("second user bootstrap joins as member on the same household id", () => {
             displayName: "Bob",
         },
     });
-});
-
-test("repeating bootstrap for the same user returns the same household id", () => {
-    const store = createMemoryHouseholdStore();
-    const householdId = bootstrapHousehold(store, alice, "Home", "Alice");
-
-    expect(bootstrapHousehold(store, alice, "Other", "Renamed")).toBe(
-        householdId,
-    );
-    expect(requireMember(store, alice)).toEqual({
-        ok: true,
-        member: {
+    expect(listMembers(store, householdId)).toEqual([
+        {
             householdId,
             userId: alice,
             role: "owner",
             displayName: "Alice",
         },
-    });
+        {
+            householdId,
+            userId: bob,
+            role: "member",
+            displayName: "Bob",
+        },
+    ]);
 });
 
 test("a second household insert is rejected after the singleton exists", () => {
     const store = createMemoryHouseholdStore();
-    bootstrapHousehold(store, alice, "Home", "Alice");
-    bootstrapHousehold(store, bob, "Home", "Bob");
+    const householdId = createHousehold(store, alice, "Home", "Alice");
+    addMember(store, householdId, bob, "Bob");
 
     expect(() =>
         store.insertHousehold(
@@ -122,30 +157,9 @@ test("a second household insert is rejected after the singleton exists", () => {
     expect(store.getHousehold()?.name).toBe("Home");
 });
 
-test("createHousehold inserts the owner and fails if a household exists", () => {
-    const store = createMemoryHouseholdStore();
-    const householdId = createHousehold(store, alice, "Home", "Alice");
-
-    expect(getHouseholdId(store, alice)).toBe(householdId);
-    expect(requireMember(store, alice)).toEqual({
-        ok: true,
-        member: {
-            householdId,
-            userId: alice,
-            role: "owner",
-            displayName: "Alice",
-        },
-    });
-    expect(() => createHousehold(store, bob, "Other", "Bob")).toThrow(
-        HouseholdAlreadyExistsError,
-    );
-    expect(getHouseholdId(store, bob)).toBe(null);
-    expect(store.getHousehold()?.id).toBe(householdId);
-});
-
 test("requireMember for a stranger fails with a typed error", () => {
     const store = createMemoryHouseholdStore();
-    bootstrapHousehold(store, alice, "Home", "Alice");
+    createHousehold(store, alice, "Home", "Alice");
 
     expect(requireMember(store, carol)).toEqual({
         ok: false,
@@ -154,10 +168,10 @@ test("requireMember for a stranger fails with a typed error", () => {
     expect(getHouseholdId(store, carol)).toBe(null);
 });
 
-test("listMembers returns both members after two bootstraps", () => {
+test("listMembers returns owner and addHouseholdMember result", () => {
     const store = createMemoryHouseholdStore();
-    const householdId = bootstrapHousehold(store, alice, "Home", "Alice");
-    bootstrapHousehold(store, bob, "Home", "Bob");
+    const householdId = createHousehold(store, alice, "Home", "Alice");
+    addMember(store, householdId, bob, "Bob");
 
     expect(listMembers(store, householdId)).toEqual([
         {
@@ -177,8 +191,8 @@ test("listMembers returns both members after two bootstraps", () => {
 
 test("deleting a user removes only that membership", () => {
     const store = createMemoryHouseholdStore();
-    const householdId = bootstrapHousehold(store, alice, "Home", "Alice");
-    bootstrapHousehold(store, bob, "Home", "Bob");
+    const householdId = createHousehold(store, alice, "Home", "Alice");
+    addMember(store, householdId, bob, "Bob");
 
     store.deleteUser(bob);
 

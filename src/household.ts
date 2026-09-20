@@ -307,43 +307,6 @@ export function dashboardAccess(
     return { ok: true, mode: "peer", viewer, subject };
 }
 
-export function bootstrapHousehold(
-    store: HouseholdStore,
-    userId: string,
-    name: string,
-    displayName: string,
-): string {
-    const existing = store.getMember(userId);
-    if (existing != null) return existing.householdId;
-
-    const household = store.getHousehold();
-    if (household != null) {
-        store.insertMember({
-            householdId: household.id,
-            userId,
-            role: "member",
-            displayName,
-        });
-        return household.id;
-    }
-
-    const householdId = crypto.randomUUID();
-    store.insertHousehold({
-        id: householdId,
-        name,
-        fridgeLocations: [],
-        recipeSearchPlaces: [],
-        preferences: { ...EMPTY_HOUSEHOLD_PREFERENCES },
-    });
-    store.insertMember({
-        householdId,
-        userId,
-        role: "owner",
-        displayName,
-    });
-    return householdId;
-}
-
 export function createHousehold(
     store: HouseholdStore,
     userId: string,
