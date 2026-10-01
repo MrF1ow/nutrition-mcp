@@ -11,6 +11,7 @@ import {
 } from "./food-picker.js";
 import { renderFridgePage } from "../fridge/page.js";
 import { renderGroceryPage } from "../grocery/page.js";
+import { renderRecipeDetailPage } from "../recipes/page.js";
 import { ACCENT_SWATCHES } from "../shell.js";
 import {
     DEMO_HOUSEHOLD_MEMBERS,
@@ -49,10 +50,13 @@ function food(
 test("fridge page and grocery page import the same quantity-field and food-picker modules", () => {
     const fridgeSrc = stubSource("fridge/page.ts");
     const grocerySrc = stubSource("grocery/page.ts");
+    const recipesSrc = stubSource("recipes/page.ts");
     expect(fridgeSrc).toContain('from "../components/quantity-field.js"');
     expect(grocerySrc).toContain('from "../components/quantity-field.js"');
     expect(fridgeSrc).toContain('from "../components/food-picker.js"');
     expect(grocerySrc).toContain('from "../components/food-picker.js"');
+    expect(recipesSrc).toContain('from "../components/food-picker.js"');
+    expect(recipesSrc).toContain('from "../components/member-multi-select.js"');
 
     const fridge = renderFridgePage({
         locations: [
@@ -94,6 +98,39 @@ test("fridge page and grocery page import the same quantity-field and food-picke
     expect(grocery).toContain('class="quantity-field"');
     expect(fridge).toContain('class="food-picker"');
     expect(grocery).toContain('class="food-picker"');
+    const recipes = renderRecipeDetailPage({
+        chrome: { theme: "light", accent: ACCENT_SWATCHES.sky },
+        recipe: {
+            id: "r1",
+            householdId: "hh-1",
+            creatorId: "11111111-1111-4111-8111-111111111111",
+            name: "Mac",
+            yieldPortions: 4,
+        },
+        ingredients: [],
+        members: DEMO_HOUSEHOLD_MEMBERS.map((member) => ({
+            userId: member.userId,
+            displayName: member.displayName,
+        })),
+        stores: [{ id: "st-1", name: "Safeway" }],
+        viewerId: DEMO_HOUSEHOLD_MEMBERS[0]!.userId,
+        filterUserId: DEMO_HOUSEHOLD_MEMBERS[0]!.userId,
+        portionCount: 1,
+        macros: {
+            calories: null,
+            protein_g: null,
+            carbs_g: null,
+            fat_g: null,
+            fiber_g: null,
+            sugar_g: null,
+            alcohol_g: null,
+            incomplete: true,
+        },
+        isOwner: true,
+    });
+    expect(recipes).toContain('class="quantity-field"');
+    expect(recipes).toContain('class="food-picker"');
+    expect(recipes).toContain('class="member-multi-select"');
 });
 
 test("quantity field food kind defaults to grams and supply lists units", () => {
