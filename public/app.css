@@ -437,3 +437,128 @@ body {
     color: #b42318;
     font-weight: 600;
 }
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.settings-lead {
+    margin: 0 0 16px;
+}
+
+.settings-lead a {
+    color: var(--accent);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.nutrition-prefs fieldset,
+.add-member,
+.rotate-token,
+.household-name,
+.household-location,
+.add-store,
+.store-rule-form,
+.allergen-form,
+.dislike-form,
+.person-rule-form,
+.section-rename {
+    display: grid;
+    gap: 8px;
+    margin: 0 0 20px;
+}
+
+.nutrition-prefs input,
+.nutrition-prefs select,
+.add-member input,
+.household-name input,
+.household-location input,
+.add-store input,
+.store-rule-form textarea,
+.allergen-form select,
+.allergen-form input,
+.dislike-form input,
+.person-rule-form textarea,
+.section-rename input,
+.add-member button,
+.rotate-token button,
+.household-name button,
+.household-location button,
+.add-store button,
+.store-rule-form button,
+.allergen-form button,
+.dislike-form button,
+.person-rule-form button,
+.section-rename button {
+    font: inherit;
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    min-height: 44px;
+    padding: 8px 12px;
+}
+
+.add-member button,
+.rotate-token button,
+.household-name button,
+.household-location button,
+.add-store button,
+.store-rule-form button,
+.allergen-form button,
+.dislike-form button,
+.person-rule-form button,
+.section-rename button {
+    color: var(--accent-ink);
+    background: var(--accent);
+    border-color: var(--accent);
+    font-weight: 600;
+}
+
+.household-store,
+.member-rules {
+    display: grid;
+    gap: 12px;
+    margin: 0 0 24px;
+    padding: 16px;
+    border: 1px solid var(--panel-border);
+    border-radius: 14px;
+    background: var(--panel);
+}
+
+.household-store h3,
+.member-rules h3 {
+    margin: 0;
+}
+
+.household-members,
+.allergen-list,
+.dislike-list,
+.person-rule-list,
+.store-rule-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 6px;
+}
+
+.token-once {
+    padding: 12px;
+    border-radius: 12px;
+    background: var(--accent-soft);
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.empty-stores {
+    color: var(--text-dim);
+}

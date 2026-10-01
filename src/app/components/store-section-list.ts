@@ -1,16 +1,7 @@
 import { escapeHtml } from "../shell.js";
+import { DEFAULT_STORE_SECTIONS } from "../../settings.js";
 
-export const DEFAULT_STORE_SECTIONS = [
-    "Produce",
-    "Dairy",
-    "Meat & seafood",
-    "Bakery",
-    "Frozen",
-    "Pantry",
-    "Beverages",
-    "Household",
-    "Other",
-] as const;
+export { DEFAULT_STORE_SECTIONS };
 
 export function renderStoreSectionList(
     sections: readonly string[] = DEFAULT_STORE_SECTIONS,

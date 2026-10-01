@@ -57,6 +57,8 @@ import {
     type HouseholdConfig,
 } from "./household.js";
 import { createMemoryFridgeStore } from "./fridge.js";
+import { createMemorySettingsStore } from "./settings.js";
+import { createMemoryRulesStore } from "./rules.js";
 import {
     TOOLS,
     HOUSEHOLD_SCOPED_TOOL_NAMES,
@@ -1466,6 +1468,8 @@ const db = {
     }[],
     household: null as HouseholdConfig | null,
     fridgeStore: createMemoryFridgeStore(),
+    settingsStore: createMemorySettingsStore(),
+    rulesStore: createMemoryRulesStore(),
 };
 
 mock.module("./supabase.js", () => ({
@@ -1682,6 +1686,18 @@ mock.module("./supabase.js", () => ({
     getLatestWeight: async () => null,
     getWeightInRange: async () => [],
     liveFridgeStore: () => db.fridgeStore,
+    liveSettingsStore: () => db.settingsStore,
+    liveRulesStore: () => db.rulesStore,
+    updateMemberDisplayName: async (
+        householdId: string,
+        userId: string,
+        displayName: string,
+    ) => {
+        const member = db.members.find(
+            (row) => row.householdId === householdId && row.userId === userId,
+        );
+        if (member) member.displayName = displayName;
+    },
 }));
 
 afterAll(() => {
@@ -1721,6 +1737,8 @@ beforeEach(() => {
         },
     ];
     db.fridgeStore = createMemoryFridgeStore();
+    db.settingsStore = createMemorySettingsStore();
+    db.rulesStore = createMemoryRulesStore();
 });
 
 interface ToolResult {
@@ -5542,8 +5560,8 @@ describe("authenticated dashboard HTTP", () => {
         expect(html).not.toContain('action="/add-household-member"');
     });
 
-    test("POST /add-household-member as owner adds a username member", async () => {
-        const r = await siteApp.request("http://x/add-household-member", {
+    test("POST /settings/household as owner adds a username member", async () => {
+        const r = await siteApp.request("http://x/settings/household", {
             method: "POST",
             headers: {
                 cookie: cookieFor(alice),
@@ -5552,7 +5570,7 @@ describe("authenticated dashboard HTTP", () => {
             body: "display_name=Kid&password=password1&username=kid",
         });
         expect(r.status).toBe(302);
-        expect(r.headers.get("location")).toBe("/");
+        expect(r.headers.get("location")).toBe("/settings/household");
         expect(db.members).toContainEqual({
             householdId: "hh-1",
             userId: "55555555-5555-4555-8555-555555555555",
@@ -5565,8 +5583,8 @@ describe("authenticated dashboard HTTP", () => {
         expect(await home.text()).toContain("Kid");
     });
 
-    test("POST /add-household-member as a member is 403 and adds nobody", async () => {
-        const r = await siteApp.request("http://x/add-household-member", {
+    test("POST /settings/household as a member is 403 and adds nobody", async () => {
+        const r = await siteApp.request("http://x/settings/household", {
             method: "POST",
             headers: {
                 cookie: cookieFor(bob),
@@ -5579,8 +5597,8 @@ describe("authenticated dashboard HTTP", () => {
         expect(db.addedLogins).toEqual([]);
     });
 
-    test("POST /add-household-member with a short password stays on the page", async () => {
-        const r = await siteApp.request("http://x/add-household-member", {
+    test("POST /settings/household with a short password stays on the page", async () => {
+        const r = await siteApp.request("http://x/settings/household", {
             method: "POST",
             headers: {
                 cookie: cookieFor(alice),
@@ -5591,13 +5609,13 @@ describe("authenticated dashboard HTTP", () => {
         expect(r.status).toBe(400);
         const html = await r.text();
         expect(html).toContain("Password must be at least 8 characters.");
-        expect(html).toContain('action="/add-household-member"');
+        expect(html).toContain('action="/settings/household"');
         expect(db.addedLogins).toEqual([]);
         expect(db.members.map((m) => m.displayName)).toEqual(["Alice", "Bob"]);
     });
 
-    test("POST /add-household-member logged out does not add a member", async () => {
-        const r = await siteApp.request("http://x/add-household-member", {
+    test("POST /settings/household logged out does not add a member", async () => {
+        const r = await siteApp.request("http://x/settings/household", {
             method: "POST",
             headers: {
                 "content-type": "application/x-www-form-urlencoded",
@@ -5607,13 +5625,13 @@ describe("authenticated dashboard HTTP", () => {
         expect(r.status).toBe(200);
         const html = await r.text();
         expect(html).toContain('action="/approve"');
-        expect(html).not.toContain('action="/add-household-member"');
+        expect(html).not.toContain('action="/settings/household"');
         expect(db.addedLogins).toEqual([]);
         expect(db.members.map((m) => m.displayName)).toEqual(["Alice", "Bob"]);
     });
 
-    test("POST /add-household-member duplicate username stays on the page", async () => {
-        await siteApp.request("http://x/add-household-member", {
+    test("POST /settings/household duplicate username stays on the page", async () => {
+        await siteApp.request("http://x/settings/household", {
             method: "POST",
             headers: {
                 cookie: cookieFor(alice),
@@ -5621,7 +5639,7 @@ describe("authenticated dashboard HTTP", () => {
             },
             body: "display_name=Kid&password=password1&username=kid",
         });
-        const r = await siteApp.request("http://x/add-household-member", {
+        const r = await siteApp.request("http://x/settings/household", {
             method: "POST",
             headers: {
                 cookie: cookieFor(alice),
@@ -5632,7 +5650,7 @@ describe("authenticated dashboard HTTP", () => {
         expect(r.status).toBe(400);
         const html = await r.text();
         expect(html).toContain("That login is already in use.");
-        expect(html).toContain('action="/add-household-member"');
+        expect(html).toContain('action="/settings/household"');
         expect(
             db.members.filter((m) => m.displayName.startsWith("Kid")),
         ).toHaveLength(1);
@@ -5790,11 +5808,10 @@ describe("authenticated dashboard HTTP", () => {
         expect(html).not.toContain("<h1>Fridge</h1>");
     });
 
-    test("GET /grocery, /recipes, and /settings return stubs", async () => {
+    test("GET /grocery and /recipes return stubs", async () => {
         for (const [path, heading] of [
             ["/grocery", "Groceries"],
             ["/recipes", "Recipes"],
-            ["/settings", "Settings"],
         ] as const) {
             const r = await siteApp.request(`http://x${path}`, {
                 headers: { cookie: cookieFor(alice) },
@@ -5804,6 +5821,74 @@ describe("authenticated dashboard HTTP", () => {
             expect(html).toContain(`<h1>${heading}</h1>`);
             expect(html).toContain(`href="${path}" aria-current="page"`);
         }
+    });
+
+    test("GET /settings is the account page, not a stub", async () => {
+        const r = await siteApp.request("http://x/settings", {
+            headers: { cookie: cookieFor(alice) },
+        });
+        expect(r.status).toBe(200);
+        const html = await r.text();
+        expect(html).toContain("<h1>Settings</h1>");
+        expect(html).toContain('href="/settings/household"');
+        expect(html).toContain('href="/settings" aria-current="page"');
+        expect(html).not.toContain("coming-soon");
+    });
+
+    test("GET /settings/household shows owner add-member form", async () => {
+        const r = await siteApp.request("http://x/settings/household", {
+            headers: { cookie: cookieFor(alice) },
+        });
+        expect(r.status).toBe(200);
+        const html = await r.text();
+        expect(html).toContain("<h1>Household</h1>");
+        expect(html).toContain('action="/settings/household"');
+        expect(html).toContain("Alice");
+        expect(html).toContain("Bob");
+    });
+
+    test("GET /settings/household as a member is read-only", async () => {
+        db.profile = { ...PROFILE_BASE, user_id: bob };
+        const r = await siteApp.request("http://x/settings/household", {
+            headers: { cookie: cookieFor(bob) },
+        });
+        expect(r.status).toBe(200);
+        const html = await r.text();
+        expect(html).toContain("<h1>Household</h1>");
+        expect(html).not.toContain("Add household member");
+        expect(html).not.toContain('action="/settings/household/stores"');
+    });
+
+    test("POST /settings/household/stores seeds default sections", async () => {
+        const add = await siteApp.request(
+            "http://x/settings/household/stores",
+            {
+                method: "POST",
+                headers: {
+                    cookie: cookieFor(alice),
+                    "content-type": "application/x-www-form-urlencoded",
+                },
+                body: "name=Safeway",
+            },
+        );
+        expect(add.status).toBe(302);
+        const page = await siteApp.request("http://x/settings/household", {
+            headers: { cookie: cookieFor(alice) },
+        });
+        const html = await page.text();
+        expect(html).toContain("Safeway");
+        expect(html).toContain("Produce");
+        expect(html).toContain("Other");
+    });
+
+    test("GET /settings is 403 for a non-member", async () => {
+        const r = await siteApp.request("http://x/settings", {
+            headers: { cookie: cookieFor(outsider) },
+        });
+        expect(r.status).toBe(403);
+        const html = await r.text();
+        expect(html).toContain("household membership");
+        expect(html).not.toContain("<h1>Settings</h1>");
     });
 
     test("GET /nutrition redirects to /", async () => {
