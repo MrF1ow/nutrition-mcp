@@ -193,3 +193,154 @@ body {
     border-radius: 50%;
     border: 1px solid var(--panel-border);
 }
+
+.component-demo {
+    display: grid;
+    gap: 16px;
+    margin-top: 20px;
+    max-width: 420px;
+}
+
+.component-demo h2 {
+    margin: 8px 0 0;
+    font-size: 15px;
+}
+
+.quantity-field,
+.food-picker,
+.member-multi-select,
+.store-section-list {
+    display: grid;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid var(--panel-border);
+    border-radius: 14px;
+    background: var(--panel);
+}
+
+.quantity-field {
+    align-items: stretch;
+}
+
+.quantity-field-amount,
+.quantity-field-unit,
+.food-picker label,
+.member-choice {
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.quantity-field input,
+.quantity-field select,
+.food-picker input,
+.food-picker button,
+.member-choice input {
+    font: inherit;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    min-height: 44px;
+    padding: 8px 10px;
+}
+
+.quantity-field input {
+    width: 100%;
+}
+
+.food-picker-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+}
+
+.food-picker-tabs [role="tab"] {
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    min-height: 44px;
+    color: var(--text-dim);
+    background: var(--bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+}
+
+.food-picker-tabs [aria-selected="true"] {
+    color: var(--accent-ink);
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.food-picker-panel {
+    display: grid;
+    gap: 8px;
+}
+
+.food-picker-barcode {
+    display: grid;
+    gap: 8px;
+}
+
+.food-picker-barcode button,
+.food-picker button[type="submit"] {
+    color: var(--accent-ink);
+    background: var(--accent);
+    border-color: var(--accent);
+    font-weight: 600;
+}
+
+.food-picker-results {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 6px;
+}
+
+.food-picker-results li {
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: var(--bg);
+    border: 1px solid var(--panel-border);
+    color: var(--text);
+}
+
+.already-have-tag {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.store-section-list {
+    list-style: none;
+    margin: 0;
+}
+
+.store-section-list li {
+    color: var(--text);
+    padding: 6px 0;
+    border-bottom: 1px solid var(--panel-border);
+}
+
+.store-section-list li:last-child {
+    border-bottom: 0;
+}
+
+.member-choice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+}
+
+.member-multi-select legend {
+    color: var(--text);
+    font-weight: 600;
+}
