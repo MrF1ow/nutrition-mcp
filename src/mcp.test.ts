@@ -40,11 +40,15 @@ import {
 import { Hono } from "hono";
 import { McpServer, InMemoryTransport } from "@modelcontextprotocol/server";
 import * as actualSupabase from "./supabase.js";
+import * as actualFoods from "./foods.js";
+import * as actualFoodSearch from "./food-search.js";
 
 // Snapshot BEFORE mock.module runs: Bun patches a mocked module's namespace
 // in place, so restoring from the live `actualSupabase` afterwards would hand
 // the next file the mock again. Restore from this copy.
 const realSupabase = { ...actualSupabase };
+const realFoods = { ...actualFoods };
+const realFoodSearch = { ...actualFoodSearch };
 import { DELETED_ACCOUNT_ANALYTICS_ID } from "./analytics.js";
 import {
     HOUSEHOLD_CANNOT_DELETE_ACCOUNT,
@@ -64,6 +68,7 @@ import { addAllergen, createMemoryRulesStore } from "./rules.js";
 import {
     TOOLS,
     HOUSEHOLD_SCOPED_TOOL_NAMES,
+    NUTRITION_WRITE_TOOL_NAMES,
     OAUTH_ONLY_TOOL_NAMES,
 } from "./copy/tools.js";
 import { formatFoodResult, type FoodResult } from "./foods.js";
@@ -1474,6 +1479,8 @@ const db = {
     recipesStore: createMemoryRecipesStore(),
     settingsStore: createMemorySettingsStore(),
     rulesStore: createMemoryRulesStore(),
+    barcodeFoods: {} as Record<string, FoodResult>,
+    foodSearchHits: [] as FoodResult[],
 };
 
 mock.module("./supabase.js", () => ({
@@ -1706,8 +1713,20 @@ mock.module("./supabase.js", () => ({
     },
 }));
 
+mock.module("./foods.js", () => ({
+    ...actualFoods,
+    lookupBarcode: async (barcode: string) => db.barcodeFoods[barcode] ?? null,
+}));
+
+mock.module("./food-search.js", () => ({
+    ...actualFoodSearch,
+    searchFoodsByName: async () => db.foodSearchHits,
+}));
+
 afterAll(() => {
     mock.module("./supabase.js", () => realSupabase);
+    mock.module("./foods.js", () => realFoods);
+    mock.module("./food-search.js", () => realFoodSearch);
 });
 
 beforeEach(() => {
@@ -1747,6 +1766,8 @@ beforeEach(() => {
     db.recipesStore = createMemoryRecipesStore();
     db.settingsStore = createMemorySettingsStore();
     db.rulesStore = createMemoryRulesStore();
+    db.barcodeFoods = {};
+    db.foodSearchHits = [];
 });
 
 interface ToolResult {
@@ -4627,6 +4648,372 @@ describe("household config tools", () => {
             }
         }
     });
+
+    test("nutrition write catalog tools include optional target_member", () => {
+        for (const name of NUTRITION_WRITE_TOOL_NAMES) {
+            const tool = TOOLS.find((item) => item.name === name);
+            expect(
+                tool?.params.find((item) => item.name === "target_member"),
+                name,
+            ).toEqual({
+                name: "target_member",
+                required: false,
+            });
+        }
+    });
+});
+
+describe("phone-app domain MCP tools", () => {
+    const alice = "11111111-1111-4111-8111-111111111111";
+    const bob = "22222222-2222-4222-8222-222222222222";
+    const cottage: FoodResult = {
+        name: "Cottage Cheese",
+        brand: "Good Culture",
+        serving: "100 g",
+        calories: 98,
+        protein_g: 14,
+        carbs_g: 3,
+        fat_g: 4,
+        fiber_g: 0,
+        sugar_g: 3,
+        alcohol_g: null,
+        nutriscore_grade: "a",
+        nova_group: 3,
+        source: "off:070852010016",
+        source_name: "openfoodfacts",
+        barcode: "070852010016",
+    };
+
+    function householdMembers() {
+        db.members = [
+            {
+                householdId: "hh-1",
+                userId: alice,
+                role: "owner",
+                displayName: "Alice",
+            },
+            {
+                householdId: "hh-1",
+                userId: bob,
+                role: "member",
+                displayName: "Bob",
+            },
+        ];
+    }
+
+    async function withPat(run: (call: CallTool) => Promise<void>) {
+        householdMembers();
+        const server = new McpServer(
+            { name: "nutrition-mcp-test", version: "0.0.0" },
+            { capabilities: { tools: {}, resources: {} } },
+        );
+        registerTools(
+            server,
+            { kind: "household", householdId: "hh-1" },
+            true,
+            null,
+        );
+        const [clientTransport, serverTransport] =
+            InMemoryTransport.createLinkedPair();
+        const client = new Client({ name: "test-client", version: "0.0.0" });
+        await Promise.all([
+            server.connect(serverTransport),
+            client.connect(clientTransport),
+        ]);
+        try {
+            await run(
+                (name, args = {}) =>
+                    client.callTool({
+                        name,
+                        arguments: args,
+                    }) as Promise<ToolResult>,
+            );
+        } finally {
+            await client.close();
+            await server.close();
+        }
+    }
+
+    async function withUser(
+        userId: string,
+        run: (call: CallTool) => Promise<void>,
+    ) {
+        householdMembers();
+        const server = new McpServer(
+            { name: "nutrition-mcp-test", version: "0.0.0" },
+            { capabilities: { tools: {}, resources: {} } },
+        );
+        registerTools(server, { kind: "user", userId }, true, null);
+        const [clientTransport, serverTransport] =
+            InMemoryTransport.createLinkedPair();
+        const client = new Client({ name: "test-client", version: "0.0.0" });
+        await Promise.all([
+            server.connect(serverTransport),
+            client.connect(clientTransport),
+        ]);
+        try {
+            await run(
+                (name, args = {}) =>
+                    client.callTool({
+                        name,
+                        arguments: args,
+                    }) as Promise<ToolResult>,
+            );
+        } finally {
+            await client.close();
+            await server.close();
+        }
+    }
+
+    test("list_fridge_items returns seeded locations and items", async () => {
+        db.barcodeFoods[cottage.barcode] = cottage;
+        await withPat(async (call) => {
+            const loc = await call("add_fridge_location", { name: "Fridge" });
+            expect(loc.isError).toBeFalsy();
+            const locationId = loc.structuredContent?.id as string;
+            const added = await call("add_fridge_item", {
+                location_id: locationId,
+                kind: "food",
+                barcode: cottage.barcode,
+                amount: 200,
+            });
+            expect(added.isError).toBeFalsy();
+            const listed = await call("list_fridge_items");
+            expect(listed.isError).toBeFalsy();
+            expect(textOf(listed)).toContain("Cottage Cheese");
+            expect(listed.structuredContent?.items).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({
+                        display_name: "Cottage Cheese",
+                        amount: 200,
+                        unit: "g",
+                    }),
+                ]),
+            );
+            const locations = await call("list_fridge_locations");
+            expect(textOf(locations)).toContain("Fridge");
+        });
+    });
+
+    test("add_grocery_line with fridge identity shows already-have", async () => {
+        db.barcodeFoods[cottage.barcode] = cottage;
+        const store = await createGroceryStore(
+            db.settingsStore,
+            "hh-1",
+            "Safeway",
+        );
+        await withPat(async (call) => {
+            const loc = await call("add_fridge_location", { name: "Fridge" });
+            await call("add_fridge_item", {
+                location_id: loc.structuredContent?.id,
+                kind: "food",
+                barcode: cottage.barcode,
+                amount: 200,
+            });
+            const line = await call("add_grocery_line", {
+                store_id: store.id,
+                kind: "food",
+                barcode: cottage.barcode,
+                amount: 400,
+            });
+            expect(line.isError).toBeFalsy();
+            expect(textOf(line)).toContain("already have");
+            expect(line.structuredContent?.already_have).toBe(
+                "already have: have 200 g, need 200 g",
+            );
+        });
+    });
+
+    test("add_recipe_to_grocery returns remainder for selected members", async () => {
+        db.barcodeFoods[cottage.barcode] = cottage;
+        const store = await createGroceryStore(
+            db.settingsStore,
+            "hh-1",
+            "Safeway",
+        );
+        await withUser(alice, async (call) => {
+            const recipe = await call("create_recipe", {
+                name: "Bowl",
+                yield_portions: 2,
+            });
+            const recipeId = recipe.structuredContent?.id as string;
+            await call("add_recipe_ingredient", {
+                recipe_id: recipeId,
+                barcode: cottage.barcode,
+                amount: 200,
+            });
+            const loc = await call("add_fridge_location", { name: "Fridge" });
+            await call("add_fridge_item", {
+                location_id: loc.structuredContent?.id,
+                kind: "food",
+                barcode: cottage.barcode,
+                amount: 50,
+            });
+            const added = await call("add_recipe_to_grocery", {
+                recipe_id: recipeId,
+                store_id: store.id,
+                member_ids: [alice, bob],
+            });
+            expect(added.isError).toBeFalsy();
+            const remainder = added.structuredContent?.remainder as Array<{
+                display_name: string;
+                skipped: boolean;
+                remainder: { amount: number; unit: string } | null;
+            }>;
+            expect(remainder).toHaveLength(1);
+            expect(remainder[0]?.display_name).toBe("Cottage Cheese");
+            expect(remainder[0]?.skipped).toBe(false);
+            expect(remainder[0]?.remainder).toEqual({
+                amount: 150,
+                unit: "g",
+            });
+        });
+    });
+
+    test("search_food returns FoodResult shape", async () => {
+        db.foodSearchHits = [cottage];
+        await withPat(async (call) => {
+            const r = await call("search_food", { query: "cottage" });
+            expect(r.isError).toBeFalsy();
+            expect(textOf(r)).toContain("Cottage Cheese");
+            expect(r.structuredContent?.foods).toEqual([
+                expect.objectContaining({
+                    name: "Cottage Cheese",
+                    source: "off:070852010016",
+                    barcode: "070852010016",
+                    calories: 98,
+                }),
+            ]);
+        });
+    });
+
+    test("set_store_rules stores free text", async () => {
+        const store = await createGroceryStore(
+            db.settingsStore,
+            "hh-1",
+            "Safeway",
+        );
+        await withPat(async (call) => {
+            const r = await call("set_store_rules", {
+                store_id: store.id,
+                body: "dairy is on the back wall",
+            });
+            expect(r.isError).toBeFalsy();
+            expect(textOf(r)).toContain("dairy is on the back wall");
+            const listed = await call("list_store_rules", {
+                store_id: store.id,
+            });
+            expect(textOf(listed)).toContain("dairy is on the back wall");
+        });
+    });
+
+    test("OAuth log_meal with target_member writes the partner", async () => {
+        db.members = [
+            {
+                householdId: "hh-1",
+                userId: "u1",
+                role: "owner",
+                displayName: "U1",
+            },
+            {
+                householdId: "hh-1",
+                userId: bob,
+                role: "member",
+                displayName: "Bob",
+            },
+        ];
+        await withTools(null, async (call) => {
+            const r = await call("log_meal", {
+                description: "toast",
+                meal_type: "breakfast",
+                calories: 100,
+                protein_g: 4,
+                carbs_g: 18,
+                fat_g: 1,
+                target_member: bob,
+            });
+            expect(r.isError).toBeFalsy();
+            expect(db.inserted[0]!.user_id).toBe(bob);
+            const today = await call("get_meals_today", { user_id: bob });
+            expect(textOf(today)).toContain("toast");
+        });
+    });
+
+    test("OAuth user_id still cannot sudo a nutrition write", async () => {
+        db.members = [
+            {
+                householdId: "hh-1",
+                userId: "u1",
+                role: "owner",
+                displayName: "U1",
+            },
+            {
+                householdId: "hh-1",
+                userId: bob,
+                role: "member",
+                displayName: "Bob",
+            },
+        ];
+        await withTools(null, async (call) => {
+            const r = await call("log_meal", {
+                description: "toast",
+                meal_type: "breakfast",
+                calories: 100,
+                protein_g: 4,
+                carbs_g: 18,
+                fat_g: 1,
+                user_id: bob,
+            });
+            expect(r.isError).toBe(true);
+            expect(textOf(r)).toContain(OAUTH_USER_MISMATCH);
+            expect(db.inserted).toHaveLength(0);
+        });
+    });
+
+    test("delete_recipe as non-creator member is refused", async () => {
+        db.barcodeFoods[cottage.barcode] = cottage;
+        let recipeId = "";
+        await withUser(alice, async (call) => {
+            const recipe = await call("create_recipe", {
+                name: "Owner oats",
+                yield_portions: 2,
+            });
+            recipeId = recipe.structuredContent?.id as string;
+        });
+        await withUser(bob, async (call) => {
+            const r = await call("delete_recipe", { id: recipeId });
+            expect(r.isError).toBe(true);
+            expect(textOf(r)).toContain("creator or household owner");
+        });
+        await withUser(alice, async (call) => {
+            const listed = await call("list_recipes");
+            expect(textOf(listed)).toContain("Owner oats");
+        });
+    });
+
+    test("set_person_allergens then grocery add warns", async () => {
+        const store = await createGroceryStore(
+            db.settingsStore,
+            "hh-1",
+            "Safeway",
+        );
+        await withPat(async (call) => {
+            const allergen = await call("set_person_allergens", {
+                member_id: bob,
+                allergen: "peanut",
+            });
+            expect(allergen.isError).toBeFalsy();
+            const line = await call("add_grocery_line", {
+                store_id: store.id,
+                kind: "food",
+                name: "peanut butter",
+                amount: 100,
+            });
+            expect(line.isError).toBeFalsy();
+            expect(line.structuredContent?.warning).toContain("peanut");
+            expect(textOf(line).toLowerCase()).toContain("peanut");
+        });
+    });
 });
 
 describe("rotate_household_token from member OAuth", () => {
@@ -5540,6 +5927,8 @@ describe("authenticated dashboard HTTP", () => {
         expect(html).not.toContain("You can look, not edit");
         expect(html).not.toContain('action="/approve"');
         expect(html).not.toContain('action="/add-household-member"');
+        expect(html).not.toContain('action="/log-meal"');
+        expect(html).not.toContain('name="log_meal"');
         expect(html).not.toContain('class="facts"');
         expect(html).toContain('class="bottom-nav"');
         expect(html).toContain('href="/fridge"');

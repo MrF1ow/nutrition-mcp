@@ -73,6 +73,11 @@ import {
     countMeals,
     existingIdempotencyKeys,
     existingMealIds,
+    liveFridgeStore,
+    liveGroceryStore,
+    liveRecipesStore,
+    liveSettingsStore,
+    liveRulesStore,
     type Meal,
     type NutritionGoals,
     type WaterEntry,
@@ -129,8 +134,46 @@ import {
     type BulkImportArgs,
 } from "./import.js";
 import { normalizeBarcode, lookupBarcode, formatFoodResult } from "./foods.js";
+import { searchFoodsByName } from "./food-search.js";
 import { formatMealSearchResults } from "./search.js";
 import { getWidgetHtml } from "./widgets.js";
+import { alreadyHaveTag } from "./linking.js";
+import {
+    addFoodByBarcode,
+    addLocation,
+    addManualFood,
+    addSupply,
+    deleteItem,
+    deleteLocation,
+    listFridge,
+    moveItem,
+    updateItemQuantity,
+} from "./fridge.js";
+import {
+    addGroceryFoodByBarcode,
+    addGroceryManualFood,
+    addGrocerySupply,
+    checkGroceryLine,
+    clearCheckedLines,
+    groceryAllergenWarning,
+    listGrocery,
+} from "./grocery.js";
+import {
+    addRecipeIngredientByBarcode,
+    addRecipeManualIngredient,
+    addRecipeToGrocery,
+    createRecipe,
+    deleteRecipe,
+    getRecipeView,
+    listRecipes,
+    setPersonPortion,
+} from "./recipes.js";
+import {
+    addAllergen,
+    addDislike,
+    addPersonRule,
+    addStoreRule,
+} from "./rules.js";
 
 // MCP Apps UI (https://blog.modelcontextprotocol.io/posts/2026-01-26-mcp-apps/):
 // the get_nutrition_summary tool links to an HTML dashboard served as a ui://
@@ -1374,6 +1417,15 @@ export function registerTools(
                   );
     const personSchema = <T extends z.ZodRawShape>(shape: T) =>
         z.object({ ...shape, user_id: userIdArg });
+    const targetMemberArg = z
+        .string()
+        .min(1)
+        .optional()
+        .describe(
+            "Household member to write this nutrition entry for. MCP only; the site has no log-as-them control.",
+        );
+    const nutritionWriteSchema = <T extends z.ZodRawShape>(shape: T) =>
+        personSchema({ ...shape, target_member: targetMemberArg });
     async function actorUserId(
         requested: string | undefined,
         intent: ActorIntent = "write",
@@ -1433,6 +1485,66 @@ export function registerTools(
         }
         return check.member.householdId;
     }
+    async function writeUserId(
+        requested: string | undefined,
+        targetMember: string | undefined,
+    ): Promise<string> {
+        if (targetMember != null) {
+            if (requested != null && requested !== targetMember) {
+                throw new Error(
+                    "target_member must match user_id when both are set",
+                );
+            }
+            const householdId = await callerHouseholdId();
+            const member = await getHouseholdMembership(
+                targetMember,
+                householdId,
+            );
+            const check = requireMemberOfHousehold(member, householdId);
+            if (!check.ok) {
+                throw new Error("not a household member");
+            }
+            return targetMember;
+        }
+        return actorUserId(requested, "write");
+    }
+    async function requireHouseholdMemberId(memberId: string): Promise<string> {
+        const householdId = await callerHouseholdId();
+        const member = await getHouseholdMembership(memberId, householdId);
+        const check = requireMemberOfHousehold(member, householdId);
+        if (!check.ok) {
+            throw new Error("not a household member");
+        }
+        return memberId;
+    }
+    async function callerActor(): Promise<{
+        userId: string;
+        isOwner: boolean;
+        householdId: string;
+    }> {
+        if (auth.kind === "household") {
+            const members = await listHouseholdMembers(auth.householdId);
+            const owner = members.find((row) => row.role === "owner");
+            if (!owner) {
+                throw new Error("not a household member");
+            }
+            return {
+                userId: owner.userId,
+                isOwner: true,
+                householdId: auth.householdId,
+            };
+        }
+        const member = await getHouseholdMembership(auth.userId);
+        const check = requireMemberOfHousehold(member, null);
+        if (!check.ok) {
+            throw new Error("not a household member");
+        }
+        return {
+            userId: check.member.userId,
+            isOwner: check.member.role === "owner",
+            householdId: check.member.householdId,
+        };
+    }
     // clientInfo is a getter, not a value: at registration time the SDK has not
     // yet resolved who is calling, and on the modern leg it backfills the
     // identity per request before dispatch.
@@ -1478,7 +1590,7 @@ export function registerTools(
                 idempotentHint: false,
                 openWorldHint: false,
             },
-            inputSchema: personSchema({
+            inputSchema: nutritionWriteSchema({
                 description: z.string().describe("What was eaten"),
                 meal_type: z
                     .enum(["breakfast", "lunch", "dinner", "snack"])
@@ -1572,11 +1684,11 @@ export function registerTools(
             // widget renders nothing when no goals are set.
             ...uiMeta(MEAL_LOGGED_WIDGET_URI),
         },
-        async ({ user_id, ...mealArgs }) => {
+        async ({ user_id, target_member, ...mealArgs }) => {
             return withAnalytics(
                 "log_meal",
                 async () => {
-                    const userId = await actorUserId(user_id);
+                    const userId = await writeUserId(user_id, target_member);
                     const { iso, note } = await resolveWriteTimestamp(
                         userId,
                         mealArgs.logged_at,
@@ -1698,7 +1810,7 @@ export function registerTools(
                 " rows per call: split larger files by date range, keeping all rows for one calendar date in the same call. If a single calendar date alone has more than " +
                 MAX_ROWS_PER_CALL +
                 " rows, that date has to be split across more than one call — the row cap is a hard server-side limit and wins over the same-call grouping. Doing so loosens deduplication for that date only: two rows in it that are byte-identical (same description, meal_type, calories, protein_g, carbs_g, fat_g, notes and logged_at) may collapse into one if they land in different calls, so prefer keeping duplicate-looking rows together in one call when you have to split. If the file is an export from THIS server (its header starts with an id column), map that column to source_id on every row, and map its timezone column to timezone on every row too — source_id is what makes restoring a backup a no-op instead of doubling the user's history, and timezone is what makes a restored row resolve at the local time it was actually recorded rather than the account's current timezone.",
-            inputSchema: personSchema({
+            inputSchema: nutritionWriteSchema({
                 meals: z
                     .array(IMPORT_ROW_SCHEMA)
                     .describe(
@@ -1762,7 +1874,10 @@ export function registerTools(
             return withAnalytics(
                 "bulk_import_meals",
                 async () => {
-                    const userId = await actorUserId(args.user_id);
+                    const userId = await writeUserId(
+                        args.user_id,
+                        args.target_member,
+                    );
                     // One profile read serves both: the timezone, and whether the
                     // user ever configured one via timezoneFromProfile (null
                     // means never set — see the Profile.timezone doc comment in
@@ -2626,7 +2741,7 @@ export function registerTools(
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            inputSchema: personSchema({
+            inputSchema: nutritionWriteSchema({
                 // Bounded in the schema for the same reason as log_meal, with
                 // the gram ceiling set by the numeric(6,2) goal columns rather
                 // than by what a plausible meal carries.
@@ -2721,7 +2836,10 @@ export function registerTools(
             return withAnalytics(
                 "set_nutrition_goals",
                 async () => {
-                    const userId = await actorUserId(args.user_id);
+                    const userId = await writeUserId(
+                        args.user_id,
+                        args.target_member,
+                    );
                     const [existing, preferredUnit] = await Promise.all([
                         getNutritionGoals(userId),
                         getPreferredWeightUnit(userId),
@@ -3005,15 +3123,15 @@ export function registerTools(
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            inputSchema: personSchema({
+            inputSchema: nutritionWriteSchema({
                 id: z.string().describe("UUID of the meal to delete"),
             }),
         },
-        async ({ id, user_id }) => {
+        async ({ id, user_id, target_member }) => {
             return withAnalytics(
                 "delete_meal",
                 async () => {
-                    const userId = await actorUserId(user_id);
+                    const userId = await writeUserId(user_id, target_member);
                     const deleted = await deleteMeal(userId, id);
                     return {
                         content: [
@@ -3047,7 +3165,7 @@ export function registerTools(
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            inputSchema: personSchema({
+            inputSchema: nutritionWriteSchema({
                 id: z.string().describe("UUID of the meal to update"),
                 description: z.string().optional(),
                 meal_type: z
@@ -3102,11 +3220,11 @@ export function registerTools(
             // changes its header. Renders nothing when no goals are set.
             ...uiMeta(MEAL_LOGGED_WIDGET_URI),
         },
-        async ({ id, user_id, ...fields }) => {
+        async ({ id, user_id, target_member, ...fields }) => {
             return withAnalytics(
                 "update_meal",
                 async () => {
-                    const userId = await actorUserId(user_id);
+                    const userId = await writeUserId(user_id, target_member);
                     const { iso, note } = await resolveWriteTimestamp(
                         userId,
                         fields.logged_at,
@@ -3152,7 +3270,7 @@ export function registerTools(
                 idempotentHint: false,
                 openWorldHint: false,
             },
-            inputSchema: personSchema({
+            inputSchema: nutritionWriteSchema({
                 amount_ml: z.coerce
                     .number()
                     .int()
@@ -3180,11 +3298,11 @@ export function registerTools(
                     ),
             }),
         },
-        async ({ user_id, ...waterArgs }) => {
+        async ({ user_id, target_member, ...waterArgs }) => {
             return withAnalytics(
                 "log_water",
                 async () => {
-                    const userId = await actorUserId(user_id);
+                    const userId = await writeUserId(user_id, target_member);
                     const { iso, note } = await resolveWriteTimestamp(
                         userId,
                         waterArgs.logged_at,
@@ -3328,15 +3446,15 @@ export function registerTools(
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            inputSchema: personSchema({
+            inputSchema: nutritionWriteSchema({
                 id: z.string().describe("UUID of the water entry to delete"),
             }),
         },
-        async ({ id, user_id }) => {
+        async ({ id, user_id, target_member }) => {
             return withAnalytics(
                 "delete_water",
                 async () => {
-                    const userId = await actorUserId(user_id);
+                    const userId = await writeUserId(user_id, target_member);
                     const deleted = await deleteWater(userId, id);
                     return {
                         content: [
@@ -3366,7 +3484,7 @@ export function registerTools(
                 idempotentHint: false,
                 openWorldHint: false,
             },
-            inputSchema: personSchema({
+            inputSchema: nutritionWriteSchema({
                 weight: z.coerce
                     .number()
                     .positive()
@@ -3405,7 +3523,10 @@ export function registerTools(
             return withAnalytics(
                 "log_weight",
                 async () => {
-                    const userId = await actorUserId(args.user_id);
+                    const userId = await writeUserId(
+                        args.user_id,
+                        args.target_member,
+                    );
                     const { iso, note } = await resolveWriteTimestamp(
                         userId,
                         args.logged_at,
@@ -3788,7 +3909,7 @@ export function registerTools(
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            inputSchema: personSchema({
+            inputSchema: nutritionWriteSchema({
                 id: z.string().describe("UUID of the weight entry to update"),
                 weight: z.coerce
                     .number()
@@ -3810,11 +3931,19 @@ export function registerTools(
                 notes: z.string().optional(),
             }),
         },
-        async ({ id, weight, unit, logged_at, notes, user_id }) => {
+        async ({
+            id,
+            weight,
+            unit,
+            logged_at,
+            notes,
+            user_id,
+            target_member,
+        }) => {
             return withAnalytics(
                 "update_weight",
                 async () => {
-                    const userId = await actorUserId(user_id);
+                    const userId = await writeUserId(user_id, target_member);
                     const { iso, note } = await resolveWriteTimestamp(
                         userId,
                         logged_at,
@@ -3868,15 +3997,15 @@ export function registerTools(
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            inputSchema: personSchema({
+            inputSchema: nutritionWriteSchema({
                 id: z.string().describe("UUID of the weight entry to delete"),
             }),
         },
-        async ({ id, user_id }) => {
+        async ({ id, user_id, target_member }) => {
             return withAnalytics(
                 "delete_weight",
                 async () => {
-                    const userId = await actorUserId(user_id);
+                    const userId = await writeUserId(user_id, target_member);
                     const deleted = await deleteWeight(userId, id);
                     return {
                         content: [
@@ -4528,6 +4657,1673 @@ export function registerTools(
                 analytics,
             );
         },
+    );
+
+    const ALLERGEN_SCHEMA = z.enum([
+        "peanut",
+        "tree_nut",
+        "milk",
+        "egg",
+        "wheat",
+        "soy",
+        "fish",
+        "shellfish",
+        "sesame",
+        "other",
+    ]);
+    const QUANTITY_ITEM = z.object({
+        amount: z.number(),
+        unit: z.string(),
+    });
+    async function householdFoodNames(householdId: string): Promise<string[]> {
+        const [fridge, recipes] = await Promise.all([
+            listFridge(liveFridgeStore(), householdId),
+            listRecipes(liveRecipesStore(), householdId),
+        ]);
+        const names = fridge.items.map((item) => item.displayName);
+        const recipesStore = liveRecipesStore();
+        for (const recipe of recipes) {
+            const ingredients = await recipesStore.listIngredients(
+                householdId,
+                recipe.id,
+            );
+            for (const ingredient of ingredients) {
+                names.push(ingredient.displayName);
+            }
+        }
+        return names;
+    }
+    async function groceryLineExtras(
+        householdId: string,
+        line: {
+            displayName: string;
+            identity: Parameters<typeof alreadyHaveTag>[0]["identity"];
+            quantity: { amount: number; unit: string };
+        },
+    ): Promise<{ alreadyHave: string | null; warning: string | null }> {
+        const [fridge, members] = await Promise.all([
+            listFridge(liveFridgeStore(), householdId),
+            listHouseholdMembers(householdId),
+        ]);
+        const tag = alreadyHaveTag(
+            { identity: line.identity, quantity: line.quantity },
+            fridge.items.map((item) => ({
+                identity: item.identity,
+                quantity: item.quantity,
+            })),
+        );
+        const rules = liveRulesStore();
+        const allergenMembers = await Promise.all(
+            members.map(async (member) => ({
+                displayName: member.displayName,
+                allergens: await rules.listAllergens(
+                    householdId,
+                    member.userId,
+                ),
+            })),
+        );
+        const warning = groceryAllergenWarning(
+            line.displayName,
+            allergenMembers,
+        );
+        return {
+            alreadyHave:
+                tag == null
+                    ? null
+                    : tag.cover === "full"
+                      ? "already have"
+                      : `already have: have ${tag.have.amount} ${tag.have.unit}, need ${tag.need.amount} ${tag.need.unit}`,
+            warning: warning?.text ?? null,
+        };
+    }
+
+    server.registerTool(
+        "list_fridge_locations",
+        {
+            title: "List Fridge Locations",
+            description:
+                "List household fridge and pantry locations with ids for add_fridge_item.",
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            outputSchema: z.object({
+                locations: z.array(
+                    z.object({
+                        id: z.string(),
+                        name: z.string(),
+                        sort_order: z.number(),
+                    }),
+                ),
+            }),
+        },
+        async () =>
+            withAnalytics(
+                "list_fridge_locations",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    const { locations } = await listFridge(
+                        liveFridgeStore(),
+                        householdId,
+                    );
+                    const payload = {
+                        locations: locations.map((row) => ({
+                            id: row.id,
+                            name: row.name,
+                            sort_order: row.sortOrder,
+                        })),
+                    };
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text:
+                                    payload.locations.length === 0
+                                        ? "No fridge locations."
+                                        : payload.locations
+                                              .map(
+                                                  (row) =>
+                                                      `${row.name} ${row.id}`,
+                                              )
+                                              .join("\n"),
+                            },
+                        ],
+                        structuredContent: payload,
+                    };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "list_fridge_items",
+        {
+            title: "List Fridge Items",
+            description:
+                "List household fridge items with quantity, location, and identity.",
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            outputSchema: z.object({
+                items: z.array(
+                    z.object({
+                        id: z.string(),
+                        location_id: z.string(),
+                        kind: z.enum(["food", "supply"]),
+                        display_name: z.string(),
+                        amount: z.number(),
+                        unit: z.string(),
+                    }),
+                ),
+            }),
+        },
+        async () =>
+            withAnalytics(
+                "list_fridge_items",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    const { items } = await listFridge(
+                        liveFridgeStore(),
+                        householdId,
+                    );
+                    const payload = {
+                        items: items.map((item) => ({
+                            id: item.id,
+                            location_id: item.locationId,
+                            kind: item.kind,
+                            display_name: item.displayName,
+                            amount: item.quantity.amount,
+                            unit: item.quantity.unit,
+                        })),
+                    };
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text:
+                                    payload.items.length === 0
+                                        ? "Fridge is empty."
+                                        : payload.items
+                                              .map(
+                                                  (item) =>
+                                                      `${item.display_name} ${item.amount} ${item.unit} ${item.id}`,
+                                              )
+                                              .join("\n"),
+                            },
+                        ],
+                        structuredContent: payload,
+                    };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "add_fridge_location",
+        {
+            title: "Add Fridge Location",
+            description: "Add a named fridge or pantry location.",
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                name: z.string().min(1).describe("Location name"),
+            }),
+            outputSchema: z.object({
+                id: z.string(),
+                name: z.string(),
+            }),
+        },
+        async (args) =>
+            withAnalytics(
+                "add_fridge_location",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    const location = await addLocation(
+                        liveFridgeStore(),
+                        householdId,
+                        args.name,
+                    );
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Added ${location.name} ${location.id}`,
+                            },
+                        ],
+                        structuredContent: {
+                            id: location.id,
+                            name: location.name,
+                        },
+                    };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "delete_fridge_location",
+        {
+            title: "Delete Fridge Location",
+            description:
+                "Delete a fridge location and the items filed under it.",
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: true,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                id: z.string().describe("Location id"),
+            }),
+        },
+        async (args) =>
+            withAnalytics(
+                "delete_fridge_location",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    const deleted = await deleteLocation(
+                        liveFridgeStore(),
+                        householdId,
+                        args.id,
+                    );
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: deleted
+                                    ? `Deleted location ${args.id}.`
+                                    : `No location found with id ${args.id}.`,
+                            },
+                        ],
+                    };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "add_fridge_item",
+        {
+            title: "Add Fridge Item",
+            description:
+                "Add a food or supply to a fridge location. Food defaults to grams. Pass a barcode for packaged food, a name for a manual food, and name plus unit for a supply.",
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                location_id: z.string(),
+                kind: z.enum(["food", "supply"]),
+                amount: z.coerce.number(),
+                name: z.string().optional(),
+                barcode: z.string().optional(),
+                unit: z.string().optional(),
+            }),
+            outputSchema: z.object({
+                id: z.string(),
+                display_name: z.string(),
+                amount: z.number(),
+                unit: z.string(),
+            }),
+        },
+        async (args) =>
+            withAnalytics(
+                "add_fridge_item",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    const store = liveFridgeStore();
+                    const item =
+                        args.kind === "supply"
+                            ? await addSupply(store, {
+                                  householdId,
+                                  locationId: args.location_id,
+                                  name: args.name ?? "",
+                                  amount: args.amount,
+                                  unit: args.unit ?? "",
+                              })
+                            : args.barcode
+                              ? await addFoodByBarcode(
+                                    store,
+                                    {
+                                        householdId,
+                                        locationId: args.location_id,
+                                        barcode: args.barcode,
+                                        amount: args.amount,
+                                    },
+                                    { lookup: lookupBarcode },
+                                )
+                              : await addManualFood(store, {
+                                    householdId,
+                                    locationId: args.location_id,
+                                    name: args.name ?? "",
+                                    amount: args.amount,
+                                });
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Added ${item.displayName} ${item.quantity.amount} ${item.quantity.unit} ${item.id}`,
+                            },
+                        ],
+                        structuredContent: {
+                            id: item.id,
+                            display_name: item.displayName,
+                            amount: item.quantity.amount,
+                            unit: item.quantity.unit,
+                        },
+                    };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "update_fridge_item",
+        {
+            title: "Update Fridge Item",
+            description:
+                "Change a fridge item's quantity and/or move it to another location.",
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                id: z.string(),
+                amount: z.coerce.number().optional(),
+                unit: z.string().optional(),
+                location_id: z.string().optional(),
+            }),
+        },
+        async (args) =>
+            withAnalytics(
+                "update_fridge_item",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    const store = liveFridgeStore();
+                    if (args.amount != null) {
+                        const updated = await updateItemQuantity(
+                            store,
+                            householdId,
+                            args.id,
+                            { amount: args.amount, unit: args.unit ?? "g" },
+                        );
+                        if (!updated) {
+                            throw new Error(
+                                `No fridge item found with id ${args.id}.`,
+                            );
+                        }
+                    }
+                    if (args.location_id != null) {
+                        const moved = await moveItem(
+                            store,
+                            householdId,
+                            args.id,
+                            args.location_id,
+                        );
+                        if (!moved) {
+                            throw new Error(
+                                `No fridge item found with id ${args.id}.`,
+                            );
+                        }
+                    }
+                    if (args.amount == null && args.location_id == null) {
+                        throw new Error("Pass amount and/or location_id.");
+                    }
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Updated fridge item ${args.id}.`,
+                            },
+                        ],
+                    };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "delete_fridge_item",
+        {
+            title: "Delete Fridge Item",
+            description: "Remove one fridge item.",
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: true,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                id: z.string(),
+            }),
+        },
+        async (args) =>
+            withAnalytics(
+                "delete_fridge_item",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    const deleted = await deleteItem(
+                        liveFridgeStore(),
+                        householdId,
+                        args.id,
+                    );
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: deleted
+                                    ? `Deleted fridge item ${args.id}.`
+                                    : `No fridge item found with id ${args.id}.`,
+                            },
+                        ],
+                    };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "list_grocery_lines",
+        {
+            title: "List Grocery Lines",
+            description:
+                "List grocery lines grouped by store and section, with already-have against the fridge.",
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            outputSchema: z.object({
+                lines: z.array(
+                    z.object({
+                        id: z.string(),
+                        store_id: z.string(),
+                        section_id: z.string(),
+                        display_name: z.string(),
+                        amount: z.number(),
+                        unit: z.string(),
+                        checked: z.boolean(),
+                        already_have: z.string().nullable(),
+                    }),
+                ),
+            }),
+        },
+        async () =>
+            withAnalytics(
+                "list_grocery_lines",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    const snapshot = await listGrocery(
+                        liveGroceryStore(),
+                        liveSettingsStore(),
+                        householdId,
+                    );
+                    const fridge = await listFridge(
+                        liveFridgeStore(),
+                        householdId,
+                    );
+                    const stock = fridge.items.map((item) => ({
+                        identity: item.identity,
+                        quantity: item.quantity,
+                    }));
+                    const payload = {
+                        lines: snapshot.lines.map((line) => {
+                            const tag = alreadyHaveTag(
+                                {
+                                    identity: line.identity,
+                                    quantity: line.quantity,
+                                },
+                                stock,
+                            );
+                            return {
+                                id: line.id,
+                                store_id: line.storeId,
+                                section_id: line.sectionId,
+                                display_name: line.displayName,
+                                amount: line.quantity.amount,
+                                unit: line.quantity.unit,
+                                checked: line.checked,
+                                already_have:
+                                    tag == null
+                                        ? null
+                                        : tag.cover === "full"
+                                          ? "already have"
+                                          : `already have: have ${tag.have.amount} ${tag.have.unit}, need ${tag.need.amount} ${tag.need.unit}`,
+                            };
+                        }),
+                    };
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text:
+                                    payload.lines.length === 0
+                                        ? "Grocery list is empty."
+                                        : payload.lines
+                                              .map((line) => {
+                                                  const tag = line.already_have
+                                                      ? ` [${line.already_have}]`
+                                                      : "";
+                                                  return `${line.display_name} ${line.amount} ${line.unit}${tag}`;
+                                              })
+                                              .join("\n"),
+                            },
+                        ],
+                        structuredContent: payload,
+                    };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "add_grocery_line",
+        {
+            title: "Add Grocery Line",
+            description:
+                "Add a food or supply line to a grocery store. Reports already-have when fridge stock matches, and allergen warnings for household members.",
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                store_id: z.string(),
+                kind: z.enum(["food", "supply"]),
+                amount: z.coerce.number(),
+                name: z.string().optional(),
+                barcode: z.string().optional(),
+                unit: z.string().optional(),
+                section_id: z.string().optional(),
+            }),
+            outputSchema: z.object({
+                id: z.string(),
+                display_name: z.string(),
+                already_have: z.string().nullable(),
+                warning: z.string().nullable(),
+            }),
+        },
+        async (args) =>
+            withAnalytics(
+                "add_grocery_line",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    const grocery = liveGroceryStore();
+                    const settings = liveSettingsStore();
+                    const line =
+                        args.kind === "supply"
+                            ? await addGrocerySupply(grocery, settings, {
+                                  householdId,
+                                  storeId: args.store_id,
+                                  sectionId: args.section_id,
+                                  name: args.name ?? "",
+                                  amount: args.amount,
+                                  unit: args.unit ?? "",
+                              })
+                            : args.barcode
+                              ? await addGroceryFoodByBarcode(
+                                    grocery,
+                                    settings,
+                                    {
+                                        householdId,
+                                        storeId: args.store_id,
+                                        sectionId: args.section_id,
+                                        barcode: args.barcode,
+                                        amount: args.amount,
+                                    },
+                                    { lookup: lookupBarcode },
+                                )
+                              : await addGroceryManualFood(grocery, settings, {
+                                    householdId,
+                                    storeId: args.store_id,
+                                    sectionId: args.section_id,
+                                    name: args.name ?? "",
+                                    amount: args.amount,
+                                });
+                    const extras = await groceryLineExtras(householdId, line);
+                    const bits = [
+                        `Added ${line.displayName} ${line.quantity.amount} ${line.quantity.unit}`,
+                    ];
+                    if (extras.alreadyHave) bits.push(extras.alreadyHave);
+                    if (extras.warning) bits.push(extras.warning);
+                    return {
+                        content: [{ type: "text", text: bits.join(". ") }],
+                        structuredContent: {
+                            id: line.id,
+                            display_name: line.displayName,
+                            already_have: extras.alreadyHave,
+                            warning: extras.warning,
+                        },
+                    };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "check_grocery_line",
+        {
+            title: "Check Grocery Line",
+            description:
+                "Mark a grocery line checked or unchecked. Checking does not add the item to the fridge.",
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                id: z.string(),
+                checked: z.boolean().optional(),
+            }),
+        },
+        async (args) =>
+            withAnalytics(
+                "check_grocery_line",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    const line = await checkGroceryLine(
+                        liveGroceryStore(),
+                        householdId,
+                        args.id,
+                        args.checked ?? true,
+                    );
+                    if (!line) {
+                        throw new Error(
+                            `No grocery line found with id ${args.id}.`,
+                        );
+                    }
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: line.checked
+                                    ? `Checked ${line.displayName}. Fridge unchanged.`
+                                    : `Unchecked ${line.displayName}.`,
+                            },
+                        ],
+                    };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "delete_grocery_line",
+        {
+            title: "Delete Grocery Line",
+            description: "Remove one grocery line.",
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: true,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                id: z.string(),
+            }),
+        },
+        async (args) =>
+            withAnalytics(
+                "delete_grocery_line",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    const deleted = await liveGroceryStore().deleteLine(
+                        householdId,
+                        args.id,
+                    );
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: deleted
+                                    ? `Deleted grocery line ${args.id}.`
+                                    : `No grocery line found with id ${args.id}.`,
+                            },
+                        ],
+                    };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "clear_checked_grocery_lines",
+        {
+            title: "Clear Checked Grocery Lines",
+            description: "Remove every checked grocery line.",
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: true,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+        },
+        async () =>
+            withAnalytics(
+                "clear_checked_grocery_lines",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    const removed = await clearCheckedLines(
+                        liveGroceryStore(),
+                        householdId,
+                    );
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Cleared ${removed} checked line${removed === 1 ? "" : "s"}.`,
+                            },
+                        ],
+                    };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "list_recipes",
+        {
+            title: "List Recipes",
+            description: "List household recipes.",
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            outputSchema: z.object({
+                recipes: z.array(
+                    z.object({
+                        id: z.string(),
+                        name: z.string(),
+                        yield_portions: z.number(),
+                        creator_id: z.string(),
+                    }),
+                ),
+            }),
+        },
+        async () =>
+            withAnalytics(
+                "list_recipes",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    const recipes = await listRecipes(
+                        liveRecipesStore(),
+                        householdId,
+                    );
+                    const payload = {
+                        recipes: recipes.map((recipe) => ({
+                            id: recipe.id,
+                            name: recipe.name,
+                            yield_portions: recipe.yieldPortions,
+                            creator_id: recipe.creatorId,
+                        })),
+                    };
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text:
+                                    payload.recipes.length === 0
+                                        ? "No recipes."
+                                        : payload.recipes
+                                              .map(
+                                                  (recipe) =>
+                                                      `${recipe.name} yield ${recipe.yield_portions} ${recipe.id}`,
+                                              )
+                                              .join("\n"),
+                            },
+                        ],
+                        structuredContent: payload,
+                    };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "get_recipe",
+        {
+            title: "Get Recipe",
+            description:
+                "Get a recipe as viewed by a household member, including per-portion and per-person amounts.",
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                id: z.string(),
+                member_id: z.string().optional(),
+            }),
+            outputSchema: z.object({
+                id: z.string(),
+                name: z.string(),
+                yield_portions: z.number(),
+                portion_count: z.number(),
+                ingredients: z.array(
+                    z.object({
+                        display_name: z.string(),
+                        amount: z.number(),
+                        unit: z.string(),
+                        per_portion_amount: z.number(),
+                        person_amount: z.number(),
+                    }),
+                ),
+            }),
+        },
+        async (args) =>
+            withAnalytics(
+                "get_recipe",
+                async () => {
+                    const actor = await callerActor();
+                    const memberId = args.member_id
+                        ? await requireHouseholdMemberId(args.member_id)
+                        : actor.userId;
+                    const view = await getRecipeView(
+                        liveRecipesStore(),
+                        actor.householdId,
+                        args.id,
+                        memberId,
+                    );
+                    const payload = {
+                        id: view.id,
+                        name: view.name,
+                        yield_portions: view.yieldPortions,
+                        portion_count: view.portionCount,
+                        ingredients: view.ingredients.map((ingredient) => ({
+                            display_name: ingredient.displayName,
+                            amount: ingredient.quantity.amount,
+                            unit: ingredient.quantity.unit,
+                            per_portion_amount: ingredient.perPortionAmount,
+                            person_amount: ingredient.personAmount,
+                        })),
+                    };
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `${view.name} yield ${view.yieldPortions}, portion ${view.portionCount}\n${payload.ingredients
+                                    .map(
+                                        (ingredient) =>
+                                            `${ingredient.display_name} ${ingredient.person_amount} ${ingredient.unit}`,
+                                    )
+                                    .join("\n")}`,
+                            },
+                        ],
+                        structuredContent: payload,
+                    };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "create_recipe",
+        {
+            title: "Create Recipe",
+            description:
+                "Create a household recipe with a cook yield. The caller is the creator.",
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                name: z.string().min(1),
+                yield_portions: z.coerce.number(),
+            }),
+            outputSchema: z.object({
+                id: z.string(),
+                name: z.string(),
+                yield_portions: z.number(),
+            }),
+        },
+        async (args) =>
+            withAnalytics(
+                "create_recipe",
+                async () => {
+                    const actor = await callerActor();
+                    const recipe = await createRecipe(liveRecipesStore(), {
+                        householdId: actor.householdId,
+                        creatorId: actor.userId,
+                        name: args.name,
+                        yieldPortions: args.yield_portions,
+                    });
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Created ${recipe.name} yield ${recipe.yieldPortions} ${recipe.id}`,
+                            },
+                        ],
+                        structuredContent: {
+                            id: recipe.id,
+                            name: recipe.name,
+                            yield_portions: recipe.yieldPortions,
+                        },
+                    };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "add_recipe_ingredient",
+        {
+            title: "Add Recipe Ingredient",
+            description:
+                "Add a food ingredient to a recipe. Pass a barcode or a manual name. Amounts are grams.",
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                recipe_id: z.string(),
+                amount: z.coerce.number(),
+                name: z.string().optional(),
+                barcode: z.string().optional(),
+            }),
+        },
+        async (args) =>
+            withAnalytics(
+                "add_recipe_ingredient",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    const store = liveRecipesStore();
+                    const ingredient = args.barcode
+                        ? await addRecipeIngredientByBarcode(
+                              store,
+                              {
+                                  householdId,
+                                  recipeId: args.recipe_id,
+                                  barcode: args.barcode,
+                                  amount: args.amount,
+                              },
+                              { lookup: lookupBarcode },
+                          )
+                        : await addRecipeManualIngredient(store, {
+                              householdId,
+                              recipeId: args.recipe_id,
+                              name: args.name ?? "",
+                              amount: args.amount,
+                          });
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Added ${ingredient.displayName} ${ingredient.quantity.amount} ${ingredient.quantity.unit}`,
+                            },
+                        ],
+                    };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "set_recipe_portion",
+        {
+            title: "Set Recipe Portion",
+            description:
+                "Set how many portions a household member eats of a recipe.",
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                recipe_id: z.string(),
+                member_id: z.string(),
+                portion_count: z.coerce.number(),
+            }),
+        },
+        async (args) =>
+            withAnalytics(
+                "set_recipe_portion",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    await requireHouseholdMemberId(args.member_id);
+                    const portion = await setPersonPortion(liveRecipesStore(), {
+                        householdId,
+                        recipeId: args.recipe_id,
+                        userId: args.member_id,
+                        portionCount: args.portion_count,
+                    });
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Set portion ${portion.portionCount} for ${args.member_id}.`,
+                            },
+                        ],
+                    };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "delete_recipe",
+        {
+            title: "Delete Recipe",
+            description:
+                "Delete a recipe. Only the creator or the household owner may delete.",
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: true,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                id: z.string(),
+            }),
+        },
+        async (args) =>
+            withAnalytics(
+                "delete_recipe",
+                async () => {
+                    const actor = await callerActor();
+                    const deleted = await deleteRecipe(
+                        liveRecipesStore(),
+                        actor.householdId,
+                        args.id,
+                        { userId: actor.userId, isOwner: actor.isOwner },
+                    );
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: deleted
+                                    ? `Deleted recipe ${args.id}.`
+                                    : `No recipe found with id ${args.id}.`,
+                            },
+                        ],
+                    };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "add_recipe_to_grocery",
+        {
+            title: "Add Recipe to Grocery",
+            description:
+                "Add a recipe's remainder to a grocery store after summing the selected members' portions and netting fridge stock. Returns the per-ingredient remainder.",
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                recipe_id: z.string(),
+                store_id: z.string(),
+                member_ids: z.array(z.string()).min(1),
+            }),
+            outputSchema: z.object({
+                remainder: z.array(
+                    z.object({
+                        display_name: z.string(),
+                        skipped: z.boolean(),
+                        need: QUANTITY_ITEM,
+                        remainder: QUANTITY_ITEM.nullable(),
+                    }),
+                ),
+            }),
+        },
+        async (args) =>
+            withAnalytics(
+                "add_recipe_to_grocery",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    for (const memberId of args.member_ids) {
+                        await requireHouseholdMemberId(memberId);
+                    }
+                    const recipes = liveRecipesStore();
+                    const portionCounts: number[] = [];
+                    for (const memberId of args.member_ids) {
+                        const view = await getRecipeView(
+                            recipes,
+                            householdId,
+                            args.recipe_id,
+                            memberId,
+                        );
+                        portionCounts.push(view.portionCount);
+                    }
+                    const fridge = await listFridge(
+                        liveFridgeStore(),
+                        householdId,
+                    );
+                    const result = await addRecipeToGrocery({
+                        recipes,
+                        grocery: liveGroceryStore(),
+                        settings: liveSettingsStore(),
+                        fridgeItems: fridge.items.map((item) => ({
+                            identity: item.identity,
+                            quantity: item.quantity,
+                        })),
+                        householdId,
+                        recipeId: args.recipe_id,
+                        storeId: args.store_id,
+                        portionCounts,
+                    });
+                    const remainder = result.plan.map((line) => ({
+                        display_name: line.displayName,
+                        skipped: line.skipped,
+                        need: line.need,
+                        remainder: line.remainder,
+                    }));
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: remainder
+                                    .map((line) =>
+                                        line.skipped || line.remainder == null
+                                            ? `${line.display_name} skipped`
+                                            : `${line.display_name} remainder ${line.remainder.amount} ${line.remainder.unit}`,
+                                    )
+                                    .join("\n"),
+                            },
+                        ],
+                        structuredContent: { remainder },
+                    };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "list_store_rules",
+        {
+            title: "List Store Rules",
+            description: "List free-text rules for a grocery store.",
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                store_id: z.string(),
+            }),
+            outputSchema: z.object({
+                rules: z.array(
+                    z.object({
+                        id: z.string(),
+                        body: z.string(),
+                    }),
+                ),
+            }),
+        },
+        async (args) =>
+            withAnalytics(
+                "list_store_rules",
+                async () => {
+                    await callerHouseholdId();
+                    const rules = await liveRulesStore().listStoreRules(
+                        args.store_id,
+                    );
+                    const payload = {
+                        rules: rules.map((rule) => ({
+                            id: rule.id,
+                            body: rule.body,
+                        })),
+                    };
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text:
+                                    payload.rules.length === 0
+                                        ? "No store rules."
+                                        : payload.rules
+                                              .map((rule) => rule.body)
+                                              .join("\n"),
+                            },
+                        ],
+                        structuredContent: payload,
+                    };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "set_store_rules",
+        {
+            title: "Set Store Rules",
+            description: "Add a free-text rule on a grocery store.",
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                store_id: z.string(),
+                body: z.string().min(1),
+            }),
+            outputSchema: z.object({
+                id: z.string(),
+                body: z.string(),
+            }),
+        },
+        async (args) =>
+            withAnalytics(
+                "set_store_rules",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    const rule = await addStoreRule(liveRulesStore(), {
+                        householdId,
+                        storeId: args.store_id,
+                        body: args.body,
+                    });
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Stored rule: ${rule.body}`,
+                            },
+                        ],
+                        structuredContent: { id: rule.id, body: rule.body },
+                    };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "list_person_rules",
+        {
+            title: "List Person Rules",
+            description: "List free-text rules for a household member.",
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                member_id: z.string(),
+            }),
+            outputSchema: z.object({
+                rules: z.array(
+                    z.object({
+                        id: z.string(),
+                        body: z.string(),
+                    }),
+                ),
+            }),
+        },
+        async (args) =>
+            withAnalytics(
+                "list_person_rules",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    await requireHouseholdMemberId(args.member_id);
+                    const rules = await liveRulesStore().listPersonRules(
+                        householdId,
+                        args.member_id,
+                    );
+                    const payload = {
+                        rules: rules.map((rule) => ({
+                            id: rule.id,
+                            body: rule.body,
+                        })),
+                    };
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text:
+                                    payload.rules.length === 0
+                                        ? "No person rules."
+                                        : payload.rules
+                                              .map((rule) => rule.body)
+                                              .join("\n"),
+                            },
+                        ],
+                        structuredContent: payload,
+                    };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "set_person_rules",
+        {
+            title: "Set Person Rules",
+            description: "Add a free-text rule for a household member.",
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                member_id: z.string(),
+                body: z.string().min(1),
+            }),
+        },
+        async (args) =>
+            withAnalytics(
+                "set_person_rules",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    await requireHouseholdMemberId(args.member_id);
+                    const rule = await addPersonRule(liveRulesStore(), {
+                        householdId,
+                        userId: args.member_id,
+                        body: args.body,
+                    });
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Stored person rule: ${rule.body}`,
+                            },
+                        ],
+                    };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "list_person_allergens",
+        {
+            title: "List Person Allergens",
+            description: "List allergens recorded for a household member.",
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                member_id: z.string(),
+            }),
+            outputSchema: z.object({
+                allergens: z.array(
+                    z.object({
+                        allergen: z.string(),
+                        other_label: z.string().nullable(),
+                    }),
+                ),
+            }),
+        },
+        async (args) =>
+            withAnalytics(
+                "list_person_allergens",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    await requireHouseholdMemberId(args.member_id);
+                    const rows = await liveRulesStore().listAllergens(
+                        householdId,
+                        args.member_id,
+                    );
+                    const payload = {
+                        allergens: rows.map((row) => ({
+                            allergen: row.allergen,
+                            other_label: row.otherLabel,
+                        })),
+                    };
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text:
+                                    payload.allergens.length === 0
+                                        ? "No allergens."
+                                        : payload.allergens
+                                              .map((row) =>
+                                                  row.other_label
+                                                      ? `${row.allergen} (${row.other_label})`
+                                                      : row.allergen,
+                                              )
+                                              .join("\n"),
+                            },
+                        ],
+                        structuredContent: payload,
+                    };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "set_person_allergens",
+        {
+            title: "Set Person Allergens",
+            description:
+                "Add an allergen for a household member. Grocery and recipe tools warn when a name matches.",
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                member_id: z.string(),
+                allergen: ALLERGEN_SCHEMA,
+                other_label: z.string().optional(),
+            }),
+        },
+        async (args) =>
+            withAnalytics(
+                "set_person_allergens",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    await requireHouseholdMemberId(args.member_id);
+                    const row = await addAllergen(liveRulesStore(), {
+                        householdId,
+                        userId: args.member_id,
+                        allergen: args.allergen,
+                        otherLabel: args.other_label,
+                    });
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Recorded ${row.allergen}${row.otherLabel ? ` (${row.otherLabel})` : ""} for ${args.member_id}.`,
+                            },
+                        ],
+                    };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "list_person_dislikes",
+        {
+            title: "List Person Dislikes",
+            description: "List foods a household member dislikes.",
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                member_id: z.string(),
+            }),
+            outputSchema: z.object({
+                dislikes: z.array(z.string()),
+            }),
+        },
+        async (args) =>
+            withAnalytics(
+                "list_person_dislikes",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    await requireHouseholdMemberId(args.member_id);
+                    const rows = await liveRulesStore().listDislikes(
+                        householdId,
+                        args.member_id,
+                    );
+                    const payload = {
+                        dislikes: rows.map((row) => row.displayName),
+                    };
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text:
+                                    payload.dislikes.length === 0
+                                        ? "No dislikes."
+                                        : payload.dislikes.join("\n"),
+                            },
+                        ],
+                        structuredContent: payload,
+                    };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "set_person_dislikes",
+        {
+            title: "Set Person Dislikes",
+            description: "Add a disliked food for a household member.",
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                member_id: z.string(),
+                display_name: z.string().min(1),
+            }),
+        },
+        async (args) =>
+            withAnalytics(
+                "set_person_dislikes",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    await requireHouseholdMemberId(args.member_id);
+                    const row = await addDislike(liveRulesStore(), {
+                        householdId,
+                        userId: args.member_id,
+                        displayName: args.display_name,
+                    });
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Recorded dislike ${row.displayName} for ${args.member_id}.`,
+                            },
+                        ],
+                    };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "search_food",
+        {
+            title: "Search Food",
+            description:
+                "Search packaged foods by name via Open Food Facts and the local food cache. Household fridge and recipe names rank above generic hits. Do not use this to search logged meals — that is search_meals.",
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: true,
+            },
+            inputSchema: z.object({
+                query: z.string().min(1),
+            }),
+            outputSchema: z.object({
+                foods: z.array(
+                    z.object({
+                        name: z.string(),
+                        brand: z.string().nullable(),
+                        source: z.string(),
+                        barcode: z.string(),
+                        calories: z.number().nullable(),
+                        protein_g: z.number().nullable(),
+                        carbs_g: z.number().nullable(),
+                        fat_g: z.number().nullable(),
+                        fiber_g: z.number().nullable(),
+                        sugar_g: z.number().nullable(),
+                        serving: z.string().nullable(),
+                    }),
+                ),
+            }),
+        },
+        async (args) =>
+            withAnalytics(
+                "search_food",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    const names = await householdFoodNames(householdId);
+                    const foods = await searchFoodsByName(args.query, names);
+                    const payload = {
+                        foods: foods.map((food) => ({
+                            name: food.name,
+                            brand: food.brand,
+                            source: food.source,
+                            barcode: food.barcode,
+                            calories: food.calories,
+                            protein_g: food.protein_g,
+                            carbs_g: food.carbs_g,
+                            fat_g: food.fat_g,
+                            fiber_g: food.fiber_g,
+                            sugar_g: food.sugar_g,
+                            serving: food.serving,
+                        })),
+                    };
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text:
+                                    foods.length === 0
+                                        ? `No foods found for "${args.query}".`
+                                        : foods
+                                              .map((food) =>
+                                                  formatFoodResult(
+                                                      food,
+                                                      alcohol,
+                                                  ),
+                                              )
+                                              .join("\n\n"),
+                            },
+                        ],
+                        structuredContent: payload,
+                    };
+                },
+                analytics,
+            ),
     );
 
     const LIST_MEMBERS_OUTPUT_SCHEMA = z.object({
