@@ -56,6 +56,7 @@ import {
     HouseholdAlreadyExistsError,
     type HouseholdConfig,
 } from "./household.js";
+import { createMemoryFridgeStore } from "./fridge.js";
 import {
     TOOLS,
     HOUSEHOLD_SCOPED_TOOL_NAMES,
@@ -1464,6 +1465,7 @@ const db = {
         issuedBy: string | null;
     }[],
     household: null as HouseholdConfig | null,
+    fridgeStore: createMemoryFridgeStore(),
 };
 
 mock.module("./supabase.js", () => ({
@@ -1679,6 +1681,7 @@ mock.module("./supabase.js", () => ({
     },
     getLatestWeight: async () => null,
     getWeightInRange: async () => [],
+    liveFridgeStore: () => db.fridgeStore,
 }));
 
 afterAll(() => {
@@ -1717,6 +1720,7 @@ beforeEach(() => {
             displayName: "U1",
         },
     ];
+    db.fridgeStore = createMemoryFridgeStore();
 });
 
 interface ToolResult {
@@ -5634,16 +5638,156 @@ describe("authenticated dashboard HTTP", () => {
         ).toHaveLength(1);
     });
 
-    test("GET /fridge returns the stub with Fridge active", async () => {
+    test("GET /fridge returns the inventory page with Fridge active", async () => {
         const r = await siteApp.request("http://x/fridge", {
             headers: { cookie: cookieFor(alice) },
         });
         expect(r.status).toBe(200);
         const html = await r.text();
         expect(html).toContain("<h1>Fridge</h1>");
-        expect(html).toContain("Coming soon.");
+        expect(html).toContain("Add a location, then add an item.");
+        expect(html).toContain('action="/fridge/locations"');
+        expect(html).not.toContain("Coming soon.");
         expect(html).toContain('href="/fridge" aria-current="page"');
         expect(html).not.toContain('class="facts"');
+    });
+
+    test("POST /fridge/locations adds Pantry for any member", async () => {
+        const r = await siteApp.request("http://x/fridge/locations", {
+            method: "POST",
+            headers: {
+                cookie: cookieFor(bob),
+                "content-type": "application/x-www-form-urlencoded",
+            },
+            body: "name=Pantry",
+        });
+        expect(r.status).toBe(302);
+        expect(r.headers.get("location")).toBe("/fridge");
+        const page = await siteApp.request("http://x/fridge", {
+            headers: { cookie: cookieFor(alice) },
+        });
+        const html = await page.text();
+        expect(html).toContain("Pantry");
+        expect(html).toContain('class="food-picker"');
+        expect(html).toContain('class="quantity-field"');
+        expect(html).toContain("Add an item to Pantry.");
+    });
+
+    test("POST /fridge/items adds a supply with the entered unit", async () => {
+        await siteApp.request("http://x/fridge/locations", {
+            method: "POST",
+            headers: {
+                cookie: cookieFor(alice),
+                "content-type": "application/x-www-form-urlencoded",
+            },
+            body: "name=Pantry",
+        });
+        const listed = await db.fridgeStore.listLocations("hh-1");
+        const locationId = listed[0]!.id;
+        const add = await siteApp.request("http://x/fridge/items", {
+            method: "POST",
+            headers: {
+                cookie: cookieFor(alice),
+                "content-type": "application/x-www-form-urlencoded",
+            },
+            body: `kind=supply&location_id=${locationId}&name=Foil&qty_amount=2&qty_unit=roll`,
+        });
+        expect(add.status).toBe(302);
+        const page = await siteApp.request("http://x/fridge", {
+            headers: { cookie: cookieFor(alice) },
+        });
+        const html = await page.text();
+        expect(html).toContain("Foil");
+        expect(html).toContain("2 roll");
+    });
+
+    test("POST /fridge/items adds barcode food in grams", async () => {
+        await siteApp.request("http://x/fridge/locations", {
+            method: "POST",
+            headers: {
+                cookie: cookieFor(alice),
+                "content-type": "application/x-www-form-urlencoded",
+            },
+            body: "name=Fridge",
+        });
+        const locationId = (await db.fridgeStore.listLocations("hh-1"))[0]!.id;
+        const add = await siteApp.request("http://x/fridge/items", {
+            method: "POST",
+            headers: {
+                cookie: cookieFor(alice),
+                "content-type": "application/x-www-form-urlencoded",
+            },
+            body: `kind=food&location_id=${locationId}&barcode=070852010016&qty_amount=1360.8&qty_unit=g`,
+        });
+        expect(add.status).toBe(302);
+        const page = await siteApp.request("http://x/fridge", {
+            headers: { cookie: cookieFor(alice) },
+        });
+        const html = await page.text();
+        expect(html).toContain("Good Culture Cottage Cheese");
+        expect(html).toContain("1360.8 g");
+    });
+
+    test("POST /fridge/items/:id updates quantity and move, then delete removes it", async () => {
+        await siteApp.request("http://x/fridge/locations", {
+            method: "POST",
+            headers: {
+                cookie: cookieFor(alice),
+                "content-type": "application/x-www-form-urlencoded",
+            },
+            body: "name=Fridge",
+        });
+        await siteApp.request("http://x/fridge/locations", {
+            method: "POST",
+            headers: {
+                cookie: cookieFor(alice),
+                "content-type": "application/x-www-form-urlencoded",
+            },
+            body: "name=Pantry",
+        });
+        const locations = await db.fridgeStore.listLocations("hh-1");
+        const fridge = locations.find((l) => l.name === "Fridge")!;
+        const pantry = locations.find((l) => l.name === "Pantry")!;
+        await siteApp.request("http://x/fridge/items", {
+            method: "POST",
+            headers: {
+                cookie: cookieFor(alice),
+                "content-type": "application/x-www-form-urlencoded",
+            },
+            body: `kind=supply&location_id=${fridge.id}&name=Foil&qty_amount=2&qty_unit=roll`,
+        });
+        const item = (await db.fridgeStore.listItems("hh-1"))[0]!;
+        const save = await siteApp.request(`http://x/fridge/items/${item.id}`, {
+            method: "POST",
+            headers: {
+                cookie: cookieFor(alice),
+                "content-type": "application/x-www-form-urlencoded",
+            },
+            body: `qty_amount=1&qty_unit=roll&location_id=${pantry.id}`,
+        });
+        expect(save.status).toBe(302);
+        const moved = (await db.fridgeStore.listItems("hh-1"))[0]!;
+        expect(moved.quantity.amount).toBe(1);
+        expect(moved.locationId).toBe(pantry.id);
+        const del = await siteApp.request(
+            `http://x/fridge/items/${item.id}/delete`,
+            {
+                method: "POST",
+                headers: { cookie: cookieFor(alice) },
+            },
+        );
+        expect(del.status).toBe(302);
+        expect(await db.fridgeStore.listItems("hh-1")).toEqual([]);
+    });
+
+    test("GET /fridge is 403 for a non-member", async () => {
+        const r = await siteApp.request("http://x/fridge", {
+            headers: { cookie: cookieFor(outsider) },
+        });
+        expect(r.status).toBe(403);
+        const html = await r.text();
+        expect(html).toContain("household membership");
+        expect(html).not.toContain("<h1>Fridge</h1>");
     });
 
     test("GET /grocery, /recipes, and /settings return stubs", async () => {
