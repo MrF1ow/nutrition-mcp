@@ -57,8 +57,9 @@ import {
     type HouseholdConfig,
 } from "./household.js";
 import { createMemoryFridgeStore } from "./fridge.js";
-import { createMemorySettingsStore } from "./settings.js";
-import { createMemoryRulesStore } from "./rules.js";
+import { createMemoryGroceryStore } from "./grocery.js";
+import { createGroceryStore, createMemorySettingsStore } from "./settings.js";
+import { addAllergen, createMemoryRulesStore } from "./rules.js";
 import {
     TOOLS,
     HOUSEHOLD_SCOPED_TOOL_NAMES,
@@ -1468,6 +1469,7 @@ const db = {
     }[],
     household: null as HouseholdConfig | null,
     fridgeStore: createMemoryFridgeStore(),
+    groceryStore: createMemoryGroceryStore(),
     settingsStore: createMemorySettingsStore(),
     rulesStore: createMemoryRulesStore(),
 };
@@ -1686,6 +1688,7 @@ mock.module("./supabase.js", () => ({
     getLatestWeight: async () => null,
     getWeightInRange: async () => [],
     liveFridgeStore: () => db.fridgeStore,
+    liveGroceryStore: () => db.groceryStore,
     liveSettingsStore: () => db.settingsStore,
     liveRulesStore: () => db.rulesStore,
     updateMemberDisplayName: async (
@@ -1737,6 +1740,7 @@ beforeEach(() => {
         },
     ];
     db.fridgeStore = createMemoryFridgeStore();
+    db.groceryStore = createMemoryGroceryStore();
     db.settingsStore = createMemorySettingsStore();
     db.rulesStore = createMemoryRulesStore();
 });
@@ -5808,19 +5812,113 @@ describe("authenticated dashboard HTTP", () => {
         expect(html).not.toContain("<h1>Fridge</h1>");
     });
 
-    test("GET /grocery and /recipes return stubs", async () => {
-        for (const [path, heading] of [
-            ["/grocery", "Groceries"],
-            ["/recipes", "Recipes"],
-        ] as const) {
-            const r = await siteApp.request(`http://x${path}`, {
-                headers: { cookie: cookieFor(alice) },
-            });
-            expect(r.status).toBe(200);
-            const html = await r.text();
-            expect(html).toContain(`<h1>${heading}</h1>`);
-            expect(html).toContain(`href="${path}" aria-current="page"`);
-        }
+    test("GET /grocery lists by store and GET /recipes still stubs", async () => {
+        const grocery = await siteApp.request("http://x/grocery", {
+            headers: { cookie: cookieFor(alice) },
+        });
+        expect(grocery.status).toBe(200);
+        const groceryHtml = await grocery.text();
+        expect(groceryHtml).toContain("<h1>Groceries</h1>");
+        expect(groceryHtml).toContain('href="/grocery" aria-current="page"');
+        expect(groceryHtml).not.toContain("Coming soon.");
+        expect(groceryHtml).toContain("Add a grocery store");
+
+        const recipes = await siteApp.request("http://x/recipes", {
+            headers: { cookie: cookieFor(alice) },
+        });
+        expect(recipes.status).toBe(200);
+        const recipesHtml = await recipes.text();
+        expect(recipesHtml).toContain("<h1>Recipes</h1>");
+        expect(recipesHtml).toContain('href="/recipes" aria-current="page"');
+        expect(recipesHtml).toContain("Coming soon.");
+    });
+
+    test("POST /grocery/lines adds a supply and checking it does not insert fridge stock", async () => {
+        const store = await createGroceryStore(
+            db.settingsStore,
+            "hh-1",
+            "Safeway",
+        );
+        const sections = await db.settingsStore.listSections(store.id);
+        const other = sections.find((row) => row.isOther)!;
+        const add = await siteApp.request("http://x/grocery/lines", {
+            method: "POST",
+            headers: {
+                cookie: cookieFor(alice),
+                "content-type": "application/x-www-form-urlencoded",
+            },
+            body: `kind=supply&store_id=${store.id}&section_id=${other.id}&name=Foil&qty_amount=1&qty_unit=roll`,
+        });
+        expect(add.status).toBe(302);
+        const lines = await db.groceryStore.listLines("hh-1");
+        expect(lines).toHaveLength(1);
+        expect(lines[0]?.displayName).toBe("Foil");
+        const check = await siteApp.request(
+            `http://x/grocery/lines/${lines[0]!.id}/check`,
+            {
+                method: "POST",
+                headers: {
+                    cookie: cookieFor(alice),
+                    "content-type": "application/x-www-form-urlencoded",
+                },
+                body: "checked=1",
+            },
+        );
+        expect(check.status).toBe(302);
+        expect((await db.groceryStore.listLines("hh-1"))[0]?.checked).toBe(
+            true,
+        );
+        expect(await db.fridgeStore.listItems("hh-1")).toEqual([]);
+        const page = await siteApp.request("http://x/grocery", {
+            headers: { cookie: cookieFor(alice) },
+        });
+        const html = await page.text();
+        expect(html).toContain("Safeway");
+        expect(html).toContain("Foil");
+        expect(html).toContain('data-checked="true"');
+        const clear = await siteApp.request("http://x/grocery/clear-checked", {
+            method: "POST",
+            headers: { cookie: cookieFor(alice) },
+        });
+        expect(clear.status).toBe(302);
+        expect(await db.groceryStore.listLines("hh-1")).toEqual([]);
+    });
+
+    test("POST /grocery/lines warns on peanut for an affected member", async () => {
+        const store = await createGroceryStore(
+            db.settingsStore,
+            "hh-1",
+            "Safeway",
+        );
+        await addAllergen(db.rulesStore, {
+            householdId: "hh-1",
+            userId: bob,
+            allergen: "peanut",
+        });
+        const add = await siteApp.request("http://x/grocery/lines", {
+            method: "POST",
+            headers: {
+                cookie: cookieFor(alice),
+                "content-type": "application/x-www-form-urlencoded",
+            },
+            body: `kind=food&store_id=${store.id}&food_name=Peanut%20Butter&qty_amount=100`,
+        });
+        expect(add.status).toBe(400);
+        const html = await add.text();
+        expect(html).toContain("allergen-warning");
+        expect(html.toLowerCase()).toContain("peanut");
+        expect(html).toContain("Bob");
+        expect(await db.groceryStore.listLines("hh-1")).toEqual([]);
+    });
+
+    test("GET /grocery is 403 for a non-member", async () => {
+        const r = await siteApp.request("http://x/grocery", {
+            headers: { cookie: cookieFor(outsider) },
+        });
+        expect(r.status).toBe(403);
+        const html = await r.text();
+        expect(html).toContain("household membership");
+        expect(html).not.toContain("<h1>Groceries</h1>");
     });
 
     test("GET /settings is the account page, not a stub", async () => {

@@ -10,8 +10,13 @@ import {
     runBarcodeLookupAction,
 } from "./food-picker.js";
 import { renderFridgePage } from "../fridge/page.js";
-import { renderGroceryStub } from "../grocery-stub.js";
+import { renderGroceryPage } from "../grocery/page.js";
 import { ACCENT_SWATCHES } from "../shell.js";
+import {
+    DEMO_HOUSEHOLD_MEMBERS,
+    renderMemberMultiSelect,
+} from "./member-multi-select.js";
+import { renderStoreSectionList } from "./store-section-list.js";
 import type { FoodResult } from "../../foods.js";
 
 const appDir = join(import.meta.dir, "..");
@@ -41,13 +46,13 @@ function food(
     };
 }
 
-test("fridge page and grocery stub import the same quantity-field and food-picker modules", () => {
+test("fridge page and grocery page import the same quantity-field and food-picker modules", () => {
     const fridgeSrc = stubSource("fridge/page.ts");
-    const grocerySrc = stubSource("grocery-stub.ts");
+    const grocerySrc = stubSource("grocery/page.ts");
     expect(fridgeSrc).toContain('from "../components/quantity-field.js"');
-    expect(grocerySrc).toContain('from "./components/quantity-field.js"');
+    expect(grocerySrc).toContain('from "../components/quantity-field.js"');
     expect(fridgeSrc).toContain('from "../components/food-picker.js"');
-    expect(grocerySrc).toContain('from "./components/food-picker.js"');
+    expect(grocerySrc).toContain('from "../components/food-picker.js"');
 
     const fridge = renderFridgePage({
         locations: [
@@ -61,7 +66,30 @@ test("fridge page and grocery stub import the same quantity-field and food-picke
         items: [],
         chrome: { theme: "light", accent: ACCENT_SWATCHES.sky },
     });
-    const grocery = renderGroceryStub();
+    const grocery = renderGroceryPage({
+        chrome: { theme: "light", accent: ACCENT_SWATCHES.sky },
+        stores: [
+            {
+                id: "st-1",
+                householdId: "hh-1",
+                name: "Safeway",
+                sortOrder: 0,
+                rules: [],
+                sections: [
+                    {
+                        id: "sec-other",
+                        householdId: "hh-1",
+                        storeId: "st-1",
+                        name: "Other",
+                        sortOrder: 8,
+                        hidden: false,
+                        isOther: true,
+                        lines: [],
+                    },
+                ],
+            },
+        ],
+    });
     expect(fridge).toContain('class="quantity-field"');
     expect(grocery).toContain('class="quantity-field"');
     expect(fridge).toContain('class="food-picker"');
@@ -98,17 +126,78 @@ test("food picker HTML has barcode, search, and manual tabs", () => {
     expect(html).toContain('data-lookup-path="lookupBarcode"');
 });
 
-test("grocery stub demos member multi-select, already-have, and store sections", () => {
-    const html = renderGroceryStub();
-    expect(html).toContain('class="member-multi-select"');
-    expect(html).toContain('type="checkbox"');
-    expect(html).toContain("Alice");
-    expect(html).toContain("Bob");
-    expect(html).toContain('class="already-have-tag"');
-    expect(html.toLowerCase()).toMatch(/have .+ need /);
-    expect(html).toContain('class="store-section-list"');
-    expect(html).toContain("Produce");
-    expect(html).toContain("Other");
+test("member multi-select, already-have, and store sections still render", () => {
+    const members = renderMemberMultiSelect(DEMO_HOUSEHOLD_MEMBERS, [
+        DEMO_HOUSEHOLD_MEMBERS[0]!.userId,
+    ]);
+    expect(members).toContain('class="member-multi-select"');
+    expect(members).toContain('type="checkbox"');
+    expect(members).toContain("Alice");
+    expect(members).toContain("Bob");
+    const grocery = renderGroceryPage({
+        chrome: { theme: "light", accent: ACCENT_SWATCHES.sky },
+        stores: [
+            {
+                id: "st-1",
+                householdId: "hh-1",
+                name: "Safeway",
+                sortOrder: 0,
+                rules: [],
+                sections: [
+                    {
+                        id: "sec-produce",
+                        householdId: "hh-1",
+                        storeId: "st-1",
+                        name: "Produce",
+                        sortOrder: 0,
+                        hidden: false,
+                        isOther: false,
+                        lines: [
+                            {
+                                id: "line-1",
+                                householdId: "hh-1",
+                                storeId: "st-1",
+                                sectionId: "sec-produce",
+                                kind: "food",
+                                displayName: "Cottage Cheese",
+                                quantity: { amount: 1360.8, unit: "g" },
+                                identity: {
+                                    kind: "food",
+                                    via: "barcode",
+                                    barcode: "070852010016",
+                                    displayName: "Cottage Cheese",
+                                },
+                                checked: false,
+                                alreadyHave: {
+                                    cover: "partial",
+                                    have: { amount: 24, unit: "oz" },
+                                    need: { amount: 24, unit: "oz" },
+                                },
+                            },
+                        ],
+                    },
+                    {
+                        id: "sec-other",
+                        householdId: "hh-1",
+                        storeId: "st-1",
+                        name: "Other",
+                        sortOrder: 8,
+                        hidden: false,
+                        isOther: true,
+                        lines: [],
+                    },
+                ],
+            },
+        ],
+    });
+    expect(grocery).toContain('class="already-have-tag"');
+    expect(grocery.toLowerCase()).toMatch(/have .+ need /);
+    expect(grocery).toContain("Produce");
+    expect(grocery).toContain("Other");
+    const sections = renderStoreSectionList();
+    expect(sections).toContain('class="store-section-list"');
+    expect(sections).toContain("Produce");
+    expect(sections).toContain("Other");
 });
 
 test("searchPickerFoods uses searchFoodsByName hooks", async () => {
