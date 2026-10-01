@@ -41,7 +41,7 @@
         var dark = effectiveTheme() === "dark";
         body.classList.toggle("is-dark", dark);
         if (metaTheme)
-            metaTheme.setAttribute("content", dark ? "#0d1210" : "#fbfbf9");
+            metaTheme.setAttribute("content", dark ? "#000000" : "#f5f5f7");
         var mode = selectedMode();
         doc.querySelectorAll("[data-theme-set]").forEach(function (btn) {
             btn.setAttribute(

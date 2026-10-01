@@ -23,6 +23,7 @@ import {
     generatedBanner,
     nav,
     HEAD_ASSETS,
+    LOGIN_SKY_TOKENS,
     SITE_SCRIPT,
     THEME_PREPAINT,
 } from "./site-partials.js";
@@ -64,6 +65,9 @@ await removeStaleMarketingHtml();
 
 // Page-layout CSS, unchanged from the previous hand-authored login.html.
 const LOGIN_STYLE = `        <style>
+            /* Sky widget chrome on login /authorize only. styles.css keeps
+               FDA green for leftover marketing CSS. */
+${LOGIN_SKY_TOKENS}
             /* Page layout: sticky header, centred stage, footer at the foot.
                body.auth in styles.css is flex-centred for the old standalone
                card; here the stage does the centring instead. */
@@ -137,7 +141,7 @@ function renderDoc(doc: LoginDoc, locale: SiteLocale): string {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta charset="utf-8" />
         <link rel="icon" href="/favicon.ico" />
-        <meta name="theme-color" content="#fbfbf9" />
+        <meta name="theme-color" content="#f5f5f7" />
         <!-- No canonical/hreflang: this page has no fixed URL (rendered
              per in-flight OAuth session via GET /authorize, not routed by
              path — see src/copy/login.ts) and isn't in the sitemap. noindex
@@ -198,7 +202,7 @@ ${nav(locale)}
                                 type="submit"
                                 name="action"
                                 value="login"
-                                class="auth-btn auth-btn-secondary"
+                                class="auth-btn"
                             >
                                 ${esc(doc.continueButton)}
                             </button>

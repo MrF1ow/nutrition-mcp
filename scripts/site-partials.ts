@@ -46,6 +46,94 @@ export const THEME_PREPAINT = `        <script>
             })();
         </script>`;
 
+/** Sky widget tokens for login /authorize only. styles.css stays FDA green
+ *  for leftover marketing CSS; body.auth overrides beat those rules. */
+export const LOGIN_SKY_TOKENS = `            body.auth {
+                --font-display:
+                    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+                    Helvetica, Arial, sans-serif;
+                --font-body: var(--font-display);
+                --bg: #f5f5f7;
+                --bg-alt: #f5f5f7;
+                --surface: #ffffff;
+                --surface-2: #ffffff;
+                --ink: #1d1d1f;
+                --ink-2: #6e6e73;
+                --ink-3: #98989d;
+                --line: #e6e6ea;
+                --line-2: #e6e6ea;
+                --accent: #2f8fd4;
+                --accent-hover: #2478b8;
+                --accent-ink: #ffffff;
+                --accent-soft: color-mix(in srgb, var(--accent) 16%, #ffffff);
+                --accent-soft-2: color-mix(in srgb, var(--accent) 28%, #ffffff);
+                --shadow-card:
+                    0 1px 2px rgba(0, 0, 0, 0.05),
+                    0 8px 22px rgba(0, 0, 0, 0.05);
+            }
+            @media (prefers-color-scheme: dark) {
+                body.auth:not([data-theme="light"]) {
+                    --bg: #000000;
+                    --bg-alt: #000000;
+                    --surface: #1c1c1e;
+                    --surface-2: #1c1c1e;
+                    --ink: #f5f5f7;
+                    --ink-2: #98989d;
+                    --ink-3: #6e6e73;
+                    --line: #2c2c2e;
+                    --line-2: #2c2c2e;
+                    --accent: #5eb8f0;
+                    --accent-hover: #7ec8f5;
+                    --accent-ink: #0b1220;
+                    --accent-soft: color-mix(in srgb, var(--accent) 22%, #1c1c1e);
+                    --accent-soft-2: color-mix(
+                        in srgb,
+                        var(--accent) 32%,
+                        #1c1c1e
+                    );
+                    --shadow-card: none;
+                    color-scheme: dark;
+                }
+            }
+            body.auth[data-theme="dark"] {
+                --bg: #000000;
+                --bg-alt: #000000;
+                --surface: #1c1c1e;
+                --surface-2: #1c1c1e;
+                --ink: #f5f5f7;
+                --ink-2: #98989d;
+                --ink-3: #6e6e73;
+                --line: #2c2c2e;
+                --line-2: #2c2c2e;
+                --accent: #5eb8f0;
+                --accent-hover: #7ec8f5;
+                --accent-ink: #0b1220;
+                --accent-soft: color-mix(in srgb, var(--accent) 22%, #1c1c1e);
+                --accent-soft-2: color-mix(in srgb, var(--accent) 32%, #1c1c1e);
+                --shadow-card: none;
+                color-scheme: dark;
+            }
+            body.auth[data-theme="light"] {
+                --bg: #f5f5f7;
+                --bg-alt: #f5f5f7;
+                --surface: #ffffff;
+                --surface-2: #ffffff;
+                --ink: #1d1d1f;
+                --ink-2: #6e6e73;
+                --ink-3: #98989d;
+                --line: #e6e6ea;
+                --line-2: #e6e6ea;
+                --accent: #2f8fd4;
+                --accent-hover: #2478b8;
+                --accent-ink: #ffffff;
+                --accent-soft: color-mix(in srgb, var(--accent) 16%, #ffffff);
+                --accent-soft-2: color-mix(in srgb, var(--accent) 28%, #ffffff);
+                --shadow-card:
+                    0 1px 2px rgba(0, 0, 0, 0.05),
+                    0 8px 22px rgba(0, 0, 0, 0.05);
+                color-scheme: light;
+            }`;
+
 export const SITE_SCRIPT = `        <script src="/site.js" defer></script>`;
 
 export function generatedBanner(script: string): string {
@@ -53,9 +141,10 @@ export function generatedBanner(script: string): string {
 }
 
 /**
- * Login header. Brand stays on this page (`#main`); it must not send anyone
- * to `/`, which is not HTML. Language switcher is `{{LANG_SWITCHER}}` so
- * oauth.ts can stamp authorizeUrl() links for the in-flight session.
+ * Login header. Sky tokens on body.auth paint this chrome; brand stays on
+ * this page (`#main`) and must not send anyone to `/`, which is not HTML.
+ * Language switcher is `{{LANG_SWITCHER}}` so oauth.ts can stamp
+ * authorizeUrl() links for the in-flight session.
  */
 export function nav(locale: SiteLocale): string {
     const c = chromeFor(locale);

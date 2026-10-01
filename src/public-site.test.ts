@@ -79,6 +79,8 @@ describe("marketing HTTP is gone", () => {
         expect(body).not.toContain("/authorize/google");
         expect(body).not.toContain("Continue with Google");
         expect(body).not.toContain("created automatically");
+        expect(body).toContain("--accent: #2f8fd4");
+        expect(body).not.toContain("#3b7a4f");
     });
 
     test("GET / with a bad site cookie is still login HTML", async () => {
@@ -113,6 +115,8 @@ describe("runtime surfaces that stay", () => {
     test("login assets still answer and site.js does not poll /api/stats", async () => {
         const css = await app.request("http://x/styles.css");
         expect(css.status).toBe(200);
+        const cssText = await css.text();
+        expect(cssText).toContain("--accent: #3b7a4f");
         const js = await app.request("http://x/site.js");
         expect(js.status).toBe(200);
         const siteJs = await js.text();
@@ -159,6 +163,8 @@ describe("runtime surfaces that stay", () => {
         expect(html).not.toContain('href="/terms"');
         expect(html).not.toContain('href="/privacy"');
         expect(html).not.toMatch(/<a class="brand"[^>]*href="\/"/);
+        expect(html).toContain("--accent: #2f8fd4");
+        expect(html).not.toContain("#3b7a4f");
     });
 });
 
