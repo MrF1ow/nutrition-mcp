@@ -98,6 +98,22 @@ test("renderLoginPage serves the requested locale's template when it exists", as
     expect(de).toContain('<html lang="de">');
 });
 
+test("generated login uses sky accent tokens, not FDA green", async () => {
+    const html = await renderLoginPage("s1", fakeSession());
+    expect(html).toContain("--accent: #2f8fd4");
+    expect(html).toContain("--accent: #5eb8f0");
+    expect(html).not.toContain("#3b7a4f");
+    expect(html).not.toContain("#79c28c");
+    expect(html).toContain('class="auth-btn"');
+    expect(html).not.toContain("auth-btn-secondary");
+    const bodyIdx = html.indexOf("<body");
+    const prepaintIdx = html.indexOf('localStorage.getItem("theme")');
+    const mainIdx = html.indexOf("<main");
+    expect(bodyIdx).toBeGreaterThan(-1);
+    expect(prepaintIdx).toBeGreaterThan(bodyIdx);
+    expect(mainIdx).toBeGreaterThan(prepaintIdx);
+});
+
 test("first Auth user may sign up after a failed sign-in", async () => {
     let signUps = 0;
     const userId = await resolveApproveUser({
