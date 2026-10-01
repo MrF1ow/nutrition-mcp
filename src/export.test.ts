@@ -350,6 +350,8 @@ function profile(overrides: Partial<Profile> = {}): Profile {
         alcohol_tracking_enabled: false,
         preferred_drink_unit: "us",
         locale: null,
+        theme: null,
+        accent_swatch: null,
         created_at: "2026-01-02T14:30:00.000Z",
         updated_at: "2026-06-20T14:30:00.000Z",
         ...overrides,

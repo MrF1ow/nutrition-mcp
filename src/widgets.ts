@@ -153,9 +153,33 @@ export async function getWidgetHtml(key: string): Promise<string> {
     return html;
 }
 
-export function withWidgetData(html: string, data: unknown): string {
+export type WidgetViewerChrome = {
+    theme: "light" | "dark";
+    accent: string;
+};
+
+function injectViewerAccent(html: string, chrome: WidgetViewerChrome): string {
+    const withoutTheme = html.replace(/\sdata-theme="[^"]*"/g, "");
+    const withTheme = withoutTheme.replace(
+        /<html\b/i,
+        `<html data-theme="${chrome.theme}"`,
+    );
+    const style = `<style id="viewer-accent">:root[data-theme="${chrome.theme}"]{--accent:${chrome.accent}}</style>`;
+    if (!withTheme.includes("</head>")) return style + withTheme;
+    return withTheme.replace("</head>", `${style}</head>`);
+}
+
+export function withWidgetData(
+    html: string,
+    data: unknown,
+    chrome?: WidgetViewerChrome,
+): string {
     const json = JSON.stringify(data).replace(/</g, "\\u003c");
-    return html.replace("<script>", `<script>window.__WIDGET_DATA__=${json};`);
+    const seeded = html.replace(
+        "<script>",
+        `<script>window.__WIDGET_DATA__=${json};`,
+    );
+    return chrome ? injectViewerAccent(seeded, chrome) : seeded;
 }
 
 // Assemble every widget once so a broken partial/marker fails fast at startup
