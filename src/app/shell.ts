@@ -1,3 +1,5 @@
+import { tabIcon } from "./components/bottom-nav.js";
+
 export const APP_TABS = [
     { id: "fridge", href: "/fridge", label: "Fridge" },
     { id: "grocery", href: "/grocery", label: "Groceries" },
@@ -75,7 +77,8 @@ export function escapeHtml(str: string): string {
 export function bottomNav(active: AppTabId): string {
     const links = APP_TABS.map((tab) => {
         const current = tab.id === active ? ' aria-current="page"' : "";
-        return `<a href="${tab.href}"${current}>${escapeHtml(tab.label)}</a>`;
+        const label = escapeHtml(tab.label);
+        return `<a href="${tab.href}"${current} title="${label}" aria-label="${label}">${tabIcon(tab.id)}</a>`;
     }).join("");
     return `<nav class="bottom-nav" aria-label="App">${links}</nav>`;
 }
