@@ -17,6 +17,7 @@ import {
     resolveTheme,
     type ViewerChrome,
 } from "./shell.js";
+import { renderErrorBanner } from "./components/page-markup.js";
 
 export type NutritionView = {
     access: Extract<DashboardAccess, { ok: true }>;
@@ -55,13 +56,9 @@ async function widgetCard(
     return `<iframe class="widget-frame" title="${escapeHtml(key)}" srcdoc="${escapeHtml(html)}"></iframe>`;
 }
 
-function errorBanner(error?: string): string {
-    return error ? `<p class="error-banner">${escapeHtml(error)}</p>` : "";
-}
-
 export function withNutritionError(html: string, error: string): string {
-    const banner = errorBanner(error);
-    if (!banner || html.includes('class="error-banner"')) return html;
+    const banner = renderErrorBanner(error);
+    if (!banner || html.includes(banner)) return html;
     return html.replace(
         '<header class="dash-head">',
         `${banner}\n        <header class="dash-head">`,
@@ -158,7 +155,7 @@ export async function renderNutritionPage(
     const forms = view.access.mode === "peer" ? "" : logForms();
 
     const body = `
-        ${errorBanner(view.error)}
+        ${renderErrorBanner(view.error)}
         <header class="dash-head">
             <h1>${escapeHtml(view.access.subject.displayName)}</h1>
             ${peerNote}
