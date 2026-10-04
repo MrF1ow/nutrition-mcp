@@ -57,7 +57,11 @@ function hiddenInputs(fields: Record<string, string>): string {
         .join("");
 }
 
-function pickerScript(id: string): string {
+function pickerScript(id: string, method: "get" | "post"): string {
+    const hitHtml =
+        method === "post"
+            ? `return '<li><button type="submit" name="food_name" value="' + esc(food.name) + '">' + esc(label) + "</button></li>";`
+            : `return "<li>" + esc(label) + "</li>";`;
     return `<script>
 (function () {
     var root = document.getElementById(${JSON.stringify(id)});
@@ -82,11 +86,18 @@ function pickerScript(id: string): string {
     var foods = catalogEl ? JSON.parse(catalogEl.textContent || "[]") : [];
     var searchInput = root.querySelector("[data-search-input]");
     var searchResults = root.querySelector("[data-search-results]");
+    function esc(s) {
+        return String(s)
+            .replace(/&/g, "&amp;")
+            .replace(/"/g, "&quot;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+    }
     function renderHits(target, hits) {
         if (!target) return;
         target.innerHTML = hits.map(function (food) {
             var label = food.brand ? food.brand + " · " + food.name : food.name;
-            return "<li>" + label + "</li>";
+            ${hitHtml}
         }).join("");
     }
     if (searchInput && searchResults) {
@@ -162,6 +173,26 @@ export function renderFoodPicker(opts: FoodPickerOptions = {}): string {
         required: method === "post",
     });
     const barcodeSubmit = method === "post" ? "Add food" : "Look up";
+    const searchQty =
+        method === "post" && opts.includeQuantity
+            ? renderQuantityField({
+                  kind: "food",
+                  idPrefix: `${id}-search-qty`,
+                  namePrefix: "qty",
+                  required: true,
+              })
+            : "";
+    const searchFields = `<label for="${escapeHtml(id)}-search">Search</label>
+<input id="${escapeHtml(id)}-search" type="search" data-search-input autocomplete="off" />
+${
+    method === "post"
+        ? `<form class="food-picker-search" data-search-form method="post" action="${escapeHtml(action)}">
+${extras}
+${searchQty}
+<ul class="food-picker-results" data-search-results></ul>
+</form>`
+        : `<ul class="food-picker-results" data-search-results></ul>`
+}`;
     const manualBlock =
         method === "post"
             ? `<form class="food-picker-manual" method="post" action="${escapeHtml(action)}">
@@ -191,14 +222,12 @@ ${qty}
 <ul class="food-picker-results" data-barcode-results></ul>
 </div>
 <div class="food-picker-panel" role="tabpanel" id="${escapeHtml(searchPanel)}" data-panel="search" aria-labelledby="${escapeHtml(id)}-tab-search" hidden>
-<label for="${escapeHtml(id)}-search">Search</label>
-<input id="${escapeHtml(id)}-search" type="search" data-search-input autocomplete="off" />
-<ul class="food-picker-results" data-search-results></ul>
+${searchFields}
 </div>
 <div class="food-picker-panel" role="tabpanel" id="${escapeHtml(manualPanel)}" data-panel="manual" aria-labelledby="${escapeHtml(id)}-tab-manual" hidden>
 ${manualBlock}
 </div>
 <script type="application/json" data-demo-foods>${catalog}</script>
 </div>
-${pickerScript(id)}`;
+${pickerScript(id, method)}`;
 }
