@@ -10,7 +10,7 @@ export function esc(s: string): string {
     return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-export const HEAD_ASSETS = `        <link rel="stylesheet" href="/styles.css" />`
+export const HEAD_ASSETS = `        <link rel="stylesheet" href="/styles.css" />`;
 
 export const THEME_PREPAINT = `        <script>
             // Apply a saved theme override before paint to avoid a flash.
