@@ -24,8 +24,42 @@ export const THEME_PREPAINT = `        <script>
         </script>`;
 
 /** Sky widget tokens for login /authorize only. styles.css stays FDA green
- *  for leftover marketing CSS; body.auth overrides beat those rules. */
-export const LOGIN_SKY_TOKENS = `            body.auth {
+ *  for leftover marketing CSS; body.auth overrides beat those rules.
+ *  @font-face lives here (not only in styles.css) so the generated login
+ *  HTML itself names the self-hosted files — GET /authorize is the page
+ *  visitors see, and a stylesheet href to styles.css does not put those
+ *  URLs in the document. */
+export const LOGIN_SKY_TOKENS = `            @font-face {
+                font-family: "Bricolage Grotesque";
+                src: url("/fonts/bricolage-grotesque-latin.woff2")
+                    format("woff2");
+                font-weight: 400 800;
+                font-style: normal;
+                font-display: swap;
+            }
+            @font-face {
+                font-family: "Instrument Sans";
+                src: url("/fonts/instrument-sans-latin.woff2") format("woff2");
+                font-weight: 400 700;
+                font-style: normal;
+                font-display: swap;
+            }
+            @font-face {
+                font-family: "Instrument Sans";
+                src: url("/fonts/instrument-sans-latin-italic.woff2")
+                    format("woff2");
+                font-weight: 400 700;
+                font-style: italic;
+                font-display: swap;
+            }
+            @font-face {
+                font-family: "Geist Mono";
+                src: url("/fonts/geist-mono-latin.woff2") format("woff2");
+                font-weight: 400 500;
+                font-style: normal;
+                font-display: swap;
+            }
+            body.auth {
                 --font-display:
                     "Bricolage Grotesque", ui-sans-serif, system-ui,
                     -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
