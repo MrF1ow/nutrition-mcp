@@ -1,5 +1,4 @@
 import { getSupabase } from "./supabase.js";
-import { formatClientId } from "./client-id.js";
 
 interface AnalyticsRecord {
     user_id: string;
@@ -10,8 +9,6 @@ interface AnalyticsRecord {
     date_range_days?: number;
     mcp_session_id?: string;
     invoked_at: string;
-    protocol_era?: "legacy" | "modern";
-    client_name?: string;
 }
 
 /**
@@ -30,18 +27,6 @@ export const DELETED_ACCOUNT_ANALYTICS_ID = "[deleted]";
 interface AnalyticsContext {
     userId: string;
     sessionId?: string;
-    // Which protocol era served this call, and who called it. /mcp serves two
-    // eras at once and the retirement decision turns on counting the distinct
-    // USERS still on the legacy one over a 30-day window — something the
-    // runtime access log cannot answer, because it holds well under an hour.
-    protocolEra?: "legacy" | "modern";
-    // Read lazily, at write time rather than registration time: on the modern
-    // leg the envelope backfills the client identity onto the server before
-    // dispatch, so it is populated by the time a tool handler finishes. On the
-    // legacy leg only `initialize` carries clientInfo, and a tool call is a
-    // separate request on that stateless leg, so this normally yields nothing
-    // there — the era is what matters, the name is a bonus.
-    clientInfo?: () => { name?: string; version?: string } | undefined;
 }
 
 /**
@@ -260,8 +245,6 @@ export async function withAnalytics<T>(
             date_range_days: dateRangeDays,
             mcp_session_id: context.sessionId,
             invoked_at: invokedAt,
-            protocol_era: context.protocolEra,
-            client_name: formatClientId(context.clientInfo?.()),
         });
 
         return result;
@@ -286,8 +269,6 @@ export async function withAnalytics<T>(
             date_range_days: dateRangeDays,
             mcp_session_id: context.sessionId,
             invoked_at: invokedAt,
-            protocol_era: context.protocolEra,
-            client_name: formatClientId(context.clientInfo?.()),
         });
 
         return {

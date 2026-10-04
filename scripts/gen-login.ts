@@ -1,22 +1,17 @@
 /**
- * Generates public/login.html and its translated counterparts under
- * public/{locale}/ from the typed data in src/copy/login.ts.
+ * Generates public/login.html from the typed data in src/copy/login.ts.
  *
  * This is a TEMPLATE, not a final document: src/oauth.ts's renderLoginPage()
- * reads whichever locale's output this writes and fills in four placeholders
- * at request time — {{SESSION_ID}}, {{ERROR}}, {{LANG_SWITCHER}}, and
- * {{TRANSLATION_NOTICE}}. The latter two have to be built per-request: their
- * links need to stay in this in-flight OAuth flow in another language, which
- * means carrying the session's state/redirect_uri/client_id (see
- * authorizeUrl() in oauth.ts). Those four tokens must reach the written file
- * untouched; nothing below interpolates them.
+ * reads the output this writes and fills in {{SESSION_ID}} and {{ERROR}} at
+ * request time. Those tokens must reach the written file untouched; nothing
+ * below interpolates them.
  *
  * Re-run after editing src/copy/login.ts:
  *   bun run scripts/gen-login.ts
- * The generated .html files are the served artifacts — don't hand-edit them.
+ * The generated .html file is the served artifact — don't hand-edit it.
  */
 
-import { HTML_LANG, LOCALES, type SiteLocale } from "../src/routes.js";
+import { HTML_LANG } from "../src/routes.js";
 import {
     esc,
     footer,
@@ -30,6 +25,8 @@ import {
 import { LOGIN, type LoginDoc } from "../src/copy/login.js";
 import { rm } from "node:fs/promises";
 
+const STALE_LOCALES = ["de", "es", "fr", "nl", "pl", "it", "uk", "ja"] as const;
+
 async function removeStaleMarketingHtml(): Promise<void> {
     const files = [
         "public/index.html",
@@ -39,12 +36,13 @@ async function removeStaleMarketingHtml(): Promise<void> {
         "public/sitemap.xml",
         "public/llms.txt",
     ];
-    for (const locale of LOCALES) {
+    for (const locale of STALE_LOCALES) {
         for (const name of [
             "index.html",
             "tools.html",
             "privacy.html",
             "terms.html",
+            "login.html",
         ]) {
             files.push(`public/${locale}/${name}`);
         }
@@ -52,8 +50,8 @@ async function removeStaleMarketingHtml(): Promise<void> {
     await Promise.all(files.map((f) => rm(f, { force: true })));
     await rm("public/alternatives", { recursive: true, force: true });
     await Promise.all(
-        LOCALES.map((locale) =>
-            rm(`public/${locale}/alternatives`, {
+        STALE_LOCALES.map((locale) =>
+            rm(`public/${locale}`, {
                 recursive: true,
                 force: true,
             }),
@@ -111,21 +109,9 @@ ${LOGIN_SKY_TOKENS}
             body.auth .auth-btn {
                 border-radius: 10px;
             }
-            /* Lighter and centred than the base .translation-notice box
-               (public/styles.css) — the auth-card already has its own
-               border/background, so the full callout treatment reads as a
-               box-in-a-box in this compact a card. */
-            .auth-card .translation-notice {
-                padding: 0.65rem 0.85rem;
-                margin-bottom: 1.1rem;
-            }
-            .auth-card .translation-notice p {
-                font-size: 0.8rem;
-                text-align: center;
-            }
         </style>`;
 
-function renderDoc(doc: LoginDoc, locale: SiteLocale): string {
+function renderDoc(doc: LoginDoc): string {
     const title = `${esc(doc.title)} — ${esc(doc.subtitle)}`;
 
     // Legal HTML is gone. Keep the consent sentence, but the {terms}/
@@ -135,7 +121,7 @@ function renderDoc(doc: LoginDoc, locale: SiteLocale): string {
         .replace("{privacy}", esc(doc.privacyLinkText));
 
     return `<!doctype html>
-<html lang="${HTML_LANG[locale]}">
+<html lang="${HTML_LANG.en}">
     <head>
         <title>${title}</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -155,7 +141,7 @@ ${LOGIN_STYLE}
 ${generatedBanner("scripts/gen-login.ts")}
 ${THEME_PREPAINT}
 
-${nav(locale)}
+${nav("en")}
 
         <main id="main">
             <div class="auth-stage">
@@ -166,8 +152,6 @@ ${nav(locale)}
                             <h1 class="auth-title">${esc(doc.title)}</h1>
                             <p class="auth-sub">${esc(doc.subtitle)}</p>
                         </div>
-
-                        {{TRANSLATION_NOTICE}}
 
                         {{ERROR}}
 
@@ -215,7 +199,7 @@ ${nav(locale)}
             </div>
         </main>
 
-${footer(locale)}
+${footer("en")}
 
 ${SITE_SCRIPT}
     </body>
@@ -223,11 +207,5 @@ ${SITE_SCRIPT}
 `;
 }
 
-for (const [locale, doc] of Object.entries(LOGIN) as [SiteLocale, LoginDoc][]) {
-    const file =
-        locale === "en"
-            ? "./public/login.html"
-            : `./public/${locale}/login.html`;
-    await Bun.write(file, renderDoc(doc, locale));
-    console.log(`wrote ${file}`);
-}
+await Bun.write("./public/login.html", renderDoc(LOGIN));
+console.log("wrote ./public/login.html");

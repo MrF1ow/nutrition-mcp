@@ -1,10 +1,7 @@
 // Typecheck gate for CI.
 //
-// Scoped to src/ on purpose. scripts/gen-map-data.ts carries 19 pre-existing
-// strict-null errors that have nothing to do with the server, and blocking every
-// PR on them is how a typecheck gate ends up never being added at all. src/ is
-// clean today, so this starts green and stays green; widen the scope once the
-// scripts/ backlog is cleared.
+// Scoped to src/ on purpose. src/ is clean today, so this starts green and
+// stays green.
 //
 // tsc exits non-zero for errors anywhere in the project, so its exit code cannot
 // be the verdict here — the src/-scoped diagnostic lines are. The exit code is

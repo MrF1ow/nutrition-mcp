@@ -5,9 +5,10 @@
 // by a page generator: src/widgets.ts inlines WIDGET_STRINGS (see the
 // `/*@i18n@*/` marker there) as a plain-data object directly into each
 // assembled widget's <script>, and the widget picks its own locale at
-// runtime from structuredContent.locale (get_language / set_language) or
+// runtime from structuredContent.locale (always "en") or
 // the host's ui/initialize hostContext.locale — see
-// public/widgets/src/shared/i18n.js. That inlining is why every value here
+// public/widgets/src/shared/i18n.js. English is the only bundled locale.
+// That inlining is why every value here
 // must be plain, JSON-serializable data: no functions. The handful of
 // count-sensitive strings (`PluralForms`) are picked at render time via
 // `Intl.PluralRules`, a browser built-in, rather than shipping a
@@ -17,23 +18,10 @@
 // trends, weight-trends, import-meals) reads from this, alongside the shared
 // macro strip (shared/macros.js). component-gallery is dev-only and unwired
 // on purpose (see CLAUDE.md's widget section). Extending a widget template
-// to use WIDGET_STRINGS only needs new keys added here (and to every
-// WIDGET_STRINGS_<LOCALE> below); the inlining mechanism and
-// locale-resolution bridge are already shared by every widget.
-//
-// One file per locale, like src/copy/chrome.ts, so a single translation pass
-// is a self-contained diff instead of one shared file several agents would
-// race on.
+// to use WIDGET_STRINGS only needs new keys added here; the inlining
+// mechanism and locale-resolution bridge are already shared by every widget.
 
 import type { SiteLocale } from "../routes.js";
-import { WIDGET_STRINGS_DE } from "./widgets.de.js";
-import { WIDGET_STRINGS_ES } from "./widgets.es.js";
-import { WIDGET_STRINGS_FR } from "./widgets.fr.js";
-import { WIDGET_STRINGS_NL } from "./widgets.nl.js";
-import { WIDGET_STRINGS_PL } from "./widgets.pl.js";
-import { WIDGET_STRINGS_IT } from "./widgets.it.js";
-import { WIDGET_STRINGS_UK } from "./widgets.uk.js";
-import { WIDGET_STRINGS_JA } from "./widgets.ja.js";
 
 /** A count-sensitive string, selected at render time via Intl.PluralRules.
  * Only "one"/"other" are carried (not "few"/"many"/"zero"): the widget's
@@ -623,18 +611,10 @@ export const WIDGET_STRINGS_EN: WidgetStrings = {
     },
 };
 
-export const WIDGET_STRINGS: Partial<Record<SiteLocale, WidgetStrings>> = {
+export const WIDGET_STRINGS: Record<SiteLocale, WidgetStrings> = {
     en: WIDGET_STRINGS_EN,
-    de: WIDGET_STRINGS_DE,
-    es: WIDGET_STRINGS_ES,
-    fr: WIDGET_STRINGS_FR,
-    nl: WIDGET_STRINGS_NL,
-    pl: WIDGET_STRINGS_PL,
-    it: WIDGET_STRINGS_IT,
-    uk: WIDGET_STRINGS_UK,
-    ja: WIDGET_STRINGS_JA,
 };
 
-export function widgetStringsFor(locale: SiteLocale): WidgetStrings {
-    return WIDGET_STRINGS[locale] ?? WIDGET_STRINGS_EN;
+export function widgetStringsFor(_locale: SiteLocale = "en"): WidgetStrings {
+    return WIDGET_STRINGS_EN;
 }

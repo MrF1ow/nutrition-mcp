@@ -1,5 +1,4 @@
 import { test, expect, describe } from "bun:test";
-import { SITE_LOCALES } from "./routes.js";
 import { SITE_COOKIE } from "./site-session.js";
 
 // index.ts calls createOAuthRouter() at module scope, which throws without
@@ -33,13 +32,9 @@ const MARKETING_PATHS = [
     "/map-data.json",
     "/og.png",
     "/apple-touch-icon.png",
+    "/.well-known/glama.json",
+    "/de/login.html",
 ] as const;
-
-function loginPath(locale: (typeof SITE_LOCALES)[number]): string {
-    return locale === "en"
-        ? "./public/login.html"
-        : `./public/${locale}/login.html`;
-}
 
 async function expectNotMarketingHtml(path: string): Promise<void> {
     const r = await app.request(`http://x${path}`);
@@ -73,14 +68,18 @@ describe("marketing HTTP is gone", () => {
         expect(body).toContain('action="/approve"');
         expect(body).not.toContain("MCP Tools");
         expect(r.headers.get("location")).toBeNull();
-        expect(body).toContain('href="/"');
-        expect(body).toContain("/?locale=");
         expect(body).not.toContain("response_type=code");
         expect(body).not.toContain("/authorize/google");
         expect(body).not.toContain("Continue with Google");
         expect(body).not.toContain("created automatically");
         expect(body).toContain("--accent: #2f8fd4");
         expect(body).not.toContain("#3b7a4f");
+        expect(body).not.toContain("/?locale=");
+        expect(body).not.toContain("gtag");
+        expect(body).not.toContain("googletagmanager");
+        expect(body).not.toContain("fonts.googleapis.com");
+        expect(body).not.toContain("fonts.gstatic.com");
+        expect(body).not.toContain("cdn.jsdelivr.net");
     });
 
     test("GET / with a bad site cookie is still login HTML", async () => {
@@ -165,6 +164,32 @@ describe("runtime surfaces that stay", () => {
         expect(html).not.toMatch(/<a class="brand"[^>]*href="\/"/);
         expect(html).toContain("--accent: #2f8fd4");
         expect(html).not.toContain("#3b7a4f");
+        expect(html).not.toContain("gtag");
+        expect(html).not.toContain("fonts.googleapis.com");
+        expect(html).not.toContain("fonts.gstatic.com");
+        expect(html).not.toContain("cdn.jsdelivr.net");
+        expect(html).toContain("/fonts/bricolage-grotesque-latin.woff2");
+    });
+
+    test("self-hosted login fonts are served and CSP has no third-party font hosts", async () => {
+        const font = await app.request(
+            "http://x/fonts/bricolage-grotesque-latin.woff2",
+        );
+        expect(font.status).toBe(200);
+        expect(font.headers.get("content-type")).toContain("font/woff2");
+        const r = await app.request("http://x/health");
+        expect(r.headers.get("content-security-policy") ?? "").not.toContain(
+            "fonts.googleapis.com",
+        );
+        expect(r.headers.get("content-security-policy") ?? "").not.toContain(
+            "fonts.gstatic.com",
+        );
+        expect(r.headers.get("content-security-policy") ?? "").not.toContain(
+            "cdn.jsdelivr.net",
+        );
+        expect(r.headers.get("content-security-policy") ?? "").not.toContain(
+            "googletagmanager",
+        );
     });
 });
 
@@ -184,11 +209,9 @@ describe("cannot republish the marketing site", () => {
         expect(genLogin).toContain("public/llms.txt");
     });
 
-    test("login templates are present (CI/dev run gen:all before tests)", async () => {
-        for (const locale of SITE_LOCALES) {
-            const path = loginPath(locale);
-            expect(await Bun.file(path).exists(), path).toBe(true);
-        }
+    test("the English login template is present (CI/dev run gen:all before tests)", async () => {
+        expect(await Bun.file("./public/login.html").exists()).toBe(true);
+        expect(await Bun.file("./public/de/login.html").exists()).toBe(false);
     });
 
     test("bun run gen:all does not write marketing HTML", async () => {

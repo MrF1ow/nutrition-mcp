@@ -34,7 +34,6 @@ test("theme save form posts account fields to /settings", () => {
         selectedSwatch: "rose",
         displayName: "Alice",
         timezone: "America/Los_Angeles",
-        locale: "en",
         weightUnit: "lb",
         widgetsEnabled: true,
         alcoholTrackingEnabled: false,

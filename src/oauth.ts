@@ -13,15 +13,7 @@ import {
 } from "./supabase.js";
 import { getBaseUrl } from "./url.js";
 import { rateLimitAuth } from "./middleware.js";
-import {
-    HTML_LANG,
-    LOCALE_NAMES,
-    SITE_LOCALES,
-    TRANSLATION_NOTICE,
-    type SiteLocale,
-} from "./routes.js";
 import { LOGIN_ERRORS } from "./copy/login.js";
-import { chromeFor } from "./copy/chrome.js";
 import { mintSiteSession, siteCookieHeader } from "./site-session.js";
 
 const SESSION_TTL_MS = 10 * 60 * 1000;
@@ -31,10 +23,6 @@ interface OAuthSession {
     redirectUri: string;
     codeChallenge?: string;
     clientId: string;
-    // Chosen once when the session is created (or via the switcher) and
-    // reused for every re-render of this same flow (a password failure)
-    // so an error doesn't silently snap the page back to English.
-    locale: SiteLocale;
     purpose: "mcp" | "site";
 }
 
@@ -69,118 +57,18 @@ function escapeHtml(str: string): string {
         .replace(/"/g, "&quot;");
 }
 
-// Every locale (English implicit) whose translated login page actually
-// exists on disk right now — checked here rather than importing
-// src/copy/login.ts's LOGIN keys: a locale is available when its file is
-// present, not when a data object claims it should be.
-async function availableLoginLocales(): Promise<SiteLocale[]> {
-    const checks = await Promise.all(
-        SITE_LOCALES.map(async (l) => {
-            const path =
-                l === "en" ? "./public/login.html" : `./public/${l}/login.html`;
-            return (await Bun.file(path).exists()) ? l : null;
-        }),
-    );
-    return checks.filter((l): l is SiteLocale => l !== null);
-}
-
-function authorizeUrl(session: OAuthSession, locale: SiteLocale): string {
-    if (session.purpose === "site") {
-        return locale === "en" ? "/" : `/?locale=${locale}`;
-    }
-    const params = new URLSearchParams({
-        response_type: "code",
-        client_id: session.clientId,
-        redirect_uri: session.redirectUri,
-        state: session.state,
-    });
-    if (session.codeChallenge)
-        params.set("code_challenge", session.codeChallenge);
-    if (locale !== "en") params.set("locale", locale);
-    return `/authorize?${params.toString()}`;
-}
-
-async function renderLangSwitcher(
-    session: OAuthSession,
-    locale: SiteLocale,
-): Promise<string> {
-    const available = await availableLoginLocales();
-    const items = available
-        .map((l) => {
-            const active = l === locale;
-            return `                            <a
-                                href="${escapeHtml(authorizeUrl(session, l))}"
-                                lang="${HTML_LANG[l]}"
-                                hreflang="${HTML_LANG[l]}"${active ? '\n                                aria-current="page"' : ""}
-                                >${escapeHtml(LOCALE_NAMES[l])}</a
-                            >`;
-        })
-        .join("\n");
-    // Login chrome emits {{LANG_SWITCHER}}; this fills it. Each href has to
-    // be authorizeUrl() for the in-flight session (state, redirect_uri,
-    // client_id), not a static locale path. role="group" is load-bearing:
-    // an aria-label on a bare <div> is exposed to nothing.
-    const c = chromeFor(locale);
-    return `<details class="lang-switch">
-                        <summary
-                            class="icon-btn"
-                            aria-label="${escapeHtml(c.changeLanguageAriaLabel)}"
-                            title="${escapeHtml(c.languageTitle)}"
-                        >
-                            <span class="lang-code">${HTML_LANG[locale].toUpperCase()}</span>
-                        </summary>
-                        <div class="lang-menu" role="group" aria-label="${escapeHtml(c.languageTitle)}">
-${items}
-                        </div>
-                    </details>`;
-}
-
-// "This page is machine-translated" disclosure, linking back to THIS same
-// in-flight flow in English (via authorizeUrl, same reasoning as the
-// switcher above — a fixed site link would drop the user at the marketing
-// homepage instead of back at their login attempt). Empty for English
-// itself, and empty (not a half-translated banner) for a locale
-// TRANSLATION_NOTICE hasn't reached yet.
-function renderTranslationNotice(
-    session: OAuthSession,
-    locale: SiteLocale,
-): string {
-    if (locale === "en") return "";
-    const notice = TRANSLATION_NOTICE[locale];
-    if (!notice) return "";
-    return `<div class="translation-notice">
-                            <p>
-                                ${escapeHtml(notice.text)}
-                                <a href="${escapeHtml(authorizeUrl(session, "en"))}">${escapeHtml(notice.linkText)}</a>
-                            </p>
-                        </div>`;
-}
-
 export async function renderLoginPage(
     sessionId: string,
-    session: OAuthSession,
+    _session: OAuthSession,
     error?: string,
 ): Promise<string> {
-    const locale = session.locale;
-    const file =
-        locale === "en"
-            ? "./public/login.html"
-            : `./public/${locale}/login.html`;
-    const template = await Bun.file(file).text();
+    const template = await Bun.file("./public/login.html").text();
     const errorHtml = error
         ? `<div class="error-banner">${escapeHtml(error)}</div>`
         : "";
     return template
         .replaceAll("{{SESSION_ID}}", escapeHtml(sessionId))
-        .replaceAll("{{ERROR}}", errorHtml)
-        .replaceAll(
-            "{{LANG_SWITCHER}}",
-            await renderLangSwitcher(session, locale),
-        )
-        .replaceAll(
-            "{{TRANSLATION_NOTICE}}",
-            renderTranslationNotice(session, locale),
-        );
+        .replaceAll("{{ERROR}}", errorHtml);
 }
 
 async function finishAuthorization(
@@ -315,15 +203,6 @@ export function createOAuthRouter() {
 
         cleanExpiredSessions();
 
-        // The language switcher re-enters here with ?locale=xx (see
-        // authorizeUrl) — an unsupported or untranslated value falls back
-        // to English rather than 400ing, since a client could in principle
-        // send one too and this is display-only, not a security control.
-        const requestedLocale = c.req.query("locale");
-        const available = await availableLoginLocales();
-        const locale: SiteLocale =
-            available.find((l) => l === requestedLocale) ?? "en";
-
         // Store session and show login page
         const sessionId = crypto.randomUUID();
         const session: OAuthSession = {
@@ -331,7 +210,6 @@ export function createOAuthRouter() {
             redirectUri,
             codeChallenge,
             clientId: reqClientId,
-            locale,
             purpose: "mcp",
         };
         sessions.set(sessionId, {
@@ -367,8 +245,7 @@ export function createOAuthRouter() {
                 authUserCount,
                 signInUser,
                 signUpUser,
-                signupClosedMessage:
-                    LOGIN_ERRORS[entry.session.locale].signupClosed,
+                signupClosedMessage: LOGIN_ERRORS.signupClosed,
             });
         } catch (err: unknown) {
             const message =
@@ -484,18 +361,14 @@ export function createOAuthRouter() {
 
 export async function beginSiteLogin(
     c: Context,
-    localeQuery: string | undefined,
+    _localeQuery?: string,
     error?: string,
 ): Promise<Response> {
-    const available = await availableLoginLocales();
-    const requested = localeQuery?.toLowerCase();
-    const locale: SiteLocale = available.find((l) => l === requested) ?? "en";
     const sessionId = crypto.randomUUID();
     const session: OAuthSession = {
         state: "site",
         redirectUri: "/",
         clientId: process.env.OAUTH_CLIENT_ID ?? "site",
-        locale,
         purpose: "site",
     };
     sessions.set(sessionId, {

@@ -2,10 +2,6 @@
 
 A remote MCP server for personal nutrition tracking — log meals with calories, macros, fiber, total sugar and caffeine, log water and body weight, review nutrition history, and import an existing food diary from another app, all through conversation. Alcohol tracking is opt-in and off by default.
 
-[Help me pay for the servers on Patreon][patreon]
-
-[patreon]: https://patreon.com/akutishevskyi
-
 ## Table of Contents
 
 - [Quick Start](#quick-start)
@@ -85,9 +81,8 @@ Read the story behind it: [How I Replaced MyFitnessPal and Other Apps with a Sin
 | `get_trends`                  | 7/14/30-day averages, std dev, streaks, day-of-week, best/worst day                                                                                                                                                                                         |
 | `get_meal_patterns`           | Pre-aggregated behavioural patterns (breakfast effect, late dinner, weekend vs weekday, outliers)                                                                                                                                                           |
 | `export_all_data`             | Export every table — meals, water, weight, goals, profile — as one ZIP of CSVs plus a README, and return a 60-minute download link                                                                                                                          |
-| `get_profile`                 | Get timezone (+ local date/time), widget language, weight unit, widget display and alcohol tracking in one call                                                                                                                                             |
+| `get_profile`                 | Get timezone (+ local date/time), weight unit, widget display and alcohol tracking in one call                                                                                                                                                              |
 | `set_timezone`                | Set the user's IANA timezone (e.g. `America/Los_Angeles`)                                                                                                                                                                                                   |
-| `set_language`                | Set the UI language for in-chat widgets (dashboards, charts) — not the language the AI replies in                                                                                                                                                           |
 | `get_current_time`            | Get the current date and time in the user's timezone, plus the UTC instant — for hosts with no clock in context                                                                                                                                             |
 | `set_widget_display`          | Enable or disable the in-chat visual widgets (dashboards, rings, charts); enabled by default                                                                                                                                                                |
 | `set_alcohol_tracking`        | Turn alcohol tracking on or off (off by default) and choose US standard drinks or UK units; turning it off hides alcohol rather than deleting it                                                                                                            |
@@ -145,8 +140,6 @@ cp .env.example .env   # fill in real values as you go through the steps below
 ```
 
 Requires Bun 1.x (matches the Dockerfile's `oven/bun:1` base image; no exact minor version is pinned).
-
-> **Making it yours:** Login HTML and `src/index.ts` include the maintainer's Google Analytics tag, Glama email, and domain. Run `bun run gen:all` to produce the login templates, then `bun run depersonalize` to strip those bits (analytics + CSP, Glama, widget support email, domain → a `your-domain.com` placeholder). Use `bun run depersonalize --dry` to preview without writing. Afterwards swap in your own `favicon.ico` and replace the domain placeholder. The script does not touch this README, so if you're publishing a fork, also edit or remove the Patreon line near the top and the Medium link in [Demo](#demo).
 
 ### 1. Supabase setup
 

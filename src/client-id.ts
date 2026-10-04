@@ -1,12 +1,8 @@
 // Formatting for the MCP client's self-reported name and version.
 //
-// The value is client-supplied and lands in two places that both care: the
-// access log in src/index.ts, where a raw value could carry newlines and forge
-// "[req] …" entries (the same injection surface as the SDK's error messages),
-// and the tool_analytics.client_name column, which is a varchar the caller
-// should not be able to overrun. One implementation so the two cannot drift —
-// a name that reads one way in the log and another in the table would make the
-// legacy-retirement counts impossible to reconcile.
+// The value is client-supplied and lands in the access log in src/index.ts,
+// where a raw value could carry newlines and forge "[req] …" entries (the
+// same injection surface as the SDK's error messages).
 //
 // It lives in its own module rather than in mcp.ts because analytics.ts needs it
 // too, and analytics.ts is imported BY mcp.ts — putting it there would be a

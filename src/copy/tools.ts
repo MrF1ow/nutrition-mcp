@@ -339,13 +339,6 @@ const TOOLS_BASE: ToolIdentity[] = [
         hasPhotoHint: false,
     },
     {
-        name: "set_language",
-        category: "settings-account",
-        badges: ["setting"],
-        params: [{ name: "locale", required: true }],
-        hasPhotoHint: false,
-    },
-    {
         name: "get_current_time",
         category: "settings-account",
         badges: ["view"],

@@ -18,7 +18,6 @@ import {
     getWaterByDate,
     getWaterInRange,
     getWeightInRange,
-    localeFromProfile,
     preferredWeightUnitFromProfile,
     timezoneFromProfile,
     type Meal,
@@ -46,7 +45,7 @@ export async function getGoalProgressPayload(
         getLatestWeight(userId),
     ]);
     const unit = preferredWeightUnitFromProfile(profile) ?? "kg";
-    const locale = localeFromProfile(profile) ?? "en";
+    const locale = "en";
     const totals = sumMeals(meals);
     totals.water_ml = water.reduce((n, e) => n + e.amount_ml, 0);
     const present = nutrientPresence(meals);
@@ -85,7 +84,7 @@ export async function getNutritionSummaryPayload(
 ) {
     const profile = await getProfile(userId);
     const tz = tzOf(profile);
-    const locale = localeFromProfile(profile) ?? "en";
+    const locale = "en";
     const endDate = todayInTz(tz);
     const startDate = shiftLocalDate(endDate, -(days - 1));
     const daysInRange = Math.max(1, dateDiffDays(startDate, endDate) + 1);
@@ -181,7 +180,7 @@ export async function getTrendsPayload(
 ) {
     const profile = await getProfile(userId);
     const tz = tzOf(profile);
-    const locale = localeFromProfile(profile) ?? "en";
+    const locale = "en";
     const endDate = todayInTz(tz);
     const startDate = shiftLocalDate(endDate, -29);
     const [meals, water, goals] = await Promise.all([
@@ -204,7 +203,7 @@ export async function getWeightTrendsPayload(userId: string) {
     const profile = await getProfile(userId);
     const tz = tzOf(profile);
     const unit = preferredWeightUnitFromProfile(profile) ?? "kg";
-    const locale = localeFromProfile(profile) ?? "en";
+    const locale = "en";
     const endDate = todayInTz(tz);
     const fetchStart = shiftLocalDate(endDate, -29);
     const [entries, goals] = await Promise.all([

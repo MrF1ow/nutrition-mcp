@@ -433,10 +433,9 @@
 
             function render(data) {
                 const root = document.getElementById("root");
-                // structuredContent.locale (the user's saved get_language /
-                // set_language preference, resolved server-side) wins over
-                // the host's ambient hostContext.locale — see pickLocale in
-                // shared/i18n.js.
+                // structuredContent.locale is always English; pickLocale
+                // still prefers it over the host's ambient hostContext.locale
+                // — see pickLocale in shared/i18n.js.
                 setLocale(
                     pickLocale(
                         data && data.locale,

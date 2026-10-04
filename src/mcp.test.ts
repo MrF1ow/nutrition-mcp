@@ -3080,16 +3080,14 @@ describe("get_nutrition_summary discloses its logged-day denominator", () => {
         });
     });
 
-    // The dashboard widget reads structuredContent.locale (get_language /
-    // set_language) to render its own strings — not the language of `content`,
-    // which stays whatever the model uses.
-    test("structuredContent carries the profile's saved widget language", async () => {
+    // Widgets are English-only; structuredContent.locale stays "en".
+    test("structuredContent locale stays English even if a profile locale is set", async () => {
         stage(1);
         db.profile = { ...PROFILE_BASE, locale: "de" };
         await withTools(null, async (call) => {
             const sc = (await summarize(call))
                 .structuredContent as unknown as SummaryPayload;
-            expect(sc.locale).toBe("de");
+            expect(sc.locale).toBe("en");
         });
     });
 
@@ -3715,54 +3713,31 @@ describe("current-time disclosure", () => {
         });
     });
 
-    test("set_language rejects a code outside the supported set", async () => {
-        await withTools(null, async (call) => {
-            const r = await call("set_language", { locale: "xx" });
-            expect(r.isError).toBe(true);
-            expect(textOf(r)).toContain("Unsupported language");
-            expect(db.profilePatches).toHaveLength(0);
-        });
+    test("set_language is not registered", async () => {
+        const server = new McpServer(
+            { name: "t", version: "0.0.0" },
+            { capabilities: { tools: {}, resources: {} } },
+        );
+        registerTools(server, { kind: "user", userId: "u1" }, true, null);
+        const [ct, st] = InMemoryTransport.createLinkedPair();
+        const client = new Client({ name: "c", version: "0.0.0" });
+        await Promise.all([server.connect(st), client.connect(ct)]);
+        try {
+            const { tools } = await client.listTools();
+            expect(tools.map((t) => t.name)).not.toContain("set_language");
+        } finally {
+            await client.close();
+            await server.close();
+        }
     });
 
-    test("set_language persists a supported locale", async () => {
-        await withTools(null, async (call) => {
-            const r = await call("set_language", { locale: "de" });
-            expect(textOf(r)).toContain("Deutsch");
-            expect(textOf(r)).toContain("de");
-            expect(db.profilePatches).toContainEqual({ locale: "de" });
-            expect(db.profile?.locale).toBe("de");
-        });
-    });
-
-    test("get_profile defaults language to English when never set", async () => {
-        db.profile = { ...PROFILE_BASE, locale: null };
-        await withTools(null, async (call) => {
-            const text = textOf(await call("get_profile"));
-            expect(text).toContain(
-                "Language: not set (defaulting to English).",
-            );
-            expect(text).toContain("set_language");
-        });
-    });
-
-    // #99-shaped case, same as timezone: a profile row created by some other
-    // set_* tool with locale still null must read the same as no profile at all.
-    test("get_profile treats a profile with no locale as unset", async () => {
-        db.profile = { ...PROFILE_BASE, locale: null, timezone: "UTC" };
-        await withTools(null, async (call) => {
-            const text = textOf(await call("get_profile"));
-            expect(text).toContain(
-                "Language: not set (defaulting to English).",
-            );
-        });
-    });
-
-    test("get_profile reports a saved locale", async () => {
+    test("get_profile does not report a widget language", async () => {
         db.profile = { ...PROFILE_BASE, locale: "fr" };
         await withTools(null, async (call) => {
             const text = textOf(await call("get_profile"));
-            expect(text).toContain("Français");
-            expect(text).toContain("fr");
+            expect(text).not.toContain("Language:");
+            expect(text).not.toContain("Français");
+            expect(text).not.toContain("set_language");
         });
     });
 
@@ -5811,11 +5786,8 @@ describe("/mcp records the negotiated era for the access log", () => {
         expect(client).toBe(`${"x".repeat(40)}/${"y".repeat(40)}`);
     });
 
-    // The access log is a ring buffer holding well under an hour at production
-    // volume, so it cannot answer "has anyone used legacy in the last 30 days".
-    // tool_analytics can, and only if the era actually reaches the row.
     test.each(ERAS)(
-        "the era reaches the tool_analytics row (%p)",
+        "tool_analytics rows keep duration and outcome without era columns (%p)",
         async (mode) => {
             db.analyticsRows = [];
             await withHttpClient("u1", mode, (client) =>
@@ -5825,39 +5797,12 @@ describe("/mcp records the negotiated era for the access log", () => {
                 (r) => r.tool_name === "get_current_time",
             );
             expect(rows.length).toBe(1);
-            expect(rows[0]?.protocol_era).toBe(
-                mode === "legacy" ? "legacy" : "modern",
-            );
+            expect(rows[0]?.success).toBe(true);
+            expect(typeof rows[0]?.duration_ms).toBe("number");
+            expect(rows[0]?.protocol_era).toBeUndefined();
+            expect(rows[0]?.client_name).toBeUndefined();
         },
     );
-
-    test("a modern tool call records the client that made it", async () => {
-        db.analyticsRows = [];
-        await withHttpClient("u1", { pin: "2026-07-28" }, (client) =>
-            client.callTool({ name: "get_current_time", arguments: {} }),
-        );
-        const row = db.analyticsRows.find(
-            (r) => r.tool_name === "get_current_time",
-        );
-        // withHttpClient's client identifies itself as { name: "t", version: "0" }.
-        expect(row?.client_name).toBe("t/0");
-    });
-
-    test("a legacy tool call records the era but not the client", async () => {
-        db.analyticsRows = [];
-        await withHttpClient("u1", "legacy", (client) =>
-            client.callTool({ name: "get_current_time", arguments: {} }),
-        );
-        const row = db.analyticsRows.find(
-            (r) => r.tool_name === "get_current_time",
-        );
-        // Documents the limitation instead of hiding it: on the stateless legacy
-        // leg a tool call is a separate request from `initialize`, and only
-        // `initialize` carries clientInfo. The era — the field the retirement
-        // decision actually rests on — is still recorded.
-        expect(row?.protocol_era).toBe("legacy");
-        expect(row?.client_name).toBeUndefined();
-    });
 
     test("a request refused before the factory carries no era", async () => {
         // 415: the SDK rejects on Content-Type before reading the body, so no
