@@ -5231,7 +5231,7 @@ describe("/mcp serves the 2026-07-28 revision", () => {
     test("a negotiating client lands on the modern era", async () => {
         await withHttpClient("u1", "auto", async (client) => {
             expect(client.getProtocolEra()).toBe("modern");
-            expect(client.getServerVersion()?.name).toBe("nutrition-mcp");
+            expect(client.getServerVersion()?.name).toBe("Foodable");
         });
     });
 
@@ -5453,7 +5453,7 @@ describe("/mcp still serves 2025-era clients unchanged", () => {
     test("a legacy client completes initialize and lists tools", async () => {
         await withHttpClient("u1", "legacy", async (client) => {
             expect(client.getProtocolEra()).toBe("legacy");
-            expect(client.getServerVersion()?.name).toBe("nutrition-mcp");
+            expect(client.getServerVersion()?.name).toBe("Foodable");
             expect(client.getServerCapabilities()?.tools).toBeDefined();
             const { tools } = await client.listTools();
             expect(tools.find((t) => t.name === "log_meal")?._meta?.ui).toEqual(

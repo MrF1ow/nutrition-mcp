@@ -218,7 +218,7 @@ const NUTRIENT_COVERAGE = `Fiber, sugar and caffeine are tracked here alongside 
 // question is resolved") is repeated in log_meal's own description. Keep both
 // in sync. Note this is guidance only: the client model decides whether to
 // follow it, so the loop cannot be strictly enforced from here.
-const SERVER_INSTRUCTIONS = `Nutrition tracking: meals, water, weight, goals, and trends, per-user with timezone support.
+const SERVER_INSTRUCTIONS = `Foodable: meals, water, weight, goals, and trends, per-user with timezone support.
 
 All nutrition figures are estimates and this server does not provide medical or dietary advice.
 
@@ -6682,8 +6682,9 @@ export function registerTools(
 function newMcpServer(baseUrl: string): McpServer {
     return new McpServer(
         {
-            name: "nutrition-mcp",
-            version: "1.27.2",
+            name: "Foodable",
+            title: "Foodable",
+            version: "0.1.0",
             icons: [
                 {
                     src: `${baseUrl}/favicon.ico`,

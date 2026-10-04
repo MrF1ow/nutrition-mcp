@@ -65,7 +65,7 @@ describe("categorizeError", () => {
             "service_misconfigured",
         ],
         [
-            "OFF_USER_AGENT is not configured — Open Food Facts requires a User-Agent like 'nutrition-mcp (you@example.com)'",
+            "OFF_USER_AGENT is not configured — Open Food Facts requires a User-Agent like 'Foodable (you@example.com)'",
             "service_misconfigured",
         ],
 

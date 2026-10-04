@@ -1,243 +1,56 @@
-# Nutrition MCP
+# Foodable
 
-A remote MCP server for personal nutrition tracking — log meals with calories, macros, fiber, total sugar and caffeine, log water and body weight, review nutrition history, and import an existing food diary from another app, all through conversation. Alcohol tracking is opt-in and off by default.
+Foodable is a self-hosted MCP platform for one household. People use it through their AI agents and a small web app. It is personal and open source. It is not a public hosted service.
 
-## Table of Contents
+The goal is one cohesive system. Buying, storing, cooking, and eating are steps of one loop, not four separate trackers.
 
-- [Quick Start](#quick-start)
-- [Demo](#demo)
-- [Tech Stack](#tech-stack)
-- [MCP Tools](#mcp-tools)
-- [MCP Resources](#mcp-resources)
-- [Self-hosting](#self-hosting)
-    - [0. Get the code](#0-get-the-code)
-    - [1. Supabase setup](#1-supabase-setup)
-    - [2. Environment variables](#2-environment-variables)
-- [Development](#development)
-    - [Testing and quality](#testing-and-quality)
-- [Connect to Claude.ai](#connect-to-claudeai)
-- [API Endpoints](#api-endpoints)
-- [Deploy](#deploy)
-- [License](#license)
+## Five pillars
 
-## Quick Start
+| Pillar        | What it is                                                                 |
+| ------------- | -------------------------------------------------------------------------- |
+| **Fridge**    | What is in the house, by location, with quantity                           |
+| **Groceries** | The shopping list, already-have against the fridge, store and person rules |
+| **Nutrition** | Meals, water, weight, goals, trends, and CSV import from other apps        |
+| **Recipes**   | Household recipes, portions, and remainder lines onto the grocery list     |
+| **Settings**  | Household members, appearance, timezone, and shared preferences            |
 
-Already hosted and ready to use — just connect it to your MCP client:
-
-```
-https://nutrition-mcp.com/mcp
-```
-
-**On Claude.ai:** Customize → Connectors → + → Add custom connector → paste the URL → Connect (see [Connect to Claude.ai](#connect-to-claudeai) below for the full walkthrough)
-
-On first connect you'll be asked to register with an email and password. Your data persists across reconnections.
-
-Bring your history with you: say "import my meals" and an importer opens in the chat, where you pick the CSV you exported from your old app, map its columns, and check what will be added before anything is saved. Exports from MyFitnessPal, Cronometer, Lose It! and MacroFactor are recognised automatically; any other CSV works by mapping its columns yourself. In clients that can't show in-chat panels, paste the export instead and the AI imports it for you. If your export has an alcohol column and you want it kept, turn alcohol tracking on before importing. The importer skips that column while tracking is off, and re-importing the same file later won't backfill it.
-
-## Demo
-
-[![Demo](https://img.youtube.com/vi/Y1EHbfimQ70/maxresdefault.jpg)](https://youtube.com/shorts/Y1EHbfimQ70)
-
-Read the story behind it: [How I Replaced MyFitnessPal and Other Apps with a Single MCP Server](https://medium.com/@akutishevsky/how-i-replaced-myfitnesspal-and-other-apps-with-a-single-mcp-server-56ca5ec7d673)
-
-## Tech Stack
-
-- **Bun** — runtime and package manager
-- **Hono** — HTTP framework
-- **MCP SDK** — Model Context Protocol over Streamable HTTP
-- **Supabase** — PostgreSQL database + user authentication
-- **OAuth 2.0** — authentication for Claude.ai connectors
-
-## MCP Tools
-
-| Tool                          | Description                                                                                                                                                                                                                                                 |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `log_meal`                    | Log a meal with description, type, calories, macros, fiber, total sugar, alcohol, caffeine (mg), notes — from text or a photo of your plate. Optional `target_member` writes another household member's log (MCP only; the site has no log-as-them control) |
-| `start_meal_import`           | Open the in-chat CSV importer: pick an export from another app, map its columns, preview, confirm                                                                                                                                                           |
-| `bulk_import_meals`           | Write up to 50 imported rows per call — each row validated, duplicates skipped so a re-send is safe                                                                                                                                                         |
-| `lookup_barcode`              | Look up a packaged product's label nutrition by barcode via Open Food Facts (read from a photo or typed)                                                                                                                                                    |
-| `get_meals_today`             | Get all meals logged today                                                                                                                                                                                                                                  |
-| `get_meals_by_date`           | Get meals for a specific date (YYYY-MM-DD)                                                                                                                                                                                                                  |
-| `get_meals_by_date_range`     | Get meals between two dates (inclusive)                                                                                                                                                                                                                     |
-| `search_meals`                | Search past meals by keyword, grouped into recurring variations (counts, last logged, typical macros)                                                                                                                                                       |
-| `get_nutrition_summary`       | Daily nutrition totals + goal progress for a date range                                                                                                                                                                                                     |
-| `update_meal`                 | Update any fields of an existing meal                                                                                                                                                                                                                       |
-| `delete_meal`                 | Delete a meal by ID                                                                                                                                                                                                                                         |
-| `set_nutrition_goals`         | Set daily calorie, macro, fiber and water targets to reach, sugar/alcohol/caffeine limits to stay under, plus an optional target weight                                                                                                                     |
-| `get_nutrition_goals`         | Get the current daily targets and limits                                                                                                                                                                                                                    |
-| `get_goal_progress`           | Get intake vs. targets and limits for a given day (default: today), plus latest weight vs. target                                                                                                                                                           |
-| `log_water`                   | Log a hydration entry in milliliters                                                                                                                                                                                                                        |
-| `get_water_today`             | Get today's water intake total and entries                                                                                                                                                                                                                  |
-| `get_water_by_date`           | Get water intake for a specific date                                                                                                                                                                                                                        |
-| `delete_water`                | Delete a water log entry by ID                                                                                                                                                                                                                              |
-| `log_weight`                  | Log a body-weight measurement in kg or lb (converted and stored server-side)                                                                                                                                                                                |
-| `get_weight_today`            | Get today's weight entries                                                                                                                                                                                                                                  |
-| `get_weight_by_date`          | Get weight entries for a specific date                                                                                                                                                                                                                      |
-| `get_weight_by_date_range`    | Get weight entries between two dates (inclusive), grouped by day                                                                                                                                                                                            |
-| `get_weight_trends`           | Weight trend: latest, overall change, 7/14/30-day moving averages, min/max, and goal progress                                                                                                                                                               |
-| `update_weight`               | Update an existing weight entry                                                                                                                                                                                                                             |
-| `delete_weight`               | Delete a weight entry by ID                                                                                                                                                                                                                                 |
-| `set_weight_unit`             | Set the preferred weight unit (`kg` or `lb`; null to clear)                                                                                                                                                                                                 |
-| `get_trends`                  | 7/14/30-day averages, std dev, streaks, day-of-week, best/worst day                                                                                                                                                                                         |
-| `get_meal_patterns`           | Pre-aggregated behavioural patterns (breakfast effect, late dinner, weekend vs weekday, outliers)                                                                                                                                                           |
-| `export_all_data`             | Export every table — meals, water, weight, goals, profile — as one ZIP of CSVs plus a README, and return a 60-minute download link                                                                                                                          |
-| `get_profile`                 | Get timezone (+ local date/time), weight unit, widget display and alcohol tracking in one call                                                                                                                                                              |
-| `set_timezone`                | Set the user's IANA timezone (e.g. `America/Los_Angeles`)                                                                                                                                                                                                   |
-| `get_current_time`            | Get the current date and time in the user's timezone, plus the UTC instant — for hosts with no clock in context                                                                                                                                             |
-| `set_widget_display`          | Enable or disable the in-chat visual widgets (dashboards, rings, charts); enabled by default                                                                                                                                                                |
-| `set_alcohol_tracking`        | Turn alcohol tracking on or off (off by default) and choose US standard drinks or UK units; turning it off hides alcohol rather than deleting it                                                                                                            |
-| `rotate_household_token`      | Issue a household bot token (`nt_hh_…`). Shown once; stored as a hash. Only the owner may rotate. A PAT may rotate and then stops working                                                                                                                   |
-| `list_members`                | List household members (`user_id`, `display_name`, `role`). A household PAT and any member may call this                                                                                                                                                    |
-| `add_household_member`        | Create an Auth login and household member. `display_name`, `password`, and either `email` or `username`. Username becomes `{username}@household.invalid`. Owner or PAT only. Returns `user_id`                                                              |
-| `get_household_config`        | Read household name, fridge locations, recipe search places, and shared preferences                                                                                                                                                                         |
-| `update_household_config`     | Merge household name, fridge locations, recipe places, or preferences. Places are labels, not a recipe table. Owner or PAT only                                                                                                                             |
-| `update_fridge_locations`     | Replace the household fridge and freezer location list. Owner or PAT only                                                                                                                                                                                   |
-| `list_fridge_locations`       | List fridge and pantry locations                                                                                                                                                                                                                            |
-| `list_fridge_items`           | List fridge items with quantity and location                                                                                                                                                                                                                |
-| `add_fridge_location`         | Add a named fridge or pantry location                                                                                                                                                                                                                       |
-| `delete_fridge_location`      | Delete a fridge location and its items                                                                                                                                                                                                                      |
-| `add_fridge_item`             | Add a food (grams; barcode or name) or supply (amount + unit) to a location                                                                                                                                                                                 |
-| `update_fridge_item`          | Change quantity or move a fridge item                                                                                                                                                                                                                       |
-| `delete_fridge_item`          | Remove a fridge item                                                                                                                                                                                                                                        |
-| `list_grocery_lines`          | List grocery lines with already-have against fridge stock                                                                                                                                                                                                   |
-| `add_grocery_line`            | Add a grocery line; reports already-have and allergen warnings                                                                                                                                                                                              |
-| `check_grocery_line`          | Check or uncheck a grocery line without inserting fridge stock                                                                                                                                                                                              |
-| `delete_grocery_line`         | Remove a grocery line                                                                                                                                                                                                                                       |
-| `clear_checked_grocery_lines` | Remove every checked grocery line                                                                                                                                                                                                                           |
-| `list_recipes`                | List household recipes                                                                                                                                                                                                                                      |
-| `get_recipe`                  | Get a recipe as viewed by a household member                                                                                                                                                                                                                |
-| `create_recipe`               | Create a household recipe with a cook yield                                                                                                                                                                                                                 |
-| `add_recipe_ingredient`       | Add a barcode or manual ingredient to a recipe                                                                                                                                                                                                              |
-| `set_recipe_portion`          | Set how many portions a member eats of a recipe                                                                                                                                                                                                             |
-| `delete_recipe`               | Delete a recipe (creator or owner only)                                                                                                                                                                                                                     |
-| `add_recipe_to_grocery`       | Add remainder lines after summing selected members' portions and netting the fridge                                                                                                                                                                         |
-| `list_store_rules`            | List free-text rules for a grocery store                                                                                                                                                                                                                    |
-| `set_store_rules`             | Add a free-text rule on a grocery store                                                                                                                                                                                                                     |
-| `list_person_rules`           | List free-text rules for a household member                                                                                                                                                                                                                 |
-| `set_person_rules`            | Add a free-text rule for a household member                                                                                                                                                                                                                 |
-| `list_person_allergens`       | List allergens for a household member                                                                                                                                                                                                                       |
-| `set_person_allergens`        | Add an allergen for a household member                                                                                                                                                                                                                      |
-| `list_person_dislikes`        | List disliked foods for a household member                                                                                                                                                                                                                  |
-| `set_person_dislikes`         | Add a disliked food for a household member                                                                                                                                                                                                                  |
-| `search_food`                 | Search packaged foods by name (Open Food Facts + cache); household names rank first                                                                                                                                                                         |
-| `delete_account`              | Permanently delete account and all associated data                                                                                                                                                                                                          |
-
-## MCP Resources
-
-| URI                          | Description                                                                       |
-| ---------------------------- | --------------------------------------------------------------------------------- |
-| `nutrition://weekly-summary` | Rolling 7-day digest (averages vs targets, best/roughest day) for proactive pulls |
+Every pillar is meant to refer to the same foods. That shared catalog is still being built; the nutrition stack (meals, insights, widgets, goals, import, export) already works.
 
 ## Self-hosting
 
-### 0. Get the code
+This is a single-household deploy. Clone the repo, copy `.env.example` to `.env`, create a Supabase project, push the migrations in `supabase/migrations/`, and run the server.
 
 ```bash
-git clone https://github.com/akutishevsky/nutrition-mcp.git
+git clone https://github.com/MrF1ow/nutrition-mcp.git
 cd nutrition-mcp
 bun install
-cp .env.example .env   # fill in real values as you go through the steps below
+cp .env.example .env   # fill in Supabase and OAuth values
+supabase db push       # after `supabase link --project-ref <ref>`
+bun src/index.ts       # http://localhost:8080
 ```
 
-Requires Bun 1.x (matches the Dockerfile's `oven/bun:1` base image; no exact minor version is pinned).
+`bun run generate-oauth-creds` prints `OAUTH_CLIENT_ID` and `OAUTH_CLIENT_SECRET`. Open Food Facts barcode lookup needs `OFF_USER_AGENT` in the form `Foodable (you@example.com)`.
 
-### 1. Supabase setup
+## Connecting an agent
 
-1. Create a [Supabase](https://supabase.com) project.
-2. Enable **Email Auth** (Authentication → Providers → Email) and disable email confirmation.
-3. Apply the schema. The full schema lives in [`supabase/migrations/`](supabase/migrations/). With the [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started):
+Point any MCP client at your own `/mcp` URL, for example `https://your-host/mcp`.
 
-    ```bash
-    supabase link --project-ref <your-project-ref>
-    supabase db push
-    ```
+On Claude.ai: Customize → Connectors → + → Add custom connector → name it Foodable → paste the URL → Connect. Sign in with the household account. Data stays on your deploy.
 
-    This creates every table, index, RLS policy, and foreign key the app needs. No local Postgres is involved — migrations run against your hosted project.
-
-4. Copy the **service role key** from Project Settings → API and use it as `SUPABASE_SECRET_KEY`. The same key already bypasses RLS and is what `add_household_member` uses for Auth admin `createUser`.
-
-### 2. Environment variables
-
-| Variable              | Description                                                                                                                                                    |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SUPABASE_URL`        | Your Supabase project URL                                                                                                                                      |
-| `SUPABASE_SECRET_KEY` | Supabase service role key (bypasses RLS). Also used for Auth admin `createUser` when adding a household member                                                 |
-| `OAUTH_CLIENT_ID`     | Random string for OAuth client identification                                                                                                                  |
-| `OAUTH_CLIENT_SECRET` | Random string for OAuth client authentication                                                                                                                  |
-| `ALLOWED_ORIGINS`     | _(optional)_ Comma-separated list of extra browser origins allowed to call `/mcp` via CORS — `localhost`/`127.0.0.1` on any port are always allowed regardless |
-| `OFF_USER_AGENT`      | Open Food Facts User-Agent for barcode lookups, in the form `AppName (email)`                                                                                  |
-| `PORT`                | Server port (default: `8080`)                                                                                                                                  |
-
-Generate OAuth credentials:
+The login page is the OAuth screen at `/authorize` (and `/` when you are signed out). There is no public marketing site.
 
 ```bash
-bun run generate-oauth-creds
+bun run dev             # regenerates login HTML, then watches src/
+bun test                # test suite
+bun run typecheck       # typecheck src/
+bun run format          # Prettier, 4-space indent
 ```
 
-or manually:
+Login templates under `public/login.html` are generated. After editing `src/copy/login.ts` or `scripts/site-partials.ts`, run `bun run gen:all`.
 
-```bash
-openssl rand -hex 16   # use as OAUTH_CLIENT_ID
-openssl rand -hex 32   # use as OAUTH_CLIENT_SECRET
-```
+## Forked from nutrition-mcp
 
-## Development
-
-```bash
-bun install
-cp .env.example .env   # fill in your credentials — see Self-hosting above for what to put here
-bun run dev             # regenerates login templates, then starts with hot reload on http://localhost:8080
-```
-
-The login templates under `public/` (`login.html` and locale mirrors) are build artifacts, not tracked in git. They are regenerated on every Docker build, in CI, and once at each `bun run dev` start. `--watch` only restarts the `src/index.ts` process on save, so it does **not** rerun generation. After editing `src/copy/login.ts` or `scripts/site-partials.ts`, run `bun run gen:all` yourself.
-
-### Testing and quality
-
-```bash
-bun test                # run the test suite
-bun run format           # format with Prettier (4-space indentation)
-bun run format:check     # verify the tree is prettier-clean
-bun run typecheck        # typecheck src/
-```
-
-CI runs `format:check` and `typecheck` on every PR; `typecheck` is scoped to `src/`, so a type error in a test file or under `scripts/` won't be caught by it.
-
-For in-chat widget development (`public/widgets/`), `bun run harness` starts a local host simulator so you can test widgets without a real MCP client.
-
-## Connect to Claude.ai
-
-1. Open [Claude.ai](https://claude.ai) and click **Customize**
-2. Click **Connectors**, then the **+** button
-3. Click **Add custom connector**
-4. Fill in:
-    - **Name**: Nutrition Tracker
-    - **Remote MCP Server URL**: `https://nutrition-mcp.com/mcp`
-5. Click **Connect** — sign in or register when prompted
-6. After signing in, Claude can use your nutrition tools. If you reconnect later, sign in with the same email and password to keep your data.
-
-## API Endpoints
-
-| Endpoint                                      | Description                                                                 |
-| --------------------------------------------- | --------------------------------------------------------------------------- |
-| `GET /health`                                 | Health check                                                                |
-| `GET /robots.txt`                             | Crawlers: `Disallow: /`                                                     |
-| `GET /.well-known/oauth-authorization-server` | OAuth metadata discovery (root + `/mcp`-scoped variants)                    |
-| `GET /.well-known/oauth-protected-resource`   | OAuth protected-resource metadata discovery (root + `/mcp`-scoped variants) |
-| `POST /register`                              | Dynamic client registration                                                 |
-| `GET /authorize`                              | OAuth authorization (shows login page)                                      |
-| `POST /approve`                               | Login/register handler                                                      |
-| `POST /token`                                 | Token exchange                                                              |
-| `GET /favicon.ico`                            | Server icon                                                                 |
-| `ALL /mcp`                                    | MCP endpoint (authenticated)                                                |
-
-## Deploy
-
-The project includes a `Dockerfile` for container-based deployment.
-
-1. Push your repo to a hosting provider (e.g. DigitalOcean App Platform)
-2. Set the environment variables listed above
-3. The app auto-detects the Dockerfile and deploys on port `8080`
-4. Point your domain to the deployed URL
+Foodable is a fork of [akutishevsky/nutrition-mcp](https://github.com/akutishevsky/nutrition-mcp). The original is a hosted nutrition MCP server. This fork keeps that nutrition work and is turning it into a household food platform.
 
 ## License
 

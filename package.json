@@ -1,13 +1,13 @@
 {
-    "name": "nutrition-mcp",
-    "version": "1.27.2",
-    "description": "A remote MCP server for personal nutrition tracking. Log meals, track macros, and review nutrition history through Claude.",
-    "author": "akutishevsky",
+    "name": "foodable",
+    "version": "0.1.0",
+    "description": "Self-hosted MCP platform for one household: fridge, groceries, nutrition, recipes, and settings.",
+    "author": "Ethan Flow",
     "license": "MIT",
-    "homepage": "https://nutrition-mcp.com/mcp",
+    "homepage": "https://github.com/MrF1ow/nutrition-mcp",
     "repository": {
         "type": "git",
-        "url": "https://github.com/akutishevsky/nutrition-mcp.git"
+        "url": "https://github.com/MrF1ow/nutrition-mcp.git"
     },
     "keywords": [
         "mcp",

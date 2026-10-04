@@ -1,4 +1,4 @@
-/* nutrition-mcp.com — shared site behaviour.
+/* Foodable — shared site behaviour.
    Loaded by every public page. Everything here degrades: with no script the
    pages are fully readable, the menu is reachable through the footer, and
    nothing is hidden (reveals only engage once html.js is set below). */

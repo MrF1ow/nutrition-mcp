@@ -325,7 +325,7 @@ export function buildExportReadme(opts: {
         : `No timezone has ever been set on this account, so every timestamp in this archive is expressed in UTC (that is also what the server assumes when it buckets your days). Set one with set_timezone and export again if you want your own wall clock. Each file repeats the zone in a "timezone" column.`;
 
     return [
-        "Nutrition MCP — full data export",
+        "Foodable — full data export",
         "================================",
         "",
         `Generated ${formatLocalDateTime(generatedAt, tz)} (${tz}).`,
