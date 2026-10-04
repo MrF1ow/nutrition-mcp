@@ -497,6 +497,7 @@ body {
     margin: 0;
 }
 
+.grocery-add-store,
 .grocery-clear-checked,
 .grocery-line-check {
     display: grid;
@@ -504,6 +505,12 @@ body {
     max-width: 420px;
 }
 
+.grocery-add-store {
+    margin: 0 0 20px;
+}
+
+.grocery-add-store input,
+.grocery-add-store button,
 .grocery-clear-checked button,
 .grocery-line-check button,
 .grocery-store select {
@@ -516,6 +523,7 @@ body {
     padding: 8px 12px;
 }
 
+.grocery-add-store button,
 .grocery-clear-checked button {
     color: var(--accent-ink);
     background: var(--accent);

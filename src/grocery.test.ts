@@ -264,4 +264,77 @@ test("grocery page groups by store then section and shows already-have", () => {
     expect(html).not.toContain("grocery-add-supply");
     expect(html).not.toContain('name="kind" value="supply"');
     expect(html).not.toContain('data-kind="supply"');
+    expect(html).not.toContain("grocery-add-store");
+    expect(html).not.toContain('action="/grocery/stores"');
+});
+
+const groceryChrome = {
+    theme: "light" as const,
+    accent: ACCENT_SWATCHES.sky,
+};
+
+test("owner grocery page has a short add-store form and no add-supply", () => {
+    const html = renderGroceryPage({
+        chrome: groceryChrome,
+        stores: [],
+        isOwner: true,
+    });
+    expect(html).toContain("<h1>Groceries</h1>");
+    expect(html).toContain('class="grocery-add-store"');
+    expect(html).toContain('action="/grocery/stores"');
+    expect(html).toContain('id="grocery_store_name"');
+    expect(html).toContain('name="name"');
+    expect(html).toContain("Add store");
+    expect(html).toContain("Household settings");
+    expect(html).not.toContain("<h3>Add supply</h3>");
+    expect(html).not.toContain("grocery-add-supply");
+    expect(html).not.toContain('name="kind" value="supply"');
+});
+
+test("owner grocery page keeps the add-store form when a store already exists", () => {
+    const html = renderGroceryPage({
+        chrome: groceryChrome,
+        isOwner: true,
+        stores: [
+            {
+                id: "st-1",
+                householdId: HH,
+                name: "Corner",
+                sortOrder: 0,
+                rules: [],
+                sections: [],
+            },
+        ],
+    });
+    expect(html).toContain("<h2>Corner</h2>");
+    expect(html).toContain('class="grocery-add-store"');
+    expect(html).toContain('action="/grocery/stores"');
+    expect(html).not.toContain("<h3>Add supply</h3>");
+});
+
+test("member grocery page does not get the add-store form", () => {
+    const html = renderGroceryPage({
+        chrome: groceryChrome,
+        stores: [],
+        isOwner: false,
+    });
+    expect(html).toContain("<h1>Groceries</h1>");
+    expect(html).toContain("Household settings");
+    expect(html).not.toContain("grocery-add-store");
+    expect(html).not.toContain('action="/grocery/stores"');
+    expect(html).not.toContain("<h3>Add supply</h3>");
+});
+
+test("empty store name error re-renders groceries with the banner", () => {
+    const html = renderGroceryPage({
+        chrome: groceryChrome,
+        stores: [],
+        isOwner: true,
+        error: "Enter a store name.",
+    });
+    expect(html).toContain("<h1>Groceries</h1>");
+    expect(html).toContain('class="error-banner"');
+    expect(html).toContain("Enter a store name.");
+    expect(html).toContain('action="/grocery/stores"');
+    expect(html).not.toContain("<h3>Add supply</h3>");
 });

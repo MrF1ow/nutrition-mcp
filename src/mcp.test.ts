@@ -6215,6 +6215,9 @@ describe("authenticated dashboard HTTP", () => {
         expect(groceryHtml).toContain('href="/grocery" aria-current="page"');
         expect(groceryHtml).not.toContain("Coming soon.");
         expect(groceryHtml).toContain("Add a grocery store");
+        expect(groceryHtml).toContain('class="grocery-add-store"');
+        expect(groceryHtml).toContain('action="/grocery/stores"');
+        expect(groceryHtml).not.toContain("<h3>Add supply</h3>");
 
         const recipes = await siteApp.request("http://x/recipes", {
             headers: { cookie: cookieFor(alice) },
@@ -6396,6 +6399,75 @@ describe("authenticated dashboard HTTP", () => {
         const html = await r.text();
         expect(html).toContain("household membership");
         expect(html).not.toContain("<h1>Groceries</h1>");
+    });
+
+    test("POST /grocery/stores as owner adds Corner on the grocery page", async () => {
+        const add = await siteApp.request("http://x/grocery/stores", {
+            method: "POST",
+            headers: {
+                cookie: cookieFor(alice),
+                "content-type": "application/x-www-form-urlencoded",
+            },
+            body: "name=Corner",
+        });
+        expect(add.status).toBe(302);
+        expect(add.headers.get("location")).toBe("/grocery");
+        const stores = await db.settingsStore.listStores("hh-1");
+        expect(stores.map((row) => row.name)).toEqual(["Corner"]);
+        const page = await siteApp.request("http://x/grocery", {
+            headers: { cookie: cookieFor(alice) },
+        });
+        const html = await page.text();
+        expect(html).toContain("<h2>Corner</h2>");
+        expect(html).toContain('class="grocery-add-store"');
+        expect(html).not.toContain("<h3>Add supply</h3>");
+        expect(html).not.toContain("grocery-add-supply");
+    });
+
+    test("POST /grocery/stores with an empty name re-renders grocery with the error", async () => {
+        const add = await siteApp.request("http://x/grocery/stores", {
+            method: "POST",
+            headers: {
+                cookie: cookieFor(alice),
+                "content-type": "application/x-www-form-urlencoded",
+            },
+            body: "name=",
+        });
+        expect(add.status).toBe(400);
+        expect(add.headers.get("location")).toBeNull();
+        const html = await add.text();
+        expect(html).toContain("<h1>Groceries</h1>");
+        expect(html).toContain("Enter a store name.");
+        expect(html).toContain('action="/grocery/stores"');
+        expect(html).not.toContain("<h3>Add supply</h3>");
+        expect(await db.settingsStore.listStores("hh-1")).toEqual([]);
+    });
+
+    test("GET /grocery as a member has no add-store form", async () => {
+        db.profile = { ...PROFILE_BASE, user_id: bob };
+        const r = await siteApp.request("http://x/grocery", {
+            headers: { cookie: cookieFor(bob) },
+        });
+        expect(r.status).toBe(200);
+        const html = await r.text();
+        expect(html).toContain("<h1>Groceries</h1>");
+        expect(html).not.toContain("grocery-add-store");
+        expect(html).not.toContain('action="/grocery/stores"');
+        expect(html).not.toContain("<h3>Add supply</h3>");
+    });
+
+    test("POST /grocery/stores as a member is refused", async () => {
+        const add = await siteApp.request("http://x/grocery/stores", {
+            method: "POST",
+            headers: {
+                cookie: cookieFor(bob),
+                "content-type": "application/x-www-form-urlencoded",
+            },
+            body: "name=Corner",
+        });
+        expect(add.status).toBe(403);
+        expect(await add.text()).toContain("household membership");
+        expect(await db.settingsStore.listStores("hh-1")).toEqual([]);
     });
 
     test("GET /settings is the account page, not a stub", async () => {
