@@ -5927,7 +5927,7 @@ describe("authenticated dashboard HTTP", () => {
         expect(html).not.toContain("You can look, not edit");
         expect(html).not.toContain('action="/approve"');
         expect(html).not.toContain('action="/add-household-member"');
-        expect(html).not.toContain('action="/log-meal"');
+        expect(html).toContain('action="/log-meal"');
         expect(html).not.toContain('name="log_meal"');
         expect(html).not.toContain('class="facts"');
         expect(html).toContain('class="bottom-nav"');

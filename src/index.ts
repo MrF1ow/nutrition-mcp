@@ -15,6 +15,12 @@ import {
     renderSettingsAccountPage,
 } from "./dashboard.js";
 import { parseAppearanceInput } from "./app/shell.js";
+import {
+    logMealFromForm,
+    logWaterFromForm,
+    logWeightFromForm,
+    withNutritionError,
+} from "./app/nutrition.js";
 import { parseNutritionPrefsInput } from "./app/settings/page.js";
 import {
     authenticateBearer,
@@ -41,6 +47,9 @@ import {
     createHouseholdForCaller,
     getHouseholdConfig,
     getHouseholdMembership,
+    insertMeal,
+    insertWater,
+    insertWeight,
     listHouseholdMembers,
     liveFridgeStore,
     liveGroceryStore,
@@ -298,6 +307,82 @@ app.get("/", async (c) => {
     if (!userId) return beginSiteLogin(c, c.req.query("locale"));
     const page = await renderDashboardPage(userId, c.req.query("member"));
     return c.html(page.html, page.status);
+});
+
+async function nutritionActor(c: {
+    req: {
+        header: (name: string) => string | undefined;
+        query: (k: string) => string | undefined;
+    };
+}) {
+    const userId = siteUserId(c.req.header("cookie"));
+    if (!userId) return { userId: null as string | null, member: null };
+    return {
+        userId,
+        member: await getHouseholdMembership(userId),
+    };
+}
+
+async function nutritionFormError(userId: string, error: string) {
+    const page = await renderDashboardPage(userId, undefined);
+    return {
+        html: withNutritionError(page.html, error),
+        status: 400 as const,
+    };
+}
+
+app.post("/log-meal", async (c) => {
+    const { userId, member } = await nutritionActor(c);
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    if (member == null) return c.html(forbiddenDashboardHtml(), 403);
+    const body = await c.req.parseBody();
+    const result = await logMealFromForm(
+        userId,
+        { description: formText(body, "description") },
+        insertMeal,
+    );
+    if (!result.ok) {
+        const page = await nutritionFormError(userId, result.error);
+        return c.html(page.html, page.status);
+    }
+    return c.redirect("/");
+});
+
+app.post("/log-water", async (c) => {
+    const { userId, member } = await nutritionActor(c);
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    if (member == null) return c.html(forbiddenDashboardHtml(), 403);
+    const body = await c.req.parseBody();
+    const result = await logWaterFromForm(
+        userId,
+        { amount_ml: formText(body, "amount_ml") },
+        insertWater,
+    );
+    if (!result.ok) {
+        const page = await nutritionFormError(userId, result.error);
+        return c.html(page.html, page.status);
+    }
+    return c.redirect("/");
+});
+
+app.post("/log-weight", async (c) => {
+    const { userId, member } = await nutritionActor(c);
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    if (member == null) return c.html(forbiddenDashboardHtml(), 403);
+    const body = await c.req.parseBody();
+    const result = await logWeightFromForm(
+        userId,
+        {
+            weight: formText(body, "weight"),
+            unit: formText(body, "unit"),
+        },
+        insertWeight,
+    );
+    if (!result.ok) {
+        const page = await nutritionFormError(userId, result.error);
+        return c.html(page.html, page.status);
+    }
+    return c.redirect("/");
 });
 
 app.get("/nutrition", async (c) => {
