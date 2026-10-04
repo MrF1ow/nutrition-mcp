@@ -1,7 +1,7 @@
 // Locale resolution + string lookup for widget UI text.
 //
 // Requires WIDGET_STRINGS to already be defined in scope — a plain-data
-// object ({ en: {...}, de: {...}, ... }, shaped like WidgetStrings in
+// object ({ en: {...} }, shaped like WidgetStrings in
 // src/copy/widgets.ts) that the INCLUDING TEMPLATE provides via its own
 // i18n-inlining marker (see src/widgets.ts), placed immediately before the
 // line that pulls this file in (see nutrition-summary.html). That marker
@@ -31,12 +31,11 @@ let WIDGET_LOCALE = "en";
 let T = WIDGET_STRINGS.en;
 
 // Resolve which of our bundled locales to render in. `explicit` (typically
-// structuredContent.locale, i.e. the user's saved get_language/set_language
-// preference) wins when present — it is per-user and always set by the
-// server (getUserLocale defaults to "en"), unlike `hostLocale`
-// (hostContext.locale), which is host-dependent and may be absent. Both are
-// matched on the BCP-47 base language ("de-DE" -> "de") since WIDGET_STRINGS
-// is keyed by base language only.
+// structuredContent.locale, always "en" from the server) wins when present,
+// unlike `hostLocale` (hostContext.locale), which is host-dependent and may
+// be absent. Both are matched on the BCP-47 base language ("en-US" -> "en")
+// since WIDGET_STRINGS is keyed by base language only. English is the only
+// bundled locale, so any other tag falls through to "en".
 function pickLocale(explicit, hostLocale) {
     function base(tag) {
         if (!tag) return null;

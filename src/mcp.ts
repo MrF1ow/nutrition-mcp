@@ -55,13 +55,11 @@ import {
     deleteWeight,
     getUserTimezone,
     getPreferredWeightUnit,
-    getUserLocale,
     widgetsEnabledFromProfile,
     alcoholTrackingEnabledFromProfile,
     preferredDrinkUnitFromProfile,
     preferredWeightUnitFromProfile,
     timezoneFromProfile,
-    localeFromProfile,
     upsertProfile,
     getProfile,
     getHouseholdMembership,
@@ -98,7 +96,7 @@ import {
     LoggedAtError,
     resolveWriteLoggedAt,
 } from "./tz.js";
-import { SITE_LOCALES, LOCALE_NAMES, type SiteLocale } from "./routes.js";
+import { WIDGET_LOCALE } from "./routes.js";
 import {
     buildDailyBuckets,
     computeTrends,
@@ -589,7 +587,7 @@ const MEAL_PROGRESS_OUTPUT_SCHEMA = z.object({
     drink_unit: DRINK_UNIT_FIELD,
     // The widget's UI language — see the identical field on
     // get_nutrition_summary's outputSchema for why this is z.string() and
-    // resolved server-side via getUserLocale.
+    // Widgets are English-only; always the literal "en".
     locale: z.string(),
     logged_meal: z.object({
         description: z.string(),
@@ -813,7 +811,7 @@ export const START_IMPORT_OUTPUT_SCHEMA = z.object({
     drink_unit: DRINK_UNIT_FIELD,
     // The widget's UI language — see the identical field on
     // get_nutrition_summary's outputSchema for why this is z.string() and
-    // resolved server-side via getUserLocale.
+    // Widgets are English-only; always the literal "en".
     locale: z.string(),
     user_id: z.string(),
 });
@@ -885,7 +883,7 @@ async function buildMealProgress(
 ) {
     const profile = await getProfile(userId);
     const tz = timezoneFromProfile(profile) ?? "UTC";
-    const locale = localeFromProfile(profile) ?? "en";
+    const locale = WIDGET_LOCALE;
     const mealDate = dateInTz(meal.logged_at, tz);
     const [meals, waterEntries, goals] = await Promise.all([
         getMealsByDate(userId, mealDate, tz),
@@ -1550,8 +1548,6 @@ export function registerTools(
     // identity per request before dispatch.
     const analytics = {
         userId: analyticsUserId(auth),
-        protocolEra,
-        clientInfo: () => server.server.getClientVersion(),
     };
     // Link a tool to its widget only when this user has widgets enabled. Because
     // buildMcpServer registers tools per request, this makes widget display a
@@ -1781,7 +1777,7 @@ export function registerTools(
                         tzConfigured: tz !== null,
                         widgetsEnabled,
                         alcohol,
-                        locale: localeFromProfile(profile) ?? "en",
+                        locale: WIDGET_LOCALE,
                         userId,
                     });
                     const text = widgetsEnabled
@@ -2495,14 +2491,8 @@ export function registerTools(
                 // client cannot tell a full month from a fortnight of gaps.
                 days_in_range: z.number(),
                 drink_unit: DRINK_UNIT_FIELD,
-                // The widget's UI language (get_language / set_language),
-                // resolved server-side so the dashboard renders its own
-                // labels in it without a second round trip. Not the language
-                // of `content` above — that stays whatever the model uses.
-                // z.string(), not z.enum(SITE_LOCALES): SITE_LOCALES is a
-                // `readonly SiteLocale[]`, not a literal tuple, and this is
-                // an output-only field — getUserLocale's own fallback is
-                // what actually guarantees a known code.
+                // Widgets are English-only. z.string() so the existing
+                // structuredContent contract stays stable.
                 locale: z.string(),
                 goals: GOALS_ITEM.nullable(),
                 averages: TOTALS_ITEM,
@@ -2546,7 +2536,7 @@ export function registerTools(
                         dateDiffDays(start_date, end_date) + 1,
                     );
                     const tz = await getUserTimezone(userId);
-                    const locale = await getUserLocale(userId);
+                    const locale = WIDGET_LOCALE;
                     const [meals, water, goals] = await Promise.all([
                         getMealsInRange(userId, start_date, end_date, tz),
                         getWaterInRange(userId, start_date, end_date, tz),
@@ -2986,7 +2976,7 @@ export function registerTools(
                 drink_unit: DRINK_UNIT_FIELD,
                 // The widget's UI language — see the identical field on
                 // get_nutrition_summary's outputSchema for why this is
-                // z.string() and resolved server-side via getUserLocale.
+                // Widgets are English-only.
                 locale: z.string(),
                 goals: GOALS_ITEM.nullable(),
                 totals: TOTALS_ITEM,
@@ -3020,7 +3010,7 @@ export function registerTools(
                         ]);
                     const unit =
                         preferredWeightUnitFromProfile(profile) ?? "kg";
-                    const locale = localeFromProfile(profile) ?? "en";
+                    const locale = WIDGET_LOCALE;
                     const totals = sumMeals(meals);
                     totals.water_ml = sumWater(water);
                     const present = nutrientPresence(meals);
@@ -3787,7 +3777,7 @@ export function registerTools(
                 default_range: z.number(),
                 // The widget's UI language — see the identical field on
                 // get_nutrition_summary's outputSchema for why this is
-                // z.string() and resolved server-side via getUserLocale.
+                // Widgets are English-only.
                 locale: z.string(),
                 // Per-day weight (same-day weigh-ins averaged) in display units,
                 // for logged days within the last 30 days; widget slices 7/14/30.
@@ -3810,7 +3800,7 @@ export function registerTools(
                     const tz = timezoneFromProfile(profile) ?? "UTC";
                     const unit =
                         preferredWeightUnitFromProfile(profile) ?? "kg";
-                    const locale = localeFromProfile(profile) ?? "en";
+                    const locale = WIDGET_LOCALE;
                     const endDate = end_date ?? todayInTz(tz);
                     const windowDays = days ?? 30;
                     // The widget's toggle offers up to 30 days, so fetch at
@@ -4218,7 +4208,7 @@ export function registerTools(
                 drink_unit: DRINK_UNIT_FIELD,
                 // The widget's UI language — see the identical field on
                 // get_nutrition_summary's outputSchema for why this is
-                // z.string() and resolved server-side via getUserLocale.
+                // Widgets are English-only.
                 locale: z.string(),
                 goals: GOALS_ITEM.nullable(),
                 // Up to 30 days of daily series; the widget slices to 7/14/30.
@@ -4234,7 +4224,7 @@ export function registerTools(
                     const userId = await actorUserId(user_id, "read");
                     const profile = await getProfile(userId);
                     const tz = timezoneFromProfile(profile) ?? "UTC";
-                    const locale = localeFromProfile(profile) ?? "en";
+                    const locale = WIDGET_LOCALE;
                     const endDate = end_date ?? todayInTz(tz);
                     const windowDays = days ?? 30;
                     // The widget's toggle always offers up to 30 days, so build
@@ -4468,7 +4458,7 @@ export function registerTools(
         {
             title: "Get Profile",
             description:
-                "Get the user's current settings in one call: timezone (plus local date and time), widget language, preferred weight unit, whether in-chat widgets are shown, and whether alcohol tracking is on — everything set_timezone, set_language, set_weight_unit, set_widget_display and set_alcohol_tracking each control. Prefer this over guessing a setting from context, and use it once instead of calling several separate settings tools when you need more than one.",
+                "Get the user's current settings in one call: timezone (plus local date and time), preferred weight unit, whether in-chat widgets are shown, and whether alcohol tracking is on — everything set_timezone, set_weight_unit, set_widget_display and set_alcohol_tracking each control. Prefer this over guessing a setting from context, and use it once instead of calling several separate settings tools when you need more than one.",
             annotations: {
                 readOnlyHint: true,
                 destructiveHint: false,
@@ -4484,7 +4474,6 @@ export function registerTools(
                     const userId = await actorUserId(args.user_id, "read");
                     const profile = await getProfile(userId);
                     const tz = timezoneFromProfile(profile);
-                    const locale = localeFromProfile(profile);
                     const weightUnit = preferredWeightUnitFromProfile(profile);
                     const widgetsEnabled = widgetsEnabledFromProfile(profile);
                     const alcoholEnabled =
@@ -4496,9 +4485,6 @@ export function registerTools(
                         tz === null
                             ? `Timezone: not set (defaulting to UTC). ${formatClockLine("UTC")} Call set_timezone to configure one so 'today' matches the user's local calendar day.`
                             : `Timezone: ${tz}. ${formatClockLine(tz)}`,
-                        locale === null
-                            ? "Language: not set (defaulting to English). Call set_language to configure one."
-                            : `Language: ${LOCALE_NAMES[locale as SiteLocale] ?? locale} (${locale}).`,
                         weightUnit
                             ? `Weight unit: ${weightUnit}.`
                             : "Weight unit: not set. Weights display in kg by default, and logging requires an explicit unit ('kg' or 'lb').",
@@ -4560,50 +4546,6 @@ export function registerTools(
                             {
                                 type: "text",
                                 text: `Timezone set to ${timezone}. Local today is ${todayInTz(timezone)}.`,
-                            },
-                        ],
-                    };
-                },
-                analytics,
-            );
-        },
-    );
-
-    server.registerTool(
-        "set_language",
-        {
-            title: "Set Language",
-            description: `Set the user's UI language for in-chat widgets (dashboards, charts). Supported: ${SITE_LOCALES.map((l) => `'${l}' (${LOCALE_NAMES[l]})`).join(", ")}. This does not change what language the model replies in — only the text rendered inside widget cards. Offer to set this the first time you notice the user writing in a non-English language.`,
-            annotations: {
-                readOnlyHint: false,
-                destructiveHint: false,
-                idempotentHint: true,
-                openWorldHint: false,
-            },
-            inputSchema: personSchema({
-                locale: z
-                    .string()
-                    .describe(
-                        `One of: ${SITE_LOCALES.join(", ")} (ISO 639-1 code).`,
-                    ),
-            }),
-        },
-        async ({ locale, user_id }) => {
-            return withAnalytics(
-                "set_language",
-                async () => {
-                    const userId = await actorUserId(user_id);
-                    if (!SITE_LOCALES.includes(locale as SiteLocale)) {
-                        throw new Error(
-                            `Unsupported language: ${locale}. Use one of: ${SITE_LOCALES.join(", ")}.`,
-                        );
-                    }
-                    await upsertProfile(userId, { locale });
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: `Widget language set to ${LOCALE_NAMES[locale as SiteLocale]} (${locale}).`,
                             },
                         ],
                     };

@@ -43,11 +43,6 @@ describe("categorizeError", () => {
             "invalid_numeric_value",
         ],
 
-        // src/mcp.ts set_language
-        [
-            "Unsupported language: xx. Use one of: en, de, es, fr, nl, pl, it, uk, ja.",
-            "invalid_param_value",
-        ],
         // src/mcp.ts set_weight_unit
         [
             "Invalid weight unit: stone. Use 'kg', 'lb', or null to clear.",

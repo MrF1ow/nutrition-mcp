@@ -1,20 +1,11 @@
-// Translatable strings for login chrome (scripts/site-partials.ts nav()
-// and footer(), plus oauth.ts language-switcher labels). Login is the only
-// generated public HTML. Unused nav/menu/footer-link keys remain so locale
-// files stay a complete ChromeCopy; do not wire them back into hrefs.
+// Chrome strings for login (scripts/site-partials.ts nav() and footer()).
+// Login is the only generated public HTML. Unused nav/menu/footer-link keys
+// remain on ChromeCopy; do not wire them back into hrefs.
 //
 // "Nutrition MCP" and "GitHub" are brand/product nouns and stay in Latin
 // script in every locale — see ChromeCopy.footer.github's doc comment.
 
 import type { SiteLocale } from "../routes.js";
-import { CHROME_DE } from "./chrome.de.js";
-import { CHROME_ES } from "./chrome.es.js";
-import { CHROME_FR } from "./chrome.fr.js";
-import { CHROME_NL } from "./chrome.nl.js";
-import { CHROME_PL } from "./chrome.pl.js";
-import { CHROME_IT } from "./chrome.it.js";
-import { CHROME_UK } from "./chrome.uk.js";
-import { CHROME_JA } from "./chrome.ja.js";
 
 /**
  * A count-sensitive string, picked at render time with `Intl.PluralRules`.
@@ -230,18 +221,6 @@ export const CHROME_EN: ChromeCopy = {
     },
 };
 
-export const CHROME_COPY: Partial<Record<SiteLocale, ChromeCopy>> = {
-    en: CHROME_EN,
-    de: CHROME_DE,
-    es: CHROME_ES,
-    fr: CHROME_FR,
-    nl: CHROME_NL,
-    pl: CHROME_PL,
-    it: CHROME_IT,
-    uk: CHROME_UK,
-    ja: CHROME_JA,
-};
-
-export function chromeFor(locale: SiteLocale): ChromeCopy {
-    return CHROME_COPY[locale] ?? CHROME_EN;
+export function chromeFor(_locale: SiteLocale = "en"): ChromeCopy {
+    return CHROME_EN;
 }

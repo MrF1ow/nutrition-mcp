@@ -15,12 +15,11 @@ process.env.OAUTH_CLIENT_SECRET ||= "test-client-secret";
 
 // Minimal fake session — every renderLoginPage call needs one now that the
 // language switcher's links are reconstructed from its fields.
-function fakeSession(locale: "en" | "de" = "en") {
+function fakeSession() {
     return {
         state: "state-xyz",
         redirectUri: "https://client.example/callback",
         clientId: "test-client-id",
-        locale,
         purpose: "mcp" as const,
     };
 }
@@ -49,53 +48,14 @@ test("renderLoginPage renders the error banner only when given an error", async 
     expect(withError).toContain("Bad &lt;stuff&gt; &amp; things");
 });
 
-test("renderLoginPage substitutes {{LANG_SWITCHER}} and reflects the session's locale", async () => {
+test("renderLoginPage has no language switcher or translation notice", async () => {
     const html = await renderLoginPage("s1", fakeSession());
     expect(html).not.toContain("{{LANG_SWITCHER}}");
-    expect(html).toContain('class="lang-switch"');
-
-    // The switcher's links carry the session's own OAuth params (state,
-    // client_id, redirect_uri) so switching language re-enters the same
-    // flow rather than losing it.
-    expect(html).toContain("state=state-xyz");
-    expect(html).toContain("client_id=test-client-id");
-});
-
-test("renderLoginPage substitutes {{TRANSLATION_NOTICE}}: present in translated locales, empty on English", async () => {
-    const en = await renderLoginPage("s1", fakeSession("en"));
-    expect(en).not.toContain("{{TRANSLATION_NOTICE}}");
-    // Nothing to disclose on the original-language page.
-    expect(en).not.toContain('class="translation-notice"');
-
-    const de = await renderLoginPage("s1", fakeSession("de"));
-    expect(de).not.toContain("{{TRANSLATION_NOTICE}}");
-    expect(de).toContain('class="translation-notice"');
-    // Links back to the SAME in-flight flow in English (authorizeUrl), not
-    // a fixed site URL — losing session/state here would strand a user who
-    // just wants to read the original mid sign-in.
-    expect(de).toContain('href="/authorize?response_type=code');
-    expect(de).toContain("state=state-xyz");
-    expect(de).not.toContain('href="/"');
-});
-
-test("site-purpose login switcher returns to / not /authorize", async () => {
-    const html = await renderLoginPage("s1", {
-        ...fakeSession(),
-        purpose: "site",
-        redirectUri: "/",
-        state: "site",
-    });
-    expect(html).toContain('href="/"');
-    expect(html).toContain("/?locale=");
-    expect(html).not.toContain("response_type=code");
-});
-
-test("renderLoginPage serves the requested locale's template when it exists", async () => {
-    const en = await renderLoginPage("s1", fakeSession("en"));
-    expect(en).toContain('<html lang="en">');
-
-    const de = await renderLoginPage("s1", fakeSession("de"));
-    expect(de).toContain('<html lang="de">');
+    expect(html).not.toContain("{{TRANSLATION_NOTICE}}");
+    expect(html).not.toContain('class="lang-switch"');
+    expect(html).not.toContain('class="translation-notice"');
+    expect(html).not.toContain("/?locale=");
+    expect(html).toContain('<html lang="en">');
 });
 
 test("generated login uses sky accent tokens, not FDA green", async () => {

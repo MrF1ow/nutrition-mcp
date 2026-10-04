@@ -4,7 +4,6 @@ import { decodeEscapeSequences } from "./normalize.js";
 import { isWeightUnit, toStoredInteger, type WeightUnit } from "./units.js";
 import { isDrinkUnit, type DrinkUnit } from "./alcohol.js";
 import { escapeLikePattern, tokenizeQuery } from "./search.js";
-import type { PatreonTokens, PatreonTokenStore } from "./patreon.js";
 import {
     addHouseholdMember,
     householdConfigFromRow,
@@ -669,9 +668,8 @@ export interface Profile {
     widgets_enabled: boolean;
     alcohol_tracking_enabled: boolean;
     preferred_drink_unit: DrinkUnit | null;
-    // null means "never set with set_language" — same null-is-not-a-default
-    // contract as timezone above. Always coalesce through localeFromProfile /
-    // getUserLocale, never read this directly.
+    // Locale is unused: widgets and login are English-only. The column stays
+    // until a later contract phase; do not read it to pick UI language.
     locale: string | null;
     theme: "light" | "dark" | null;
     accent_swatch: string | null;
@@ -704,23 +702,9 @@ export async function getUserTimezone(userId: string): Promise<string> {
     return timezoneFromProfile(await getProfile(userId)) ?? "UTC";
 }
 
-// Returns the locale the user actually chose with set_language, or null if
-// they never have — regardless of whether a profile row exists. Mirrors
-// timezoneFromProfile: callers that need to know whether a locale is
-// *configured* must use this, not `profile !== null`.
-export function localeFromProfile(
-    profile: Profile | null | undefined,
-): string | null {
-    return profile?.locale ?? null;
-}
-
-export async function getUserLocale(userId: string): Promise<string> {
-    return localeFromProfile(await getProfile(userId)) ?? "en";
-}
-
 // Returns the user's saved weight-unit preference, or null if they have never
 // chosen one. Write paths use null to refuse guessing; display paths coalesce
-// to "kg". Mirrors timezoneFromProfile/localeFromProfile — a caller that
+// to "kg". Mirrors timezoneFromProfile — a caller that
 // already has a fetched profile (get_profile needs all five preferences at
 // once) should use this instead of the *FromProfile-less
 // getPreferredWeightUnit, which was the one preference without a pure
@@ -1807,91 +1791,6 @@ export async function rotateHouseholdMcpToken(args: {
     return data;
 }
 
-// ---------- Patreon tokens ----------
-
-/**
- * Backed by the single `patreon_tokens` row (id = "default") — one campaign,
- * one token pair, server-only (RLS has no policy for anon/authenticated; see
- * the patreon_tokens migration). Simplified to a plain null return on any
- * lookup failure: unlike lookupBearer's valid/invalid/unavailable
- * TokenLookup, getRecentPosts already treats null as "nothing to show", so a
- * three-state return here would be unused precision for a landing-page
- * nicety with no auth/security stakes.
- */
-export function getPatreonTokenStore(): PatreonTokenStore {
-    return {
-        async getTokens(): Promise<PatreonTokens | null> {
-            const { data, error } = await getSupabase()
-                .from("patreon_tokens")
-                .select("access_token, refresh_token, expires_at")
-                .eq("id", "default")
-                .single();
-
-            if (error && error.code !== PGRST_NO_ROWS) {
-                console.error("getPatreonTokenStore.getTokens failed:", error);
-            }
-            if (error || !data) return null;
-            return {
-                accessToken: data.access_token as string,
-                refreshToken: data.refresh_token as string,
-                expiresAt: data.expires_at as string,
-            };
-        },
-
-        async saveTokens(tokens: PatreonTokens): Promise<void> {
-            const { error } = await getSupabase().from("patreon_tokens").upsert(
-                {
-                    id: "default",
-                    access_token: tokens.accessToken,
-                    refresh_token: tokens.refreshToken,
-                    expires_at: tokens.expiresAt,
-                    updated_at: new Date().toISOString(),
-                },
-                { onConflict: "id" },
-            );
-
-            if (error)
-                throw new Error(
-                    `Failed to save Patreon tokens: ${error.message}`,
-                );
-        },
-    };
-}
-
-/**
- * One-time bootstrap. PATREON_ACCESS_TOKEN / PATREON_REFRESH_TOKEN are named
- * for exactly what Patreon's client-management page calls them ("Creator's
- * Access Token" / "Creator's Refresh Token") for a manually-registered OAuth
- * client — pasting them here lets a fresh deploy seed patreon_tokens without
- * a hand-run SQL insert. expires_at is seeded already-past (the epoch): these
- * env vars carry no expiry, so the very next call through getRecentPosts
- * refreshes immediately and replaces both with a freshly-minted pair. From
- * then on this is a permanent no-op (`ignoreDuplicates` = INSERT ... ON
- * CONFLICT DO NOTHING on the `id` row) — the env vars can be left in place
- * forever without ever clobbering a token pair that has since rotated past
- * them, and this can safely run on every boot of every replica.
- */
-export async function seedPatreonTokensFromEnv(): Promise<void> {
-    const accessToken = process.env.PATREON_ACCESS_TOKEN;
-    const refreshToken = process.env.PATREON_REFRESH_TOKEN;
-    if (!accessToken || !refreshToken) return;
-
-    const { error } = await getSupabase()
-        .from("patreon_tokens")
-        .upsert(
-            {
-                id: "default",
-                access_token: accessToken,
-                refresh_token: refreshToken,
-                expires_at: new Date(0).toISOString(),
-                updated_at: new Date().toISOString(),
-            },
-            { onConflict: "id", ignoreDuplicates: true },
-        );
-
-    if (error) console.error("Failed to seed Patreon tokens:", error.message);
-}
-
 // ---------- Auth codes ----------
 
 export async function storeAuthCode(
@@ -1972,96 +1871,6 @@ export async function consumeRefreshToken(
 
     if (error || !data) return null;
     return data.user_id as string;
-}
-
-// ---------- Public landing stats ----------
-
-export interface LandingStats {
-    food_logs: number;
-    total_calories: number;
-    total_protein_g: number;
-    total_carbs_g: number;
-    total_fat_g: number;
-    timezones: number;
-    // IANA names of every distinct timezone in use — drives the landing-page
-    // world map. Aggregate-only; no per-user data.
-    //
-    // Expect this near-empty for a while after 2026-08-15: the
-    // nullable_profile_timezone migration (#99) reset every profile's
-    // timezone to NULL, and public_landing_stats() filters both this and
-    // timezone_counts to `where timezone is not null`, so a nulled profile
-    // drops out of the map entirely until its user calls set_timezone again.
-    // Not a map bug — see buildMap() in public/index.html for the visible
-    // symptom.
-    timezone_list: string[];
-    // IANA name -> 1..5, that timezone's share of all profiles. Sizes each dot
-    // on the world map. Levels, never counts: see timezoneLevels().
-    timezone_levels: Record<string, number>;
-}
-
-// What the SQL function actually returns. `timezone_counts` is exact and stays
-// inside the process — it is bucketed before anything is served.
-interface RawLandingStats extends Omit<LandingStats, "timezone_levels"> {
-    timezone_counts?: Record<string, number>;
-}
-
-// Share of all profiles at which a timezone moves up a level. Geometric, not
-// evenly spaced, because the real distribution is long-tailed: at 273 profiles
-// the largest timezone held 14% while 27 timezones held one profile each. Even
-// cuts would drop ~80% of dots into level 1 and the map would show no gradient
-// at all. Doubling at each step keeps every bucket populated.
-export const TZ_LEVEL_THRESHOLDS = [0.01, 0.02, 0.04, 0.08] as const;
-
-// The level whose radius matches the single size every dot used to be drawn at.
-// Used only when the DB has no counts to bucket — see getLandingStats.
-export const LEGACY_TZ_LEVEL = 3;
-
-// Buckets exact per-timezone counts into 1..5 by share of the total.
-//
-// This is the privacy boundary for the world map. /api/stats is public and
-// unauthenticated, and most timezones have a single profile — publishing the
-// counts would amount to "exactly one person uses this app in Pacific/Apia".
-// A level only narrows a timezone to a range, and the widest range (level 1)
-// is also the one nearly every small timezone lands in.
-export function timezoneLevels(
-    counts: Record<string, number>,
-): Record<string, number> {
-    const entries = Object.entries(counts).filter(
-        ([, n]) => typeof n === "number" && n > 0,
-    );
-    const total = entries.reduce((sum, [, n]) => sum + n, 0);
-    const levels: Record<string, number> = {};
-    if (total <= 0) return levels;
-    for (const [tz, n] of entries) {
-        const share = n / total;
-        let level = 1;
-        for (const threshold of TZ_LEVEL_THRESHOLDS) {
-            if (share >= threshold) level++;
-        }
-        levels[tz] = level;
-    }
-    return levels;
-}
-
-// Aggregate-only totals for the public landing page. Backed by the
-// `public_landing_stats` SQL function so the whole thing is one round trip and
-// the database does the summing. Never returns per-user rows.
-export async function getLandingStats(): Promise<LandingStats> {
-    const { data, error } = await getSupabase().rpc("public_landing_stats");
-    if (error) throw new Error(`Failed to get landing stats: ${error.message}`);
-    const { timezone_counts, ...rest } = data as RawLandingStats;
-    const timezone_levels = timezoneLevels(timezone_counts ?? {});
-    // Deploy-order safety. The app and the database ship separately, so this
-    // code can be live before the migration that adds `timezone_counts` has
-    // run. Without a fallback the map would render its land grid and not a
-    // single active dot; instead every timezone gets the level whose radius is
-    // the size they were all drawn at before, which looks exactly like today.
-    if (Object.keys(timezone_levels).length === 0) {
-        for (const tz of rest.timezone_list ?? []) {
-            timezone_levels[tz] = LEGACY_TZ_LEVEL;
-        }
-    }
-    return { ...rest, timezone_levels };
 }
 
 // ---------- Registered clients ----------

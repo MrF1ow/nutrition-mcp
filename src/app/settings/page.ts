@@ -6,7 +6,6 @@ import {
     type ViewerChrome,
 } from "../shell.js";
 import { DRINK_UNITS, isDrinkUnit, type DrinkUnit } from "../../alcohol.js";
-import { SITE_LOCALES, LOCALE_NAMES, type SiteLocale } from "../../routes.js";
 import { WEIGHT_UNITS, isWeightUnit, type WeightUnit } from "../../units.js";
 
 const SWATCH_ORDER = Object.keys(ACCENT_SWATCHES) as AccentSwatch[];
@@ -16,7 +15,6 @@ export type SettingsPageView = {
     selectedSwatch: AccentSwatch | null;
     displayName: string;
     timezone: string;
-    locale: string;
     weightUnit: WeightUnit | "";
     widgetsEnabled: boolean;
     alcoholTrackingEnabled: boolean;
@@ -26,7 +24,6 @@ export type SettingsPageView = {
 
 export type NutritionPrefsPatch = {
     timezone?: string;
-    locale?: string;
     preferred_weight_unit?: WeightUnit | null;
     widgets_enabled?: boolean;
     alcohol_tracking_enabled?: boolean;
@@ -35,7 +32,6 @@ export type NutritionPrefsPatch = {
 
 export function parseNutritionPrefsInput(input: {
     timezone?: unknown;
-    locale?: unknown;
     preferred_weight_unit?: unknown;
     widgets_enabled?: unknown;
     alcohol_tracking_enabled?: unknown;
@@ -44,12 +40,6 @@ export function parseNutritionPrefsInput(input: {
     const patch: NutritionPrefsPatch = {};
     if (typeof input.timezone === "string") {
         patch.timezone = input.timezone.trim();
-    }
-    if (typeof input.locale === "string") {
-        const locale = input.locale.trim();
-        if ((SITE_LOCALES as readonly string[]).includes(locale)) {
-            patch.locale = locale;
-        }
     }
     if (typeof input.preferred_weight_unit === "string") {
         const unit = input.preferred_weight_unit.trim();
@@ -109,9 +99,6 @@ export function renderSettingsPage(view: SettingsPageView): string {
     const error = view.error
         ? `<p class="error-banner">${escapeHtml(view.error)}</p>`
         : "";
-    const localeLabels = Object.fromEntries(
-        SITE_LOCALES.map((code) => [code, LOCALE_NAMES[code as SiteLocale]]),
-    );
     const widgetsChecked = view.widgetsEnabled ? " checked" : "";
     const alcoholChecked = view.alcoholTrackingEnabled ? " checked" : "";
     const body = `
@@ -142,8 +129,6 @@ export function renderSettingsPage(view: SettingsPageView): string {
                 <legend>Nutrition prefs</legend>
                 <label for="timezone">Timezone</label>
                 <input id="timezone" name="timezone" value="${escapeHtml(view.timezone)}" placeholder="America/Los_Angeles" autocomplete="off" />
-                <label for="locale">Language</label>
-                <select id="locale" name="locale">${optionList(SITE_LOCALES, view.locale, localeLabels)}</select>
                 <label for="preferred_weight_unit">Weight unit</label>
                 <select id="preferred_weight_unit" name="preferred_weight_unit">${optionList(WEIGHT_UNITS, view.weightUnit)}</select>
                 <label><input type="checkbox" name="widgets_enabled" value="true"${widgetsChecked} /> Show in-chat widgets</label>

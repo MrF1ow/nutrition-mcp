@@ -10,30 +10,7 @@ export function esc(s: string): string {
     return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-export const HEAD_ASSETS = `        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-        <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
-        <link
-            href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Instrument+Sans:ital,wght@0,400..700;1,400..700&family=Geist+Mono:wght@400;500&display=swap"
-            rel="stylesheet"
-        />
-        <link
-            rel="stylesheet"
-            href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.2.0/css/all.min.css"
-        />
-        <link rel="stylesheet" href="/styles.css" />
-        <script
-            async
-            src="https://www.googletagmanager.com/gtag/js?id=G-1K4HRB2R8X"
-        ></script>
-        <script>
-            window.dataLayer = window.dataLayer || [];
-            function gtag() {
-                dataLayer.push(arguments);
-            }
-            gtag("js", new Date());
-            gtag("config", "G-1K4HRB2R8X");
-        </script>`;
+export const HEAD_ASSETS = `        <link rel="stylesheet" href="/styles.css" />`;
 
 export const THEME_PREPAINT = `        <script>
             // Apply a saved theme override before paint to avoid a flash.
@@ -47,12 +24,47 @@ export const THEME_PREPAINT = `        <script>
         </script>`;
 
 /** Sky widget tokens for login /authorize only. styles.css stays FDA green
- *  for leftover marketing CSS; body.auth overrides beat those rules. */
-export const LOGIN_SKY_TOKENS = `            body.auth {
+ *  for leftover marketing CSS; body.auth overrides beat those rules.
+ *  @font-face lives here (not only in styles.css) so the generated login
+ *  HTML itself names the self-hosted files — GET /authorize is the page
+ *  visitors see, and a stylesheet href to styles.css does not put those
+ *  URLs in the document. */
+export const LOGIN_SKY_TOKENS = `            @font-face {
+                font-family: "Bricolage Grotesque";
+                src: url("/fonts/bricolage-grotesque-latin.woff2")
+                    format("woff2");
+                font-weight: 400 800;
+                font-style: normal;
+                font-display: swap;
+            }
+            @font-face {
+                font-family: "Instrument Sans";
+                src: url("/fonts/instrument-sans-latin.woff2") format("woff2");
+                font-weight: 400 700;
+                font-style: normal;
+                font-display: swap;
+            }
+            @font-face {
+                font-family: "Instrument Sans";
+                src: url("/fonts/instrument-sans-latin-italic.woff2")
+                    format("woff2");
+                font-weight: 400 700;
+                font-style: italic;
+                font-display: swap;
+            }
+            @font-face {
+                font-family: "Geist Mono";
+                src: url("/fonts/geist-mono-latin.woff2") format("woff2");
+                font-weight: 400 500;
+                font-style: normal;
+                font-display: swap;
+            }
+            body.auth {
                 --font-display:
-                    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-                    Helvetica, Arial, sans-serif;
-                --font-body: var(--font-display);
+                    "Bricolage Grotesque", ui-sans-serif, system-ui,
+                    -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+                    sans-serif;
+                --font-body: "Instrument Sans", var(--font-display);
                 --bg: #f5f5f7;
                 --bg-alt: #f5f5f7;
                 --surface: #ffffff;
@@ -143,10 +155,8 @@ export function generatedBanner(script: string): string {
 /**
  * Login header. Sky tokens on body.auth paint this chrome; brand stays on
  * this page (`#main`) and must not send anyone to `/`, which is not HTML.
- * Language switcher is `{{LANG_SWITCHER}}` so oauth.ts can stamp
- * authorizeUrl() links for the in-flight session.
  */
-export function nav(locale: SiteLocale): string {
+export function nav(locale: SiteLocale = "en"): string {
     const c = chromeFor(locale);
     return `        <a class="skip" href="#main">${esc(c.skipToContent)}</a>
         <header class="site-head" id="site-head">
@@ -156,7 +166,6 @@ export function nav(locale: SiteLocale): string {
                     <span>Nutrition&nbsp;MCP</span>
                 </a>
                 <div class="head-tools">
-                    {{LANG_SWITCHER}}
                     <details class="theme-switch" id="theme-switch">
                         <summary
                             class="icon-btn"
@@ -186,7 +195,7 @@ export function nav(locale: SiteLocale): string {
         </header>`;
 }
 
-export function footer(locale: SiteLocale): string {
+export function footer(locale: SiteLocale = "en"): string {
     const c = chromeFor(locale);
     return `        <footer class="footer">
             <div class="footer-inner">
