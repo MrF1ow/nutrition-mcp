@@ -42,6 +42,16 @@ test("bottom nav hrefs and tab order", () => {
     ]);
     expect(html).toContain('href="/" aria-current="page"');
     expect(html).not.toContain('href="/fridge" aria-current="page"');
+    expect(html.match(/<svg\b/g)?.length).toBe(5);
+    expect([...html.matchAll(/\stitle="([^"]+)"/g)].map((m) => m[1])).toEqual([
+        "Fridge",
+        "Groceries",
+        "Nutrition",
+        "Recipes",
+        "Settings",
+    ]);
+    const inner = html.replace(/^<nav[^>]*>/, "").replace(/<\/nav>$/, "");
+    expect(inner.replace(/<[^>]+>/g, "").trim()).toBe("");
 });
 
 test("null accent resolves to sky", () => {
