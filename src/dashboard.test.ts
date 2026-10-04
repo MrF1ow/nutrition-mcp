@@ -71,6 +71,10 @@ test("self dashboard reuses widget iframes and has no household facts", async ()
     expect(html).toContain('class="bottom-nav"');
     expect(html).toContain('href="/" aria-current="page"');
     expect(html).toContain("--accent:#2f8fd4");
+    expect(html).toContain('action="/log-meal"');
+    expect(html).toContain('action="/log-water"');
+    expect(html).toContain('action="/log-weight"');
+    expect(html).not.toContain('class="error-banner"');
 });
 
 test("owner self dashboard has no add-member form", async () => {
@@ -122,6 +126,9 @@ test("peer dashboard is read-only and uses the viewer accent", async () => {
     expect(html).not.toContain('action="/add-household-member"');
     expect(html).not.toContain('class="facts"');
     expect(html).toContain("--accent:#e25d8a");
+    expect(html).not.toContain('action="/log-meal"');
+    expect(html).not.toContain('action="/log-water"');
+    expect(html).not.toContain('action="/log-weight"');
 });
 
 test("create-household form posts name fields and has no widgets", () => {
