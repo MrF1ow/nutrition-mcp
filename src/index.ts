@@ -578,6 +578,24 @@ app.get("/grocery", async (c) => {
     return c.html(page.html, page.status);
 });
 
+app.post("/grocery/stores", async (c) => {
+    const { userId, owner } = await householdOwner(c);
+    if (!userId) return beginSiteLogin(c, c.req.query("locale"));
+    if (owner == null) return c.html(forbiddenDashboardHtml(), 403);
+    const body = await c.req.parseBody();
+    try {
+        await createGroceryStore(
+            liveSettingsStore(),
+            owner.householdId,
+            formText(body, "name"),
+        );
+    } catch (err) {
+        const page = await groceryFormError(userId, err);
+        return c.html(page.html, page.status);
+    }
+    return c.redirect("/grocery");
+});
+
 async function groceryActor(c: {
     req: {
         header: (name: string) => string | undefined;

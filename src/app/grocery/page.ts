@@ -23,6 +23,7 @@ export type GroceryStoreView = GroceryStore & {
 export type GroceryPageView = {
     chrome: ViewerChrome;
     stores: GroceryStoreView[];
+    isOwner?: boolean;
     error?: string;
     allergenWarning?: string;
     unknownAllergen?: boolean;
@@ -124,11 +125,19 @@ export function renderGroceryPage(view: GroceryPageView): string {
             ? `<p class="empty-grocery">Add a grocery store in Settings, then add a line.</p>
 <p><a href="/settings/household">Household settings</a></p>`
             : "";
+    const addStore = view.isOwner
+        ? `<form class="grocery-add-store" method="post" action="/grocery/stores">
+<label for="grocery_store_name">Grocery store</label>
+<input id="grocery_store_name" name="name" maxlength="80" autocomplete="off" />
+<button type="submit">Add store</button>
+</form>`
+        : "";
     const stores = view.stores.map(storeSection).join("");
     const body = `
         <h1>Groceries</h1>
         ${error}
         ${allergen}
+        ${addStore}
         ${empty}
         <form class="grocery-clear-checked" method="post" action="/grocery/clear-checked">
             <button type="submit">Clear checked</button>

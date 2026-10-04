@@ -248,6 +248,7 @@ export async function renderGroceryListPage(
         html: renderGroceryPage({
             chrome: viewerChromeFromProfile(profile),
             stores,
+            isOwner: gate.viewer.role === "owner",
             error: opts.error,
             allergenWarning: opts.allergenWarning,
             unknownAllergen: unknownAllergen && !opts.allergenWarning,
