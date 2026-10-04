@@ -9,6 +9,10 @@ import {
 const HOST = "nutrition-mcp.com";
 const ORIGIN = `https://${HOST}`;
 
+// These tests cover the unset / local-dev path of getBaseUrl. A process-level
+// PUBLIC_ORIGIN would pin every document and ignore X-Forwarded-*.
+delete process.env.PUBLIC_ORIGIN;
+
 // Mirrors how src/index.ts wires discovery up. index.ts itself is never imported
 // by tests — it boots a server and warms widgets on import.
 function buildTestApp() {
@@ -17,8 +21,8 @@ function buildTestApp() {
     return app;
 }
 
-// Production sits behind DigitalOcean's proxy, so getBaseUrl reads the forwarded
-// headers rather than the request URL. Drive the routes the way the proxy does.
+// Behind a reverse proxy, getBaseUrl (when PUBLIC_ORIGIN is unset) reads the
+// forwarded headers rather than the request URL. Drive the routes that way.
 function fetchDiscovery(app: Hono, path: string) {
     return app.request(`http://localhost${path}`, {
         headers: { "x-forwarded-proto": "https", "x-forwarded-host": HOST },
