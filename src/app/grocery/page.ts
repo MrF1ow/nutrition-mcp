@@ -6,6 +6,11 @@ import type { AlreadyHaveTag } from "../../linking.js";
 import { escapeHtml, renderAppShell, type ViewerChrome } from "../shell.js";
 import { renderAlreadyHaveTag } from "../components/already-have-tag.js";
 import { renderFoodPicker } from "../components/food-picker.js";
+import {
+    renderEmptyGrocery,
+    renderErrorBanner,
+    renderGroceryLineRow,
+} from "../components/page-markup.js";
 
 export type GroceryLineView = GroceryLine & {
     alreadyHave: AlreadyHaveTag | null;
@@ -59,19 +64,14 @@ function alreadyHaveHtml(tag: AlreadyHaveTag | null): string {
 }
 
 function lineRow(line: GroceryLineView): string {
-    const checked = line.checked ? "true" : "false";
-    const next = line.checked ? "0" : "1";
-    return `<li class="grocery-line${line.checked ? " is-checked" : ""}" data-line-id="${escapeHtml(line.id)}" data-checked="${checked}" data-kind="${line.kind}">
-<div class="grocery-line-head">
-<p class="grocery-line-name">${escapeHtml(line.displayName)}</p>
-<p class="grocery-line-qty">${escapeHtml(quantityLabel(line))}</p>
-${alreadyHaveHtml(line.alreadyHave)}
-</div>
-<form class="grocery-line-check" method="post" action="/grocery/lines/${escapeHtml(line.id)}/check">
-<input type="hidden" name="checked" value="${next}" />
-<button type="submit">${line.checked ? "Checked" : "Check"}</button>
-</form>
-</li>`;
+    return renderGroceryLineRow({
+        id: line.id,
+        kind: line.kind,
+        checked: line.checked,
+        displayName: line.displayName,
+        quantityLabel: quantityLabel(line),
+        alreadyHaveHtml: alreadyHaveHtml(line.alreadyHave),
+    });
 }
 
 function storeSection(store: GroceryStoreView): string {
@@ -112,19 +112,13 @@ ${renderFoodPicker({
 }
 
 export function renderGroceryPage(view: GroceryPageView): string {
-    const error = view.error
-        ? `<p class="error-banner">${escapeHtml(view.error)}</p>`
-        : "";
+    const error = renderErrorBanner(view.error);
     const allergen = view.allergenWarning
         ? `<p class="allergen-warning" data-blocking="true">${escapeHtml(view.allergenWarning)}</p>`
         : view.unknownAllergen
           ? `<p class="allergen-unknown">unknown allergen data</p>`
           : "";
-    const empty =
-        view.stores.length === 0
-            ? `<p class="empty-grocery">Add a grocery store in Settings, then add a line.</p>
-<p><a href="/settings/household">Household settings</a></p>`
-            : "";
+    const empty = view.stores.length === 0 ? renderEmptyGrocery() : "";
     const addStore = view.isOwner
         ? `<form class="grocery-add-store" method="post" action="/grocery/stores">
 <label for="grocery_store_name">Grocery store</label>

@@ -7,6 +7,13 @@ import type {
 import { escapeHtml, renderAppShell, type ViewerChrome } from "../shell.js";
 import { renderFoodPicker } from "../components/food-picker.js";
 import { renderMemberMultiSelect } from "../components/member-multi-select.js";
+import {
+    renderEmptyRecipeStore,
+    renderEmptyRecipes,
+    renderErrorBanner,
+    renderRecipeCard,
+    renderRecipeIngredientRow,
+} from "../components/page-markup.js";
 
 export type RecipeMember = { userId: string; displayName: string };
 export type RecipeStoreOption = { id: string; name: string };
@@ -40,20 +47,15 @@ function gramsLabel(amount: number): string {
 }
 
 export function renderRecipesPage(view: RecipesPageView): string {
-    const error = view.error
-        ? `<p class="error-banner">${escapeHtml(view.error)}</p>`
-        : "";
-    const empty =
-        view.recipes.length === 0
-            ? `<p class="empty-recipes">Add a recipe.</p>`
-            : "";
+    const error = renderErrorBanner(view.error);
+    const empty = view.recipes.length === 0 ? renderEmptyRecipes() : "";
     const cards = view.recipes
-        .map(
-            (recipe) =>
-                `<li class="recipe-card" data-recipe-id="${escapeHtml(recipe.id)}">
-<a href="/recipes/${escapeHtml(recipe.id)}">${escapeHtml(recipe.name)}</a>
-<p class="recipe-yield">Yield ${escapeHtml(String(recipe.yieldPortions))}</p>
-</li>`,
+        .map((recipe) =>
+            renderRecipeCard({
+                id: recipe.id,
+                name: recipe.name,
+                yieldPortions: recipe.yieldPortions,
+            }),
         )
         .join("");
     const body = `
@@ -79,12 +81,15 @@ export function renderRecipesPage(view: RecipesPageView): string {
 }
 
 function ingredientRow(ingredient: RecipeIngredientView): string {
-    return `<li class="recipe-ingredient" data-ingredient-id="${escapeHtml(ingredient.id)}" data-per-portion="${escapeHtml(String(ingredient.perPortionAmount))}" data-person-amount="${escapeHtml(String(ingredient.personAmount))}">
-<p class="recipe-ingredient-name">${escapeHtml(ingredient.displayName)}</p>
-<p class="recipe-ingredient-total">Total ${escapeHtml(gramsLabel(ingredient.quantity.amount))}</p>
-<p class="recipe-ingredient-per-portion">Per portion ${escapeHtml(gramsLabel(ingredient.perPortionAmount))}</p>
-<p class="recipe-ingredient-person">${escapeHtml(gramsLabel(ingredient.personAmount))}</p>
-</li>`;
+    return renderRecipeIngredientRow({
+        id: ingredient.id,
+        displayName: ingredient.displayName,
+        totalLabel: gramsLabel(ingredient.quantity.amount),
+        perPortionLabel: gramsLabel(ingredient.perPortionAmount),
+        personLabel: gramsLabel(ingredient.personAmount),
+        perPortionAmount: ingredient.perPortionAmount,
+        personAmount: ingredient.personAmount,
+    });
 }
 
 function macrosBlock(macros: RecipeMacros): string {
@@ -98,9 +103,7 @@ function macrosBlock(macros: RecipeMacros): string {
 }
 
 export function renderRecipeDetailPage(view: RecipeDetailView): string {
-    const error = view.error
-        ? `<p class="error-banner">${escapeHtml(view.error)}</p>`
-        : "";
+    const error = renderErrorBanner(view.error);
     const allergen = view.allergenWarning
         ? `<p class="allergen-warning" data-blocking="true">${escapeHtml(view.allergenWarning)}</p>`
         : "";
@@ -130,7 +133,7 @@ export function renderRecipeDetailPage(view: RecipeDetailView): string {
         .join("");
     const grocery =
         view.stores.length === 0
-            ? `<p class="empty-recipe-store">Add a grocery store in Settings, then add this recipe to the list.</p>`
+            ? renderEmptyRecipeStore()
             : `<form class="recipe-add-grocery" method="post" action="/recipes/${escapeHtml(view.recipe.id)}/add-to-grocery">
 ${renderMemberMultiSelect(view.members, [view.viewerId])}
 <label for="recipe-store">Store</label>

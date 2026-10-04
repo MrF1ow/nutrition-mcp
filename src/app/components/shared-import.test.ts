@@ -11,7 +11,7 @@ import {
 } from "./food-picker.js";
 import { renderFridgePage } from "../fridge/page.js";
 import { renderGroceryPage } from "../grocery/page.js";
-import { renderRecipeDetailPage } from "../recipes/page.js";
+import { renderRecipeDetailPage, renderRecipesPage } from "../recipes/page.js";
 import { ACCENT_SWATCHES } from "../shell.js";
 import {
     DEMO_HOUSEHOLD_MEMBERS,
@@ -137,6 +137,149 @@ test("fridge page and grocery page import the same quantity-field and food-picke
     expect(recipes).toContain('class="quantity-field"');
     expect(recipes).toContain('class="food-picker"');
     expect(recipes).toContain('class="member-multi-select"');
+});
+
+test("household pages call shared markup helpers for banners, empty states, and item rows", () => {
+    const helperSrc = stubSource("components/page-markup.ts");
+    const fridgeSrc = stubSource("fridge/page.ts");
+    const grocerySrc = stubSource("grocery/page.ts");
+    const recipesSrc = stubSource("recipes/page.ts");
+    const nutritionSrc = stubSource("nutrition.ts");
+
+    expect(helperSrc).toContain('class="error-banner"');
+    expect(helperSrc).toContain('class="empty-grocery"');
+    expect(helperSrc).toContain('class="empty-fridge"');
+    expect(helperSrc).toContain('class="empty-recipes"');
+    expect(helperSrc).toContain('class="grocery-line');
+    expect(helperSrc).toContain('class="fridge-item"');
+    expect((helperSrc.match(/class="error-banner"/g) ?? []).length).toBe(1);
+
+    for (const src of [fridgeSrc, grocerySrc, recipesSrc, nutritionSrc]) {
+        expect(src).toContain("page-markup.js");
+        expect(src).not.toContain('class="error-banner"');
+        expect(src).not.toContain('class="empty-grocery"');
+        expect(src).not.toContain('class="empty-fridge"');
+        expect(src).not.toContain('class="empty-recipes"');
+        expect(src).not.toContain('class="empty-recipe-store"');
+        expect(src).not.toContain('class="add-item-prompt"');
+        expect(src).not.toContain('class="fridge-item"');
+        expect(src).not.toContain('class="recipe-card"');
+        expect(src).not.toContain('class="recipe-ingredient"');
+        expect(src).not.toMatch(/class="grocery-line[^s]/);
+    }
+
+    const fridge = renderFridgePage({
+        locations: [
+            {
+                id: "loc-1",
+                householdId: "hh-1",
+                name: "Pantry",
+                sortOrder: 0,
+            },
+        ],
+        items: [
+            {
+                id: "item-1",
+                householdId: "hh-1",
+                locationId: "loc-1",
+                kind: "food",
+                displayName: "Cottage Cheese",
+                quantity: { amount: 1360.8, unit: "g" },
+                identity: {
+                    kind: "food",
+                    via: "barcode",
+                    barcode: "070852010016",
+                    displayName: "Cottage Cheese",
+                },
+            },
+        ],
+        chrome: { theme: "light", accent: ACCENT_SWATCHES.sky },
+        error: "Enter a location name.",
+    });
+    expect(fridge).toContain('class="error-banner"');
+    expect(fridge).toContain("Enter a location name.");
+    expect(fridge).toContain('class="fridge-item"');
+    expect(fridge).toContain("Cottage Cheese");
+    expect(fridge).not.toContain('class="empty-fridge"');
+
+    const emptyFridge = renderFridgePage({
+        locations: [],
+        items: [],
+        chrome: { theme: "light", accent: ACCENT_SWATCHES.sky },
+    });
+    expect(emptyFridge).toContain(
+        '<p class="empty-fridge">Add a location, then add an item.</p>',
+    );
+
+    const grocery = renderGroceryPage({
+        chrome: { theme: "light", accent: ACCENT_SWATCHES.sky },
+        stores: [],
+        isOwner: true,
+        error: "Enter a store name.",
+    });
+    expect(grocery).toContain('class="error-banner"');
+    expect(grocery).toContain("Enter a store name.");
+    expect(grocery).toContain(
+        '<p class="empty-grocery">Add a grocery store in Settings, then add a line.</p>',
+    );
+    expect(grocery).toContain('class="grocery-add-store"');
+    expect(grocery).not.toContain("<h3>Add supply</h3>");
+
+    const groceryWithLine = renderGroceryPage({
+        chrome: { theme: "light", accent: ACCENT_SWATCHES.sky },
+        stores: [
+            {
+                id: "st-1",
+                householdId: "hh-1",
+                name: "Safeway",
+                sortOrder: 0,
+                rules: [],
+                sections: [
+                    {
+                        id: "sec-other",
+                        householdId: "hh-1",
+                        storeId: "st-1",
+                        name: "Other",
+                        sortOrder: 8,
+                        hidden: false,
+                        isOther: true,
+                        lines: [
+                            {
+                                id: "line-1",
+                                householdId: "hh-1",
+                                storeId: "st-1",
+                                sectionId: "sec-other",
+                                kind: "food",
+                                displayName: "Cottage Cheese",
+                                quantity: { amount: 100, unit: "g" },
+                                identity: {
+                                    kind: "food",
+                                    via: "barcode",
+                                    barcode: "070852010016",
+                                    displayName: "Cottage Cheese",
+                                },
+                                checked: false,
+                                alreadyHave: null,
+                            },
+                        ],
+                    },
+                ],
+            },
+        ],
+    });
+    expect(groceryWithLine).toContain('class="grocery-line"');
+    expect(groceryWithLine).toContain("Cottage Cheese");
+
+    const recipes = renderRecipesPage({
+        chrome: { theme: "light", accent: ACCENT_SWATCHES.sky },
+        recipes: [],
+        members: [],
+        viewerId: "11111111-1111-4111-8111-111111111111",
+        error: "Enter a recipe name.",
+    });
+    expect(recipes).toContain('class="error-banner"');
+    expect(recipes).toContain("Enter a recipe name.");
+    expect(recipes).toContain('<p class="empty-recipes">Add a recipe.</p>');
 });
 
 test("quantity field food kind defaults to grams and supply lists units", () => {

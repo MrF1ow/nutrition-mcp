@@ -7,6 +7,12 @@ import type {
 import { escapeHtml, renderAppShell, type ViewerChrome } from "../shell.js";
 import { renderFoodPicker } from "../components/food-picker.js";
 import { renderQuantityField } from "../components/quantity-field.js";
+import {
+    renderAddItemPrompt,
+    renderEmptyFridge,
+    renderErrorBanner,
+    renderFridgeItemRow,
+} from "../components/page-markup.js";
 
 const SUPPLY_UNITS = [
     "roll",
@@ -68,21 +74,15 @@ function itemRow(item: FridgeItem, locations: FridgeLocation[]): string {
                   namePrefix: "qty",
                   required: true,
               });
-    return `<li class="fridge-item" data-item-id="${escapeHtml(item.id)}" data-kind="${item.kind}">
-<div class="fridge-item-head">
-<p class="fridge-item-name">${escapeHtml(item.displayName)}</p>
-<p class="fridge-item-qty">${escapeHtml(quantityLabel(item))}</p>
-</div>
-<form class="fridge-item-edit" method="post" action="/fridge/items/${escapeHtml(item.id)}">
-${qty}
+    return renderFridgeItemRow({
+        id: item.id,
+        kind: item.kind,
+        displayName: item.displayName,
+        quantityLabel: quantityLabel(item),
+        editFields: `${qty}
 <label for="move-${escapeHtml(item.id)}">Location</label>
-${locationSelect(locations, item.locationId, "location_id", `move-${item.id}`)}
-<button type="submit">Save</button>
-</form>
-<form class="fridge-item-delete" method="post" action="/fridge/items/${escapeHtml(item.id)}/delete">
-<button type="submit">Delete</button>
-</form>
-</li>`;
+${locationSelect(locations, item.locationId, "location_id", `move-${item.id}`)}`,
+    });
 }
 
 function locationSection(
@@ -96,7 +96,7 @@ function locationSection(
         .join("");
     const empty = items.some((item) => item.locationId === location.id)
         ? ""
-        : `<p class="add-item-prompt">Add an item to ${escapeHtml(location.name)}.</p>`;
+        : renderAddItemPrompt(location.name);
     const pickerId = `picker-${location.id}`;
     return `<section class="fridge-location" data-location-id="${escapeHtml(location.id)}">
 <div class="fridge-location-head">
@@ -135,13 +135,8 @@ ${renderQuantityField({
 }
 
 export function renderFridgePage(view: FridgePageView): string {
-    const error = view.error
-        ? `<p class="error-banner">${escapeHtml(view.error)}</p>`
-        : "";
-    const emptyPrompt =
-        view.locations.length === 0
-            ? `<p class="empty-fridge">Add a location, then add an item.</p>`
-            : "";
+    const error = renderErrorBanner(view.error);
+    const emptyPrompt = view.locations.length === 0 ? renderEmptyFridge() : "";
     const sections = view.locations
         .map((loc) => locationSection(loc, view.items, view.locations))
         .join("");
