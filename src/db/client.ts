@@ -1,0 +1,69 @@
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+
+let supabase: SupabaseClient;
+
+function buildClient(): SupabaseClient {
+    const url = process.env.SUPABASE_URL;
+    const key = process.env.SUPABASE_SECRET_KEY;
+    if (!url || !key) {
+        throw new Error("Missing SUPABASE_URL or SUPABASE_SECRET_KEY");
+    }
+    // persistSession: false keeps the client stateless — signIn/signUp on this
+    // client won't attach a user JWT to future requests. Without this, the
+    // singleton would silently downgrade from service-role to authenticated
+    // after any auth call, making RLS fire on subsequent writes.
+    return createClient(url, key, {
+        auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+            detectSessionInUrl: false,
+        },
+    });
+}
+
+export function getSupabase(): SupabaseClient {
+    if (!supabase) supabase = buildClient();
+    return supabase;
+}
+
+// ---------- Auth ----------
+
+export async function signUpUser(
+    email: string,
+    password: string,
+): Promise<string> {
+    // Use a throw-away client so the session never lands on the shared singleton.
+    const { data, error } = await buildClient().auth.signUp({
+        email,
+        password,
+    });
+
+    if (error) throw new Error(error.message);
+    if (!data.user) throw new Error("Sign-up failed");
+    return data.user.id;
+}
+
+export async function signInUser(
+    email: string,
+    password: string,
+): Promise<string> {
+    const { data, error } = await buildClient().auth.signInWithPassword({
+        email,
+        password,
+    });
+
+    if (error) throw new Error(error.message);
+    return data.user.id;
+}
+
+export async function authUserCount(): Promise<number> {
+    const { data, error } = await getSupabase().auth.admin.listUsers({
+        page: 1,
+        perPage: 1,
+    });
+    if (error) throw new Error(error.message);
+    if ("total" in data && typeof data.total === "number") {
+        return data.total;
+    }
+    return data.users.length;
+}

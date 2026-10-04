@@ -444,7 +444,7 @@ describe("exportStoragePaths", () => {
     // The guard above is only worth anything if deletion actually routes
     // through it; inlining a path there again is the regression.
     test("deleteAllUserData removes exactly this list", async () => {
-        const src = await Bun.file("./src/supabase.ts").text();
+        const src = await Bun.file("./src/db/nutrition.ts").text();
         const body = src.slice(
             src.indexOf("export async function deleteAllUserData"),
         );
