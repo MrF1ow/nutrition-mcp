@@ -259,4 +259,9 @@ test("grocery page groups by store then section and shows already-have", () => {
     expect(html).toContain('href="/grocery" aria-current="page"');
     expect(html).toContain('action="/grocery/lines"');
     expect(html).toContain('action="/grocery/clear-checked"');
+    expect(html).toContain("<h3>Add food</h3>");
+    expect(html).not.toContain("<h3>Add supply</h3>");
+    expect(html).not.toContain("grocery-add-supply");
+    expect(html).not.toContain('name="kind" value="supply"');
+    expect(html).not.toContain('data-kind="supply"');
 });

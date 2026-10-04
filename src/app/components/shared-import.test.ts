@@ -52,7 +52,7 @@ test("fridge page and grocery page import the same quantity-field and food-picke
     const grocerySrc = stubSource("grocery/page.ts");
     const recipesSrc = stubSource("recipes/page.ts");
     expect(fridgeSrc).toContain('from "../components/quantity-field.js"');
-    expect(grocerySrc).toContain('from "../components/quantity-field.js"');
+    expect(grocerySrc).not.toContain('from "../components/quantity-field.js"');
     expect(fridgeSrc).toContain('from "../components/food-picker.js"');
     expect(grocerySrc).toContain('from "../components/food-picker.js"');
     expect(recipesSrc).toContain('from "../components/food-picker.js"');
@@ -98,6 +98,12 @@ test("fridge page and grocery page import the same quantity-field and food-picke
     expect(grocery).toContain('class="quantity-field"');
     expect(fridge).toContain('class="food-picker"');
     expect(grocery).toContain('class="food-picker"');
+    expect(grocery).toContain("<h3>Add food</h3>");
+    expect(grocery).not.toContain("<h3>Add supply</h3>");
+    expect(grocery).not.toContain("grocery-add-supply");
+    expect(grocery).not.toContain('name="kind" value="supply"');
+    expect(fridge).toContain("<h3>Add supply</h3>");
+    expect(fridge).toContain("fridge-add-supply");
     const recipes = renderRecipeDetailPage({
         chrome: { theme: "light", accent: ACCENT_SWATCHES.sky },
         recipe: {

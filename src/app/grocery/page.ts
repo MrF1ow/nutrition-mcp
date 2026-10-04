@@ -6,20 +6,6 @@ import type { AlreadyHaveTag } from "../../linking.js";
 import { escapeHtml, renderAppShell, type ViewerChrome } from "../shell.js";
 import { renderAlreadyHaveTag } from "../components/already-have-tag.js";
 import { renderFoodPicker } from "../components/food-picker.js";
-import { renderQuantityField } from "../components/quantity-field.js";
-
-const SUPPLY_UNITS = [
-    "roll",
-    "each",
-    "box",
-    "pack",
-    "g",
-    "oz",
-    "lb",
-    "ml",
-    "fl oz",
-    "cup",
-] as const;
 
 export type GroceryLineView = GroceryLine & {
     alreadyHave: AlreadyHaveTag | null;
@@ -121,23 +107,6 @@ ${renderFoodPicker({
     hiddenFields: hidden,
     includeQuantity: true,
 })}
-<h3>Add supply</h3>
-<form class="grocery-add-supply" method="post" action="/grocery/lines">
-<input type="hidden" name="kind" value="supply" />
-<input type="hidden" name="store_id" value="${escapeHtml(store.id)}" />
-${other ? `<input type="hidden" name="section_id" value="${escapeHtml(other.id)}" />` : ""}
-<label for="supply-name-${escapeHtml(store.id)}">Name</label>
-<input id="supply-name-${escapeHtml(store.id)}" name="name" type="text" required autocomplete="off" />
-${renderQuantityField({
-    kind: "supply",
-    unit: "roll",
-    units: SUPPLY_UNITS,
-    idPrefix: `supply-qty-${store.id}`,
-    namePrefix: "qty",
-    required: true,
-})}
-<button type="submit">Add supply</button>
-</form>
 </section>`;
 }
 

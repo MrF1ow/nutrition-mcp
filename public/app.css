@@ -497,7 +497,6 @@ body {
     margin: 0;
 }
 
-.grocery-add-supply,
 .grocery-clear-checked,
 .grocery-line-check {
     display: grid;
@@ -505,9 +504,6 @@ body {
     max-width: 420px;
 }
 
-.grocery-add-supply input,
-.grocery-add-supply select,
-.grocery-add-supply button,
 .grocery-clear-checked button,
 .grocery-line-check button,
 .grocery-store select {
@@ -520,7 +516,6 @@ body {
     padding: 8px 12px;
 }
 
-.grocery-add-supply button,
 .grocery-clear-checked button {
     color: var(--accent-ink);
     background: var(--accent);
