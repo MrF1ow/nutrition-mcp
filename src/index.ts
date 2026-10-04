@@ -1283,7 +1283,7 @@ const port = parseInt(process.env.PORT || "8080");
 // `bun run src/index.ts` still takes this branch — verified: import.meta.main is
 // true for the entrypoint and false under `bun test`.
 if (import.meta.main) {
-    console.log(`Nutrition MCP server listening on 0.0.0.0:${port}`);
+    console.log(`Foodable server listening on 0.0.0.0:${port}`);
 
     // Assemble every MCP Apps widget from its source partials up front, so a
     // broken @include/partial fails fast at boot rather than on a client's

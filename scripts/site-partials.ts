@@ -163,7 +163,7 @@ export function nav(locale: SiteLocale = "en"): string {
             <div class="head-inner">
                 <a class="brand" href="#main" aria-label="${esc(c.brandHomeAriaLabel)}">
                     <span class="brand-mark" aria-hidden="true">🍏</span>
-                    <span>Nutrition&nbsp;MCP</span>
+                    <span>Foodable</span>
                 </a>
                 <div class="head-tools">
                     <details class="theme-switch" id="theme-switch">
@@ -201,7 +201,7 @@ export function footer(locale: SiteLocale = "en"): string {
             <div class="footer-inner">
                 <span class="footer-brand">
                     <span class="brand-mark" aria-hidden="true">🍏</span>
-                    Nutrition MCP
+                    Foodable
                 </span>
                 <p class="footer-note">
                     ${esc(c.footer.note)}

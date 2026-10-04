@@ -2,7 +2,7 @@
 // Login is the only generated public HTML. Unused nav/menu/footer-link keys
 // remain on ChromeCopy; do not wire them back into hrefs.
 //
-// "Nutrition MCP" and "GitHub" are brand/product nouns and stay in Latin
+// "Foodable" and "GitHub" are brand/product nouns and stay in Latin
 // script in every locale — see ChromeCopy.footer.github's doc comment.
 
 import type { SiteLocale } from "../routes.js";
@@ -26,7 +26,7 @@ export interface PluralForms {
 
 export interface ChromeCopy {
     skipToContent: string;
-    /** aria-label on the brand link, e.g. "Nutrition MCP home". */
+    /** aria-label on the brand link, e.g. "Foodable home". */
     brandHomeAriaLabel: string;
 
     nav: {
@@ -157,7 +157,7 @@ export interface ChromeCopy {
 
 export const CHROME_EN: ChromeCopy = {
     skipToContent: "Skip to content",
-    brandHomeAriaLabel: "Nutrition MCP home",
+    brandHomeAriaLabel: "Foodable home",
 
     nav: {
         how: "How it works",

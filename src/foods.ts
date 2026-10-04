@@ -30,7 +30,7 @@ function offUserAgent(): string {
     if (!ua) {
         throw new Error(
             "OFF_USER_AGENT is not configured — Open Food Facts requires a " +
-                "User-Agent like 'nutrition-mcp (you@example.com)'",
+                "User-Agent like 'Foodable (you@example.com)'",
         );
     }
     return ua;

@@ -25,7 +25,7 @@ export interface LoginErrors {
 }
 
 export const LOGIN: LoginDoc = {
-    title: "Nutrition MCP",
+    title: "Foodable",
     subtitle: "Sign in to connect",
     emailLabel: "Email",
     passwordLabel: "Password",

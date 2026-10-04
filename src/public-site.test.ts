@@ -66,6 +66,8 @@ describe("marketing HTTP is gone", () => {
         const body = await r.text();
         expect(body).toMatch(/<!doctype html/i);
         expect(body).toContain('action="/approve"');
+        expect(body).toContain("Foodable");
+        expect(body).not.toContain("Nutrition MCP");
         expect(body).not.toContain("MCP Tools");
         expect(r.headers.get("location")).toBeNull();
         expect(body).not.toContain("response_type=code");
@@ -157,6 +159,8 @@ describe("runtime surfaces that stay", () => {
         const html = await r.text();
         expect(html).toMatch(/<!doctype html/i);
         expect(html).toContain('action="/approve"');
+        expect(html).toContain("Foodable");
+        expect(html).not.toContain("Nutrition MCP");
         expect(html).toContain("session_id");
         expect(html).not.toContain("{{SESSION_ID}}");
         expect(html).not.toContain('href="/terms"');
