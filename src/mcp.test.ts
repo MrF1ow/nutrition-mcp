@@ -3727,6 +3727,45 @@ describe("phone-app domain MCP tools", () => {
         });
     });
 
+    test("import_recipe_from_text find-or-creates foods and reports gaps", async () => {
+        await withUser(alice, async (call) => {
+            const imported = await call("import_recipe_from_text", {
+                text: "Oats\nSimmer.",
+                name: "Overnight oats",
+                source_url: "https://example.com/oats",
+                yield_portions: 2,
+                tags: ["breakfast"],
+                ingredients: [
+                    { name: "rolled oats", amount: 80, note: "dry" },
+                    { name: "milk", amount: 200, unit: "ml" },
+                ],
+            });
+            expect(imported.isError).toBeFalsy();
+            expect(textOf(imported)).toContain("Overnight oats");
+            expect(textOf(imported)).toContain("missing nutrition");
+            const recipe = imported.structuredContent?.recipe as {
+                tags: string[];
+                source_url: string | null;
+            };
+            expect(recipe.tags).toEqual(["breakfast"]);
+            expect(recipe.source_url).toBe("https://example.com/oats");
+            const ingredients = imported.structuredContent
+                ?.ingredients as Array<{
+                display_name: string;
+                note: string | null;
+                missing: string[];
+            }>;
+            expect(ingredients[0]?.note).toBe("dry");
+            expect(
+                ingredients.find(
+                    (row) => row.display_name.toLowerCase() === "milk",
+                )?.missing,
+            ).toContain("grams_per_ml");
+            const listed = await call("list_recipes", { tag: "breakfast" });
+            expect(textOf(listed)).toContain("Overnight oats");
+        });
+    });
+
     test("set_person_allergens then grocery add warns", async () => {
         const store = await createGroceryStore(
             db.settingsStore,

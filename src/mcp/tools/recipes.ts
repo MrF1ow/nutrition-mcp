@@ -3,11 +3,15 @@ import { z } from "zod";
 import { liveFridgeStore } from "../../db/fridge.js";
 import { liveFoodsStore } from "../../db/foods.js";
 import { liveGroceryStore } from "../../db/grocery.js";
+import { getHouseholdConfig } from "../../db/household.js";
 import { liveRecipesStore } from "../../db/recipes.js";
+import { liveRulesStore } from "../../db/rules.js";
 import { liveSettingsStore } from "../../db/settings.js";
 import { withAnalytics } from "../../analytics.js";
 import { lookupBarcode } from "../../foods.js";
+import { foodsByIds } from "../../domain/foods.js";
 import { listFridge } from "../../domain/fridge.js";
+import { householdConfigToWire } from "../../household.js";
 import {
     addRecipeIngredientByBarcode,
     addRecipeIngredientById,
@@ -16,11 +20,58 @@ import {
     createRecipe,
     deleteRecipe,
     getRecipeView,
+    importRecipeFromText,
     listRecipes,
+    listRecipesFiltered,
+    macrosForPerson,
+    removeRecipeIngredient,
+    reorderRecipeIngredients,
     setPersonPortion,
+    updateRecipe,
+    updateRecipeIngredient,
+    type Recipe,
 } from "../../domain/recipes.js";
 import { QUANTITY_ITEM } from "../shared.js";
 import type { ToolContext } from "../shared.js";
+
+const RECIPE_FIELDS = {
+    id: z.string(),
+    name: z.string(),
+    yield_portions: z.number(),
+    creator_id: z.string(),
+    instructions: z.string().nullable(),
+    source_url: z.string().nullable(),
+    tags: z.array(z.string()),
+    notes: z.string().nullable(),
+    prep_minutes: z.number().nullable(),
+    cook_minutes: z.number().nullable(),
+};
+
+const MACROS_ITEM = z.object({
+    calories: z.number().nullable(),
+    protein_g: z.number().nullable(),
+    carbs_g: z.number().nullable(),
+    fat_g: z.number().nullable(),
+    fiber_g: z.number().nullable(),
+    sugar_g: z.number().nullable(),
+    alcohol_g: z.number().nullable(),
+    incomplete: z.boolean(),
+});
+
+function recipeFields(recipe: Recipe) {
+    return {
+        id: recipe.id,
+        name: recipe.name,
+        yield_portions: recipe.yieldPortions,
+        creator_id: recipe.creatorId,
+        instructions: recipe.instructions,
+        source_url: recipe.sourceUrl,
+        tags: recipe.tags,
+        notes: recipe.notes,
+        prep_minutes: recipe.prepMinutes,
+        cook_minutes: recipe.cookMinutes,
+    };
+}
 
 export function registerRecipesTools(server: McpServer, ctx: ToolContext) {
     const {
@@ -33,40 +84,75 @@ export function registerRecipesTools(server: McpServer, ctx: ToolContext) {
         "list_recipes",
         {
             title: "List Recipes",
-            description: "List household recipes.",
+            description:
+                "List household recipes. Filter by tag, recipes whose fridge stock fully covers every ingredient (can_make_now), or recipes safe for a member (no catalog allergen hits and no dislikes).",
             annotations: {
                 readOnlyHint: true,
                 destructiveHint: false,
                 idempotentHint: true,
                 openWorldHint: false,
             },
+            inputSchema: z.object({
+                tag: z.string().optional(),
+                can_make_now: z.boolean().optional(),
+                safe_for: z.string().optional(),
+            }),
             outputSchema: z.object({
-                recipes: z.array(
-                    z.object({
-                        id: z.string(),
-                        name: z.string(),
-                        yield_portions: z.number(),
-                        creator_id: z.string(),
-                    }),
-                ),
+                recipes: z.array(z.object(RECIPE_FIELDS)),
             }),
         },
-        async () =>
+        async (args) =>
             withAnalytics(
                 "list_recipes",
                 async () => {
                     const householdId = await callerHouseholdId();
-                    const recipes = await listRecipes(
-                        liveRecipesStore(),
-                        householdId,
-                    );
+                    const filterOn =
+                        Boolean(args.tag?.trim()) ||
+                        args.can_make_now === true ||
+                        Boolean(args.safe_for);
+                    let recipes;
+                    if (filterOn) {
+                        const fridge = await listFridge(
+                            liveFridgeStore(),
+                            householdId,
+                        );
+                        const foods =
+                            await liveFoodsStore().listFoods(householdId);
+                        let safeFor = null;
+                        if (args.safe_for) {
+                            const memberId = await requireHouseholdMemberId(
+                                args.safe_for,
+                            );
+                            const rules = liveRulesStore();
+                            const [allergens, dislikes] = await Promise.all([
+                                rules.listAllergens(householdId, memberId),
+                                rules.listDislikes(householdId, memberId),
+                            ]);
+                            safeFor = { allergens, dislikes };
+                        }
+                        recipes = await listRecipesFiltered(
+                            liveRecipesStore(),
+                            householdId,
+                            new Map(foods.map((food) => [food.id, food])),
+                            fridge.items.map((item) => ({
+                                identity: item.identity,
+                                quantity: item.quantity,
+                                foodId: item.foodId,
+                            })),
+                            {
+                                tag: args.tag,
+                                canMakeNow: args.can_make_now === true,
+                                safeFor,
+                            },
+                        );
+                    } else {
+                        recipes = await listRecipes(
+                            liveRecipesStore(),
+                            householdId,
+                        );
+                    }
                     const payload = {
-                        recipes: recipes.map((recipe) => ({
-                            id: recipe.id,
-                            name: recipe.name,
-                            yield_portions: recipe.yieldPortions,
-                            creator_id: recipe.creatorId,
-                        })),
+                        recipes: recipes.map(recipeFields),
                     };
                     return {
                         content: [
@@ -107,15 +193,17 @@ export function registerRecipesTools(server: McpServer, ctx: ToolContext) {
                 member_id: z.string().optional(),
             }),
             outputSchema: z.object({
-                id: z.string(),
-                name: z.string(),
-                yield_portions: z.number(),
+                ...RECIPE_FIELDS,
                 portion_count: z.number(),
+                macros_per_portion: MACROS_ITEM,
                 ingredients: z.array(
                     z.object({
+                        id: z.string(),
                         display_name: z.string(),
                         amount: z.number(),
                         unit: z.string(),
+                        note: z.string().nullable(),
+                        food_id: z.string().nullable(),
                         per_portion_amount: z.number(),
                         person_amount: z.number(),
                     }),
@@ -136,15 +224,28 @@ export function registerRecipesTools(server: McpServer, ctx: ToolContext) {
                         args.id,
                         memberId,
                     );
+                    const catalog = await foodsByIds(
+                        liveFoodsStore(),
+                        actor.householdId,
+                        view.ingredients.map((row) => row.foodId),
+                    );
+                    const macrosPerPortion = macrosForPerson(
+                        view.ingredients,
+                        view.yieldPortions,
+                        1,
+                        catalog,
+                    );
                     const payload = {
-                        id: view.id,
-                        name: view.name,
-                        yield_portions: view.yieldPortions,
+                        ...recipeFields(view),
                         portion_count: view.portionCount,
+                        macros_per_portion: macrosPerPortion,
                         ingredients: view.ingredients.map((ingredient) => ({
+                            id: ingredient.id,
                             display_name: ingredient.displayName,
                             amount: ingredient.quantity.amount,
                             unit: ingredient.quantity.unit,
+                            note: ingredient.note,
+                            food_id: ingredient.foodId,
                             per_portion_amount: ingredient.perPortionAmount,
                             person_amount: ingredient.personAmount,
                         })),
@@ -153,10 +254,10 @@ export function registerRecipesTools(server: McpServer, ctx: ToolContext) {
                         content: [
                             {
                                 type: "text",
-                                text: `${view.name} yield ${view.yieldPortions}, portion ${view.portionCount}\n${payload.ingredients
+                                text: `${view.name} yield ${view.yieldPortions}, portion ${view.portionCount}\nPer portion: ${macrosPerPortion.incomplete && macrosPerPortion.calories == null ? "macros incomplete" : `${macrosPerPortion.calories ?? "—"} kcal`}\n${payload.ingredients
                                     .map(
                                         (ingredient) =>
-                                            `${ingredient.display_name} ${ingredient.person_amount} ${ingredient.unit}`,
+                                            `${ingredient.display_name} ${ingredient.person_amount} ${ingredient.unit}${ingredient.note ? ` (${ingredient.note})` : ""}`,
                                     )
                                     .join("\n")}`,
                             },
@@ -183,12 +284,14 @@ export function registerRecipesTools(server: McpServer, ctx: ToolContext) {
             inputSchema: z.object({
                 name: z.string().min(1),
                 yield_portions: z.coerce.number(),
+                instructions: z.string().optional(),
+                source_url: z.string().optional(),
+                tags: z.array(z.string()).optional(),
+                notes: z.string().optional(),
+                prep_minutes: z.coerce.number().optional(),
+                cook_minutes: z.coerce.number().optional(),
             }),
-            outputSchema: z.object({
-                id: z.string(),
-                name: z.string(),
-                yield_portions: z.number(),
-            }),
+            outputSchema: z.object(RECIPE_FIELDS),
         },
         async (args) =>
             withAnalytics(
@@ -200,6 +303,12 @@ export function registerRecipesTools(server: McpServer, ctx: ToolContext) {
                         creatorId: actor.userId,
                         name: args.name,
                         yieldPortions: args.yield_portions,
+                        instructions: args.instructions,
+                        sourceUrl: args.source_url,
+                        tags: args.tags,
+                        notes: args.notes,
+                        prepMinutes: args.prep_minutes,
+                        cookMinutes: args.cook_minutes,
                     });
                     return {
                         content: [
@@ -208,11 +317,7 @@ export function registerRecipesTools(server: McpServer, ctx: ToolContext) {
                                 text: `Created ${recipe.name} yield ${recipe.yieldPortions} ${recipe.id}`,
                             },
                         ],
-                        structuredContent: {
-                            id: recipe.id,
-                            name: recipe.name,
-                            yield_portions: recipe.yieldPortions,
-                        },
+                        structuredContent: recipeFields(recipe),
                     };
                 },
                 analytics,
@@ -454,6 +559,339 @@ export function registerRecipesTools(server: McpServer, ctx: ToolContext) {
                             },
                         ],
                         structuredContent: { remainder },
+                    };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "update_recipe",
+        {
+            title: "Update Recipe",
+            description:
+                "Update a recipe's name, yield, instructions, source URL, tags, notes, or prep and cook times.",
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                id: z.string(),
+                name: z.string().optional(),
+                yield_portions: z.coerce.number().optional(),
+                instructions: z.string().nullable().optional(),
+                source_url: z.string().nullable().optional(),
+                tags: z.array(z.string()).optional(),
+                notes: z.string().nullable().optional(),
+                prep_minutes: z.coerce.number().nullable().optional(),
+                cook_minutes: z.coerce.number().nullable().optional(),
+            }),
+            outputSchema: z.object(RECIPE_FIELDS),
+        },
+        async (args) =>
+            withAnalytics(
+                "update_recipe",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    const recipe = await updateRecipe(
+                        liveRecipesStore(),
+                        householdId,
+                        args.id,
+                        {
+                            name: args.name,
+                            yieldPortions: args.yield_portions,
+                            instructions: args.instructions,
+                            sourceUrl: args.source_url,
+                            tags: args.tags,
+                            notes: args.notes,
+                            prepMinutes: args.prep_minutes,
+                            cookMinutes: args.cook_minutes,
+                        },
+                    );
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Updated ${recipe.name} ${recipe.id}`,
+                            },
+                        ],
+                        structuredContent: recipeFields(recipe),
+                    };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "update_recipe_ingredient",
+        {
+            title: "Update Recipe Ingredient",
+            description:
+                "Update a recipe ingredient amount, unit, or note (for example diced or room temp).",
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                recipe_id: z.string(),
+                ingredient_id: z.string(),
+                amount: z.coerce.number().optional(),
+                unit: z.string().optional(),
+                note: z.string().nullable().optional(),
+            }),
+        },
+        async (args) =>
+            withAnalytics(
+                "update_recipe_ingredient",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    const ingredient = await updateRecipeIngredient(
+                        liveRecipesStore(),
+                        householdId,
+                        args.recipe_id,
+                        args.ingredient_id,
+                        {
+                            amount: args.amount,
+                            unit: args.unit,
+                            note: args.note,
+                        },
+                    );
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Updated ${ingredient.displayName} ${ingredient.quantity.amount} ${ingredient.quantity.unit}${ingredient.note ? ` (${ingredient.note})` : ""}`,
+                            },
+                        ],
+                    };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "remove_recipe_ingredient",
+        {
+            title: "Remove Recipe Ingredient",
+            description: "Remove an ingredient from a recipe.",
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: true,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                recipe_id: z.string(),
+                ingredient_id: z.string(),
+            }),
+        },
+        async (args) =>
+            withAnalytics(
+                "remove_recipe_ingredient",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    const removed = await removeRecipeIngredient(
+                        liveRecipesStore(),
+                        householdId,
+                        args.recipe_id,
+                        args.ingredient_id,
+                    );
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: removed
+                                    ? `Removed ingredient ${args.ingredient_id}.`
+                                    : `No ingredient ${args.ingredient_id}.`,
+                            },
+                        ],
+                    };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "reorder_recipe_ingredients",
+        {
+            title: "Reorder Recipe Ingredients",
+            description:
+                "Set the ingredient order for a recipe. Pass every ingredient id exactly once.",
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                recipe_id: z.string(),
+                ingredient_ids: z.array(z.string()).min(1),
+            }),
+        },
+        async (args) =>
+            withAnalytics(
+                "reorder_recipe_ingredients",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    const ingredients = await reorderRecipeIngredients(
+                        liveRecipesStore(),
+                        householdId,
+                        args.recipe_id,
+                        args.ingredient_ids,
+                    );
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: ingredients
+                                    .map(
+                                        (ingredient) =>
+                                            `${ingredient.sortOrder + 1}. ${ingredient.displayName}`,
+                                    )
+                                    .join("\n"),
+                            },
+                        ],
+                    };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "import_recipe_from_text",
+        {
+            title: "Import Recipe From Text",
+            description:
+                "Create a recipe from structured fields the agent extracted from recipe text. Pass the original text plus extracted name, yield, ingredients, tags, and times. The server find-or-creates catalog foods for each ingredient and returns which still lack nutrition or unit factors. Use get_household_config recipe_search_places to know where this household looks up recipes. Do not store the recipe as a food.",
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                text: z.string(),
+                source_url: z.string().optional(),
+                name: z.string().optional(),
+                yield_portions: z.coerce.number().optional(),
+                ingredients: z
+                    .array(
+                        z.object({
+                            name: z.string(),
+                            amount: z.coerce.number(),
+                            unit: z.string().optional(),
+                            note: z.string().optional(),
+                            food_id: z.string().optional(),
+                            barcode: z.string().optional(),
+                        }),
+                    )
+                    .optional(),
+                tags: z.array(z.string()).optional(),
+                notes: z.string().optional(),
+                prep_minutes: z.coerce.number().optional(),
+                cook_minutes: z.coerce.number().optional(),
+            }),
+            outputSchema: z.object({
+                recipe: z.object(RECIPE_FIELDS),
+                ingredients: z.array(
+                    z.object({
+                        id: z.string(),
+                        food_id: z.string().nullable(),
+                        display_name: z.string(),
+                        amount: z.number(),
+                        unit: z.string(),
+                        note: z.string().nullable(),
+                        missing: z.array(
+                            z.enum([
+                                "nutrition",
+                                "grams_per_each",
+                                "grams_per_ml",
+                            ]),
+                        ),
+                    }),
+                ),
+                recipe_search_places: z.array(
+                    z.object({
+                        name: z.string(),
+                        kind: z.string(),
+                        url: z.string().nullable(),
+                    }),
+                ),
+            }),
+        },
+        async (args) =>
+            withAnalytics(
+                "import_recipe_from_text",
+                async () => {
+                    const actor = await callerActor();
+                    const result = await importRecipeFromText(
+                        liveRecipesStore(),
+                        liveFoodsStore(),
+                        {
+                            householdId: actor.householdId,
+                            creatorId: actor.userId,
+                            text: args.text,
+                            sourceUrl: args.source_url,
+                            name: args.name,
+                            yieldPortions: args.yield_portions,
+                            ingredients: args.ingredients?.map((line) => ({
+                                name: line.name,
+                                amount: line.amount,
+                                unit: line.unit,
+                                note: line.note,
+                                foodId: line.food_id,
+                                barcode: line.barcode,
+                            })),
+                            tags: args.tags,
+                            notes: args.notes,
+                            prepMinutes: args.prep_minutes,
+                            cookMinutes: args.cook_minutes,
+                        },
+                        { lookup: lookupBarcode },
+                    );
+                    const places = householdConfigToWire(
+                        await getHouseholdConfig(actor.householdId),
+                    ).recipe_search_places;
+                    const payload = {
+                        recipe: recipeFields(result.recipe),
+                        ingredients: result.ingredients.map((ingredient) => ({
+                            id: ingredient.id,
+                            food_id: ingredient.foodId,
+                            display_name: ingredient.displayName,
+                            amount: ingredient.quantity.amount,
+                            unit: ingredient.quantity.unit,
+                            note: ingredient.note,
+                            missing:
+                                result.gaps.find(
+                                    (gap) => gap.ingredientId === ingredient.id,
+                                )?.missing ?? [],
+                        })),
+                        recipe_search_places: places,
+                    };
+                    const gapLines = payload.ingredients.filter(
+                        (row) => row.missing.length > 0,
+                    );
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Imported ${result.recipe.name} ${result.recipe.id}\n${payload.ingredients
+                                    .map(
+                                        (row) =>
+                                            `${row.display_name} ${row.amount} ${row.unit}${row.missing.length ? ` missing ${row.missing.join(", ")}` : ""}`,
+                                    )
+                                    .join("\n")}${gapLines.length ? "" : ""}${
+                                    places.length
+                                        ? `\nSearch places: ${places.map((place) => place.name).join(", ")}`
+                                        : ""
+                                }`,
+                            },
+                        ],
+                        structuredContent: payload,
                     };
                 },
                 analytics,

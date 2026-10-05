@@ -9,9 +9,10 @@ import {
 } from "../domain/recipes.js";
 import { getSupabase } from "./client.js";
 
-const RECIPE_COLS = "id, household_id, creator_id, name, yield_portions";
+const RECIPE_COLS =
+    "id, household_id, creator_id, name, yield_portions, instructions, source_url, tags, notes, prep_minutes, cook_minutes";
 const RECIPE_INGREDIENT_COLS =
-    "id, household_id, recipe_id, kind, display_name, amount, unit, identity, food_id, nutrition, sort_order";
+    "id, household_id, recipe_id, kind, display_name, amount, unit, identity, food_id, nutrition, sort_order, note";
 const RECIPE_PORTION_COLS = "recipe_id, household_id, user_id, portion_count";
 
 export function liveRecipesStore(): RecipesStore {
@@ -49,6 +50,22 @@ export function liveRecipesStore(): RecipesStore {
                 throw new Error(`Failed to add recipe: ${error.message}`);
             }
             return recipeFromRow(data);
+        },
+        async updateRecipe(row) {
+            const { data, error } = await getSupabase()
+                .from("recipes")
+                .update({
+                    ...recipeToRow(row),
+                    updated_at: new Date().toISOString(),
+                })
+                .eq("id", row.id)
+                .eq("household_id", row.householdId)
+                .select(RECIPE_COLS)
+                .maybeSingle();
+            if (error) {
+                throw new Error(`Failed to update recipe: ${error.message}`);
+            }
+            return data ? recipeFromRow(data) : null;
         },
         async deleteRecipe(householdId, id) {
             const { data, error } = await getSupabase()
@@ -88,6 +105,35 @@ export function liveRecipesStore(): RecipesStore {
                 );
             }
             return recipeIngredientFromRow(data);
+        },
+        async updateIngredient(row) {
+            const { data, error } = await getSupabase()
+                .from("recipe_ingredients")
+                .update(recipeIngredientToRow(row))
+                .eq("id", row.id)
+                .eq("household_id", row.householdId)
+                .select(RECIPE_INGREDIENT_COLS)
+                .maybeSingle();
+            if (error) {
+                throw new Error(
+                    `Failed to update recipe ingredient: ${error.message}`,
+                );
+            }
+            return data ? recipeIngredientFromRow(data) : null;
+        },
+        async deleteIngredient(householdId, ingredientId) {
+            const { data, error } = await getSupabase()
+                .from("recipe_ingredients")
+                .delete()
+                .eq("id", ingredientId)
+                .eq("household_id", householdId)
+                .select("id");
+            if (error) {
+                throw new Error(
+                    `Failed to delete recipe ingredient: ${error.message}`,
+                );
+            }
+            return (data ?? []).length > 0;
         },
         async getPortion(householdId, recipeId, userId) {
             const { data, error } = await getSupabase()

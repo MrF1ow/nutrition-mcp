@@ -15,16 +15,19 @@ import {
     type GroceryListStore,
 } from "./grocery.js";
 import {
+    alreadyHaveTag,
     recipeToGroceryRemainder,
     type LinkedNeed,
     type RecipeGroceryRemainderLine,
 } from "./linking.js";
 import {
     convertQuantity,
+    dimensionOf,
     isQuantityUnit,
     type Quantity,
     type QuantityUnit,
 } from "./quantity.js";
+import type { MemberAllergen } from "./rules.js";
 import type { SettingsStore } from "./settings.js";
 
 export type Recipe = {
@@ -33,6 +36,12 @@ export type Recipe = {
     creatorId: string;
     name: string;
     yieldPortions: number;
+    instructions: string | null;
+    sourceUrl: string | null;
+    tags: string[];
+    notes: string | null;
+    prepMinutes: number | null;
+    cookMinutes: number | null;
 };
 
 export type IngredientNutrition = {
@@ -58,6 +67,7 @@ export type RecipeIngredient = {
     foodId: string | null;
     nutrition: IngredientNutrition | null;
     sortOrder: number;
+    note: string | null;
 };
 
 export type RecipePortion = {
@@ -92,18 +102,68 @@ export type RecipesStore = {
     listRecipes(householdId: string): Promise<Recipe[]>;
     getRecipe(householdId: string, id: string): Promise<Recipe | null>;
     insertRecipe(row: Recipe): Promise<Recipe>;
+    updateRecipe(row: Recipe): Promise<Recipe | null>;
     deleteRecipe(householdId: string, id: string): Promise<boolean>;
     listIngredients(
         householdId: string,
         recipeId: string,
     ): Promise<RecipeIngredient[]>;
     insertIngredient(row: RecipeIngredient): Promise<RecipeIngredient>;
+    updateIngredient(row: RecipeIngredient): Promise<RecipeIngredient | null>;
+    deleteIngredient(
+        householdId: string,
+        ingredientId: string,
+    ): Promise<boolean>;
     getPortion(
         householdId: string,
         recipeId: string,
         userId: string,
     ): Promise<RecipePortion | null>;
     upsertPortion(row: RecipePortion): Promise<RecipePortion>;
+};
+
+export type RecipePatch = {
+    name?: string;
+    yieldPortions?: number;
+    instructions?: string | null;
+    sourceUrl?: string | null;
+    tags?: string[];
+    notes?: string | null;
+    prepMinutes?: number | null;
+    cookMinutes?: number | null;
+};
+
+export type RecipeIngredientPatch = {
+    amount?: number;
+    unit?: string;
+    note?: string | null;
+};
+
+export type RecipeListFilter = {
+    tag?: string | null;
+    canMakeNow?: boolean;
+    safeFor?: {
+        allergens: MemberAllergen[];
+        dislikes: { displayName: string }[];
+    } | null;
+};
+
+export type RecipeImportIngredient = {
+    name: string;
+    amount: number;
+    unit?: string;
+    note?: string | null;
+    foodId?: string;
+    barcode?: string;
+};
+
+export type IngredientGapKind = "nutrition" | "grams_per_each" | "grams_per_ml";
+
+export type IngredientGap = {
+    ingredientId: string;
+    foodId: string | null;
+    displayName: string;
+    missing: IngredientGapKind[];
 };
 
 export class RecipeInputError extends Error {
@@ -140,6 +200,89 @@ function parseYield(yieldPortions: number): number {
         throw new RecipeInputError("Enter a yield greater than zero.");
     }
     return yieldPortions;
+}
+
+function parseOptionalText(
+    value: string | null | undefined,
+    label: string,
+    max: number,
+): string | null {
+    if (value == null) return null;
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    if (trimmed.length > max) {
+        throw new RecipeInputError(`${label} is too long.`);
+    }
+    return trimmed;
+}
+
+function parseOptionalMinutes(
+    value: number | null | undefined,
+    label: string,
+): number | null {
+    if (value == null) return null;
+    if (!Number.isFinite(value) || value < 0) {
+        throw new RecipeInputError(`Enter ${label} as zero or more minutes.`);
+    }
+    if (!Number.isInteger(value)) {
+        throw new RecipeInputError(`${label} must be a whole number.`);
+    }
+    return value;
+}
+
+export function normalizeRecipeTags(tags: string[]): string[] {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const raw of tags) {
+        const tag = raw.trim().toLowerCase();
+        if (!tag) continue;
+        if (tag.length > 40) {
+            throw new RecipeInputError("Tags must be 40 characters or fewer.");
+        }
+        if (seen.has(tag)) continue;
+        seen.add(tag);
+        out.push(tag);
+        if (out.length > 20) {
+            throw new RecipeInputError("A recipe can have at most 20 tags.");
+        }
+    }
+    return out;
+}
+
+export function emptyRecipeDetails(): Pick<
+    Recipe,
+    | "instructions"
+    | "sourceUrl"
+    | "tags"
+    | "notes"
+    | "prepMinutes"
+    | "cookMinutes"
+> {
+    return {
+        instructions: null,
+        sourceUrl: null,
+        tags: [],
+        notes: null,
+        prepMinutes: null,
+        cookMinutes: null,
+    };
+}
+
+function cloneRecipe(row: Recipe): Recipe {
+    return { ...row, tags: [...row.tags] };
+}
+
+function cloneIngredient(row: RecipeIngredient): RecipeIngredient {
+    return {
+        ...row,
+        quantity: { ...row.quantity },
+        nutrition: row.nutrition ? { ...row.nutrition } : null,
+    };
+}
+
+function parseUnit(unit: string | undefined): string {
+    const trimmed = unit?.trim() ?? "";
+    return trimmed || "g";
 }
 
 export function perPortionAmount(
@@ -293,18 +436,29 @@ export function createMemoryRecipesStore(): RecipesStore {
         async listRecipes(householdId) {
             return recipes
                 .filter((row) => row.householdId === householdId)
-                .map((row) => ({ ...row }));
+                .map(cloneRecipe);
         },
         async getRecipe(householdId, id) {
             const row = recipes.find(
                 (recipe) =>
                     recipe.householdId === householdId && recipe.id === id,
             );
-            return row ? { ...row } : null;
+            return row ? cloneRecipe(row) : null;
         },
         async insertRecipe(row) {
-            recipes.push({ ...row });
-            return { ...row };
+            const saved = cloneRecipe(row);
+            recipes.push(saved);
+            return cloneRecipe(saved);
+        },
+        async updateRecipe(row) {
+            const idx = recipes.findIndex(
+                (recipe) =>
+                    recipe.householdId === row.householdId &&
+                    recipe.id === row.id,
+            );
+            if (idx < 0) return null;
+            recipes[idx] = cloneRecipe(row);
+            return cloneRecipe(row);
         },
         async deleteRecipe(householdId, id) {
             const before = recipes.length;
@@ -337,24 +491,36 @@ export function createMemoryRecipesStore(): RecipesStore {
                 )
                 .slice()
                 .sort((a, b) => a.sortOrder - b.sortOrder)
-                .map((row) => ({
-                    ...row,
-                    quantity: { ...row.quantity },
-                    nutrition: row.nutrition ? { ...row.nutrition } : null,
-                }));
+                .map(cloneIngredient);
         },
         async insertIngredient(row) {
-            const saved = {
-                ...row,
-                quantity: { ...row.quantity },
-                nutrition: row.nutrition ? { ...row.nutrition } : null,
-            };
+            const saved = cloneIngredient(row);
             ingredients.push(saved);
-            return {
-                ...saved,
-                quantity: { ...saved.quantity },
-                nutrition: saved.nutrition ? { ...saved.nutrition } : null,
-            };
+            return cloneIngredient(saved);
+        },
+        async updateIngredient(row) {
+            const idx = ingredients.findIndex(
+                (ingredient) =>
+                    ingredient.householdId === row.householdId &&
+                    ingredient.id === row.id,
+            );
+            if (idx < 0) return null;
+            ingredients[idx] = cloneIngredient(row);
+            return cloneIngredient(row);
+        },
+        async deleteIngredient(householdId, ingredientId) {
+            const before = ingredients.length;
+            const next = ingredients.filter(
+                (row) =>
+                    !(
+                        row.householdId === householdId &&
+                        row.id === ingredientId
+                    ),
+            );
+            const removed = next.length < before;
+            ingredients.length = 0;
+            ingredients.push(...next);
+            return removed;
         },
         async getPortion(householdId, recipeId, userId) {
             const row = portions.find(
@@ -393,6 +559,12 @@ export async function createRecipe(
         creatorId: string;
         name: string;
         yieldPortions: number;
+        instructions?: string | null;
+        sourceUrl?: string | null;
+        tags?: string[];
+        notes?: string | null;
+        prepMinutes?: number | null;
+        cookMinutes?: number | null;
     },
 ): Promise<Recipe> {
     const name = input.name.trim();
@@ -404,6 +576,16 @@ export async function createRecipe(
         creatorId: input.creatorId,
         name,
         yieldPortions,
+        instructions: parseOptionalText(
+            input.instructions,
+            "Instructions",
+            20_000,
+        ),
+        sourceUrl: parseOptionalText(input.sourceUrl, "Source URL", 2_000),
+        tags: normalizeRecipeTags(input.tags ?? []),
+        notes: parseOptionalText(input.notes, "Notes", 5_000),
+        prepMinutes: parseOptionalMinutes(input.prepMinutes, "prep time"),
+        cookMinutes: parseOptionalMinutes(input.cookMinutes, "cook time"),
     });
 }
 
@@ -421,6 +603,142 @@ export async function deleteRecipe(
         );
     }
     return store.deleteRecipe(householdId, recipeId);
+}
+
+export async function updateRecipe(
+    store: RecipesStore,
+    householdId: string,
+    recipeId: string,
+    patch: RecipePatch,
+): Promise<Recipe> {
+    const recipe = await requireRecipe(store, householdId, recipeId);
+    const next: Recipe = {
+        ...recipe,
+        name: patch.name === undefined ? recipe.name : patch.name.trim(),
+        yieldPortions:
+            patch.yieldPortions === undefined
+                ? recipe.yieldPortions
+                : parseYield(patch.yieldPortions),
+        instructions:
+            patch.instructions === undefined
+                ? recipe.instructions
+                : parseOptionalText(patch.instructions, "Instructions", 20_000),
+        sourceUrl:
+            patch.sourceUrl === undefined
+                ? recipe.sourceUrl
+                : parseOptionalText(patch.sourceUrl, "Source URL", 2_000),
+        tags:
+            patch.tags === undefined
+                ? recipe.tags
+                : normalizeRecipeTags(patch.tags),
+        notes:
+            patch.notes === undefined
+                ? recipe.notes
+                : parseOptionalText(patch.notes, "Notes", 5_000),
+        prepMinutes:
+            patch.prepMinutes === undefined
+                ? recipe.prepMinutes
+                : parseOptionalMinutes(patch.prepMinutes, "prep time"),
+        cookMinutes:
+            patch.cookMinutes === undefined
+                ? recipe.cookMinutes
+                : parseOptionalMinutes(patch.cookMinutes, "cook time"),
+    };
+    if (!next.name) throw new RecipeInputError("Enter a recipe name.");
+    const saved = await store.updateRecipe(next);
+    if (!saved) throw new RecipeInputError("Unknown recipe.");
+    return saved;
+}
+
+async function requireIngredient(
+    store: RecipesStore,
+    householdId: string,
+    recipeId: string,
+    ingredientId: string,
+): Promise<RecipeIngredient> {
+    await requireRecipe(store, householdId, recipeId);
+    const ingredients = await store.listIngredients(householdId, recipeId);
+    const ingredient = ingredients.find((row) => row.id === ingredientId);
+    if (!ingredient) throw new RecipeInputError("Unknown ingredient.");
+    return ingredient;
+}
+
+export async function updateRecipeIngredient(
+    store: RecipesStore,
+    householdId: string,
+    recipeId: string,
+    ingredientId: string,
+    patch: RecipeIngredientPatch,
+): Promise<RecipeIngredient> {
+    const ingredient = await requireIngredient(
+        store,
+        householdId,
+        recipeId,
+        ingredientId,
+    );
+    const amount =
+        patch.amount === undefined
+            ? ingredient.quantity.amount
+            : parseAmount(patch.amount);
+    const unit =
+        patch.unit === undefined
+            ? ingredient.quantity.unit
+            : parseUnit(patch.unit);
+    const note =
+        patch.note === undefined
+            ? ingredient.note
+            : parseOptionalText(patch.note, "Ingredient note", 500);
+    const saved = await store.updateIngredient({
+        ...ingredient,
+        quantity: { amount, unit },
+        note,
+    });
+    if (!saved) throw new RecipeInputError("Unknown ingredient.");
+    return saved;
+}
+
+export async function removeRecipeIngredient(
+    store: RecipesStore,
+    householdId: string,
+    recipeId: string,
+    ingredientId: string,
+): Promise<boolean> {
+    await requireIngredient(store, householdId, recipeId, ingredientId);
+    return store.deleteIngredient(householdId, ingredientId);
+}
+
+export async function reorderRecipeIngredients(
+    store: RecipesStore,
+    householdId: string,
+    recipeId: string,
+    orderedIds: string[],
+): Promise<RecipeIngredient[]> {
+    const ingredients = await store.listIngredients(householdId, recipeId);
+    if (orderedIds.length !== ingredients.length) {
+        throw new RecipeInputError(
+            "Send every ingredient id exactly once to reorder.",
+        );
+    }
+    const byId = new Map(ingredients.map((row) => [row.id, row]));
+    const seen = new Set<string>();
+    for (const id of orderedIds) {
+        if (!byId.has(id) || seen.has(id)) {
+            throw new RecipeInputError(
+                "Send every ingredient id exactly once to reorder.",
+            );
+        }
+        seen.add(id);
+    }
+    const next: RecipeIngredient[] = [];
+    for (const [index, id] of orderedIds.entries()) {
+        const row = byId.get(id)!;
+        const saved = await store.updateIngredient({
+            ...row,
+            sortOrder: index,
+        });
+        if (saved) next.push(saved);
+    }
+    return next;
 }
 
 async function requireRecipe(
@@ -473,6 +791,7 @@ export async function addRecipeIngredientById(
             foodId: food.id,
             nutrition: nutritionFromCatalogFood(food),
             sortOrder: existing.length,
+            note: null,
         });
     } catch (err) {
         wrapFoodsError(err);
@@ -517,6 +836,7 @@ export async function addRecipeIngredientByBarcode(
             foodId: food.id,
             nutrition: nutritionFromCatalogFood(food),
             sortOrder: existing.length,
+            note: null,
         });
     } catch (err) {
         wrapFoodsError(err);
@@ -558,6 +878,7 @@ export async function addRecipeManualIngredient(
             foodId: food.id,
             nutrition: nutritionFromCatalogFood(food),
             sortOrder: existing.length,
+            note: null,
         });
     } catch (err) {
         wrapFoodsError(err);
@@ -690,6 +1011,251 @@ export async function addRecipeToGrocery(opts: {
     return { added, skipped, plan };
 }
 
+export function ingredientGaps(
+    ingredient: RecipeIngredient,
+    food: Food | undefined,
+): IngredientGapKind[] {
+    const missing: IngredientGapKind[] = [];
+    const nutrition = food
+        ? nutritionFromCatalogFood(food)
+        : ingredient.nutrition;
+    if (!isNutritionComplete(nutrition)) missing.push("nutrition");
+    if (!food) return missing;
+    const unit = ingredient.quantity.unit;
+    if (isQuantityUnit(unit)) {
+        const dim = dimensionOf(unit);
+        if (dim === "count" && food.gramsPerEach == null) {
+            missing.push("grams_per_each");
+        }
+        if (dim === "volume" && food.gramsPerMl == null) {
+            missing.push("grams_per_ml");
+        }
+    }
+    return missing;
+}
+
+export function recipeCanMakeNow(
+    ingredients: RecipeIngredient[],
+    fridgeStock: LinkedNeed[],
+): boolean {
+    if (ingredients.length === 0) return false;
+    return ingredients.every((ingredient) => {
+        const tag = alreadyHaveTag(
+            {
+                identity: ingredient.identity,
+                quantity: ingredient.quantity,
+                foodId: ingredient.foodId,
+            },
+            fridgeStock,
+        );
+        return tag?.cover === "full";
+    });
+}
+
+export function recipeIsSafeFor(
+    ingredients: RecipeIngredient[],
+    foodsById: ReadonlyMap<string, Food>,
+    person: {
+        allergens: MemberAllergen[];
+        dislikes: { displayName: string }[];
+    },
+): boolean {
+    const names = ingredients.map((row) => row.displayName);
+    if (recipeDislikeNote(names, person.dislikes, "member") != null) {
+        return false;
+    }
+    for (const ingredient of ingredients) {
+        const food = ingredient.foodId
+            ? foodsById.get(ingredient.foodId)
+            : undefined;
+        const allergens = food?.allergens ?? [];
+        for (const row of person.allergens) {
+            if (row.allergen === "other") {
+                const label = row.otherLabel?.trim().toLowerCase();
+                if (
+                    allergens.some(
+                        (code) => code.trim().toLowerCase() === "other",
+                    ) ||
+                    (label &&
+                        ingredient.displayName.toLowerCase().includes(label))
+                ) {
+                    return false;
+                }
+                continue;
+            }
+            if (
+                allergens.some(
+                    (code) => code.trim().toLowerCase() === row.allergen,
+                )
+            ) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+export function recipeMatchesFilter(
+    recipe: Recipe,
+    ingredients: RecipeIngredient[],
+    foodsById: ReadonlyMap<string, Food>,
+    fridgeStock: LinkedNeed[],
+    filter: RecipeListFilter,
+): boolean {
+    if (filter.tag) {
+        const tag = filter.tag.trim().toLowerCase();
+        if (tag && !recipe.tags.includes(tag)) return false;
+    }
+    if (filter.canMakeNow && !recipeCanMakeNow(ingredients, fridgeStock)) {
+        return false;
+    }
+    if (
+        filter.safeFor &&
+        !recipeIsSafeFor(ingredients, foodsById, filter.safeFor)
+    ) {
+        return false;
+    }
+    return true;
+}
+
+export async function listRecipesFiltered(
+    store: RecipesStore,
+    householdId: string,
+    foodsById: ReadonlyMap<string, Food>,
+    fridgeStock: LinkedNeed[],
+    filter: RecipeListFilter,
+): Promise<Recipe[]> {
+    const recipes = await store.listRecipes(householdId);
+    const matched: Recipe[] = [];
+    for (const recipe of recipes) {
+        const ingredients = await store.listIngredients(householdId, recipe.id);
+        if (
+            recipeMatchesFilter(
+                recipe,
+                ingredients,
+                foodsById,
+                fridgeStock,
+                filter,
+            )
+        ) {
+            matched.push(recipe);
+        }
+    }
+    return matched;
+}
+
+export async function importRecipeFromText(
+    store: RecipesStore,
+    foods: FoodsStore,
+    input: {
+        householdId: string;
+        creatorId: string;
+        text: string;
+        sourceUrl?: string | null;
+        name?: string;
+        yieldPortions?: number;
+        ingredients?: RecipeImportIngredient[];
+        tags?: string[];
+        notes?: string | null;
+        prepMinutes?: number | null;
+        cookMinutes?: number | null;
+    },
+    opts: {
+        lookup: (barcode: string) => Promise<FoodResult | null>;
+    },
+): Promise<{
+    recipe: Recipe;
+    ingredients: RecipeIngredient[];
+    gaps: IngredientGap[];
+}> {
+    const instructions = parseOptionalText(input.text, "Recipe text", 20_000);
+    const extractedName = input.name?.trim() ?? "";
+    const nameFromText =
+        instructions
+            ?.split(/\r?\n/)
+            .map((line) => line.trim())
+            .find((line) => line.length > 0) ?? "";
+    const name = extractedName || nameFromText;
+    if (!name) throw new RecipeInputError("Enter a recipe name.");
+    const recipe = await createRecipe(store, {
+        householdId: input.householdId,
+        creatorId: input.creatorId,
+        name,
+        yieldPortions: input.yieldPortions ?? 1,
+        instructions: input.text,
+        sourceUrl: input.sourceUrl,
+        tags: input.tags,
+        notes: input.notes,
+        prepMinutes: input.prepMinutes,
+        cookMinutes: input.cookMinutes,
+    });
+    const imported: RecipeIngredient[] = [];
+    for (const [index, line] of (input.ingredients ?? []).entries()) {
+        const amount = parseAmount(line.amount);
+        const unit = parseUnit(line.unit);
+        const note = parseOptionalText(line.note, "Ingredient note", 500);
+        let food: Food;
+        try {
+            if (line.foodId) {
+                food = await findFoodById(
+                    foods,
+                    input.householdId,
+                    line.foodId,
+                );
+                if (food.kind !== "food") {
+                    throw new RecipeInputError(
+                        "That catalog item is a supply.",
+                    );
+                }
+            } else if (line.barcode) {
+                food = await findOrCreateFoodByBarcode(
+                    foods,
+                    input.householdId,
+                    line.barcode,
+                    opts.lookup,
+                );
+            } else {
+                food = await findOrCreateManualFood(
+                    foods,
+                    input.householdId,
+                    "food",
+                    line.name,
+                );
+            }
+        } catch (err) {
+            wrapFoodsError(err);
+        }
+        imported.push(
+            await store.insertIngredient({
+                id: crypto.randomUUID(),
+                householdId: input.householdId,
+                recipeId: recipe.id,
+                kind: "food",
+                displayName: food.name,
+                quantity: { amount, unit },
+                identity: catalogIdentity("food", food.id, food.name),
+                foodId: food.id,
+                nutrition: nutritionFromCatalogFood(food),
+                sortOrder: index,
+                note,
+            }),
+        );
+    }
+    const catalog = new Map(
+        (await foods.listFoods(input.householdId)).map((row) => [row.id, row]),
+    );
+    const gaps: IngredientGap[] = imported.map((ingredient) => ({
+        ingredientId: ingredient.id,
+        foodId: ingredient.foodId,
+        displayName: ingredient.displayName,
+        missing: ingredientGaps(
+            ingredient,
+            ingredient.foodId ? catalog.get(ingredient.foodId) : undefined,
+        ),
+    }));
+    return { recipe, ingredients: imported, gaps };
+}
+
 export function recipeDislikeNote(
     ingredientNames: string[],
     dislikes: { displayName: string }[],
@@ -711,6 +1277,12 @@ export function recipeFromRow(row: {
     creator_id: unknown;
     name: unknown;
     yield_portions: unknown;
+    instructions?: unknown;
+    source_url?: unknown;
+    tags?: unknown;
+    notes?: unknown;
+    prep_minutes?: unknown;
+    cook_minutes?: unknown;
 }): Recipe {
     return {
         id: String(row.id),
@@ -718,6 +1290,24 @@ export function recipeFromRow(row: {
         creatorId: String(row.creator_id),
         name: String(row.name),
         yieldPortions: Number(row.yield_portions),
+        instructions:
+            row.instructions == null || row.instructions === ""
+                ? null
+                : String(row.instructions),
+        sourceUrl:
+            row.source_url == null || row.source_url === ""
+                ? null
+                : String(row.source_url),
+        tags: Array.isArray(row.tags) ? row.tags.map((tag) => String(tag)) : [],
+        notes: row.notes == null || row.notes === "" ? null : String(row.notes),
+        prepMinutes:
+            row.prep_minutes == null || row.prep_minutes === ""
+                ? null
+                : Number(row.prep_minutes),
+        cookMinutes:
+            row.cook_minutes == null || row.cook_minutes === ""
+                ? null
+                : Number(row.cook_minutes),
     };
 }
 
@@ -728,6 +1318,12 @@ export function recipeToRow(row: Recipe) {
         creator_id: row.creatorId,
         name: row.name,
         yield_portions: row.yieldPortions,
+        instructions: row.instructions,
+        source_url: row.sourceUrl,
+        tags: row.tags,
+        notes: row.notes,
+        prep_minutes: row.prepMinutes,
+        cook_minutes: row.cookMinutes,
     };
 }
 
@@ -743,6 +1339,7 @@ export function recipeIngredientFromRow(row: {
     nutrition: unknown;
     sort_order: unknown;
     food_id?: unknown;
+    note?: unknown;
 }): RecipeIngredient {
     return {
         id: String(row.id),
@@ -761,6 +1358,7 @@ export function recipeIngredientFromRow(row: {
                 : String(row.food_id),
         nutrition: (row.nutrition as IngredientNutrition | null) ?? null,
         sortOrder: Number(row.sort_order) || 0,
+        note: row.note == null || row.note === "" ? null : String(row.note),
     };
 }
 
@@ -777,6 +1375,7 @@ export function recipeIngredientToRow(row: RecipeIngredient) {
         food_id: row.foodId,
         nutrition: row.nutrition,
         sort_order: row.sortOrder,
+        note: row.note,
     };
 }
 

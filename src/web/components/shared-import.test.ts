@@ -120,6 +120,12 @@ test("fridge page and grocery page import the same quantity-field and food-picke
             creatorId: "11111111-1111-4111-8111-111111111111",
             name: "Mac",
             yieldPortions: 4,
+            instructions: null,
+            sourceUrl: null,
+            tags: [],
+            notes: null,
+            prepMinutes: null,
+            cookMinutes: null,
         },
         ingredients: [],
         members: FIXTURE_MEMBERS.map((member) => ({

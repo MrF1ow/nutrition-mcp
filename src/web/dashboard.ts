@@ -38,6 +38,7 @@ import { alreadyHaveTag } from "../domain/linking.js";
 import {
     getRecipeView,
     listRecipes,
+    listRecipesFiltered,
     macrosForPerson,
     RecipeInputError,
     recipeDislikeNote,
@@ -382,14 +383,55 @@ export async function renderHouseholdSettingsRoute(
 export async function renderRecipesListPage(
     viewerUserId: string,
     error?: string,
+    filter: {
+        tag?: string;
+        canMakeNow?: boolean;
+        safeFor?: string;
+    } = {},
 ): Promise<{ status: 200 | 403; html: string }> {
     const gate = await memberGate(viewerUserId);
     if ("html" in gate) return { status: gate.status, html: gate.html };
     const profile = await getProfile(viewerUserId);
-    const [recipes, members] = await Promise.all([
-        listRecipes(liveRecipesStore(), gate.viewer.householdId),
-        listHouseholdMembers(gate.viewer.householdId),
-    ]);
+    const householdId = gate.viewer.householdId;
+    const members = await listHouseholdMembers(householdId);
+    const tag = filter.tag?.trim() ?? "";
+    const canMakeNow = filter.canMakeNow === true;
+    const safeForId =
+        filter.safeFor &&
+        members.some((member) => member.userId === filter.safeFor)
+            ? filter.safeFor
+            : "";
+    let recipes;
+    if (tag || canMakeNow || safeForId) {
+        const fridge = await listFridge(liveFridgeStore(), householdId);
+        const foods = await liveFoodsStore().listFoods(householdId);
+        let safeFor = null;
+        if (safeForId) {
+            const rules = liveRulesStore();
+            const [allergens, dislikes] = await Promise.all([
+                rules.listAllergens(householdId, safeForId),
+                rules.listDislikes(householdId, safeForId),
+            ]);
+            safeFor = { allergens, dislikes };
+        }
+        recipes = await listRecipesFiltered(
+            liveRecipesStore(),
+            householdId,
+            new Map(foods.map((food) => [food.id, food])),
+            fridge.items.map((item) => ({
+                identity: item.identity,
+                quantity: item.quantity,
+                foodId: item.foodId,
+            })),
+            {
+                tag: tag || null,
+                canMakeNow,
+                safeFor,
+            },
+        );
+    } else {
+        recipes = await listRecipes(liveRecipesStore(), householdId);
+    }
     return {
         status: 200,
         html: renderRecipesPage({
@@ -400,6 +442,11 @@ export async function renderRecipesListPage(
                 displayName: member.displayName,
             })),
             viewerId: viewerUserId,
+            filter: {
+                tag,
+                canMakeNow,
+                safeFor: safeForId,
+            },
             error,
         }),
     };
@@ -445,6 +492,12 @@ export async function renderRecipeDetailRoute(
         view.portionCount,
         catalog,
     );
+    const macrosPerPortion = macrosForPerson(
+        view.ingredients,
+        view.yieldPortions,
+        1,
+        catalog,
+    );
     const rules = liveRulesStore();
     const person = members.find((member) => member.userId === filterUserId);
     const [allergens, dislikes, stores] = await Promise.all([
@@ -480,6 +533,7 @@ export async function renderRecipeDetailRoute(
             filterUserId,
             portionCount: view.portionCount,
             macros,
+            macrosPerPortion,
             allergenWarning: warning?.blocking ? warning.text : undefined,
             dislikeNote: person
                 ? (recipeDislikeNote(
