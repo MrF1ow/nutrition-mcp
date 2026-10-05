@@ -69,3 +69,18 @@ export function identityKey(identity: FoodIdentity | SupplyIdentity): string {
     }
     return `${identity.kind}:manual:${comparable.householdManualId}`;
 }
+
+/** Phase 2 identity until Phase 8 drops the JSON column. */
+export function catalogIdentity<K extends "food" | "supply">(
+    kind: K,
+    foodId: string,
+    displayName: string,
+): { kind: K } & CatalogRef {
+    return {
+        kind,
+        via: "catalog",
+        source: "foodable",
+        sourceId: foodId,
+        displayName,
+    };
+}

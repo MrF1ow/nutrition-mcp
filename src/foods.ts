@@ -56,6 +56,8 @@ export interface FoodResult {
     source: string; // stable id, e.g. "off:737628064502"
     source_name: typeof SOURCE_OFF;
     barcode: string;
+    allergens?: string[];
+    allergens_tags?: unknown;
 }
 
 // Strip everything but digits and validate length. Real barcodes (EAN-8/13,
@@ -85,6 +87,7 @@ interface OFFProduct {
     // "a"-"e", or "not-applicable" / "unknown" when OFF hasn't computed one.
     nutriscore_grade?: unknown;
     nova_group?: unknown;
+    allergens_tags?: unknown;
 }
 
 const NUTRISCORE_GRADES = ["a", "b", "c", "d", "e"] as const;
@@ -210,6 +213,7 @@ function normalizeOFFProduct(product: OFFProduct, barcode: string): FoodResult {
         source: `off:${barcode}`,
         source_name: SOURCE_OFF,
         barcode,
+        allergens_tags: product.allergens_tags,
     };
 }
 
