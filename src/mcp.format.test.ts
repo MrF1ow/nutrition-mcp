@@ -32,7 +32,7 @@ import {
     computeWeeklyDigest,
     type DailyBucket,
 } from "./domain/insights.js";
-import type { Meal, NutritionGoals } from "./db/nutrition.js";
+import type { Meal, NutritionGoals, WaterEntry } from "./db/nutrition.js";
 
 // Pure formatters and payload builders. Kept out of mcp.test.ts so this file
 // never mock.module's the db modules, foods.js, or food-search.js. Those
