@@ -4,6 +4,11 @@ import {
     type SupplyIdentity,
 } from "./food-identity.js";
 import {
+    fromGrams,
+    toGrams,
+    type FoodQuantityFactors,
+} from "./food-quantity.js";
+import {
     convertQuantity,
     isQuantityUnit,
     type Quantity,
@@ -39,6 +44,27 @@ function convertToUnit(q: LinkedQuantity, to: string): number | null {
     }
 }
 
+function foodFor(
+    need: LinkedNeed,
+    foodsById: ReadonlyMap<string, FoodQuantityFactors>,
+): FoodQuantityFactors | undefined {
+    if (!need.foodId) return undefined;
+    return foodsById.get(need.foodId);
+}
+
+function amountInUnit(
+    q: LinkedQuantity,
+    to: string,
+    food: FoodQuantityFactors | undefined,
+): number | null {
+    const sameDimension = convertToUnit(q, to);
+    if (sameDimension != null) return sameDimension;
+    if (!food) return null;
+    const grams = toGrams(q, food);
+    if (grams == null) return null;
+    return fromGrams(grams, to, food);
+}
+
 function sameFood(a: LinkedNeed, b: LinkedNeed): boolean {
     if (a.foodId && b.foodId) return a.foodId === b.foodId;
     if (a.foodId || b.foodId) return false;
@@ -48,14 +74,16 @@ function sameFood(a: LinkedNeed, b: LinkedNeed): boolean {
 export function alreadyHaveTag(
     need: LinkedNeed,
     stock: LinkedNeed[],
+    foodsById: ReadonlyMap<string, FoodQuantityFactors> = new Map(),
 ): AlreadyHaveTag | null {
     const matches = stock.filter((row) => sameFood(need, row));
     if (matches.length === 0) return null;
     const targetUnit = need.quantity.unit;
+    const food = foodFor(need, foodsById);
     let have = 0;
     let converted = 0;
     for (const row of matches) {
-        const amount = convertToUnit(row.quantity, targetUnit);
+        const amount = amountInUnit(row.quantity, targetUnit, food);
         if (amount == null) continue;
         have += amount;
         converted += 1;
@@ -94,9 +122,11 @@ export function recipeToGroceryRemainder(input: {
     yieldPortions: number;
     portionCounts: number[];
     stock: LinkedNeed[];
+    foodsById?: ReadonlyMap<string, FoodQuantityFactors>;
 }): RecipeGroceryRemainderLine[] {
     const portionSum = input.portionCounts.reduce((sum, n) => sum + n, 0);
     const scale = portionSum / input.yieldPortions;
+    const foodsById = input.foodsById ?? new Map();
     return input.ingredients.map((ingredient) => {
         const need: LinkedQuantity = {
             amount: roundAmount(ingredient.quantity.amount * scale),
@@ -109,6 +139,7 @@ export function recipeToGroceryRemainder(input: {
                 foodId: ingredient.foodId,
             },
             input.stock,
+            foodsById,
         );
         if (need.amount <= 0 || tag?.cover === "full") {
             return {

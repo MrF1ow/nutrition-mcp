@@ -10,6 +10,11 @@ import {
     type FoodsStore,
 } from "./foods.js";
 import {
+    missingGramsReason,
+    storedFoodUnit,
+    toGrams,
+} from "./food-quantity.js";
+import {
     resolveGrocerySectionId,
     type GroceryLine,
     type GroceryListStore,
@@ -20,13 +25,7 @@ import {
     type LinkedNeed,
     type RecipeGroceryRemainderLine,
 } from "./linking.js";
-import {
-    convertQuantity,
-    dimensionOf,
-    isQuantityUnit,
-    type Quantity,
-    type QuantityUnit,
-} from "./quantity.js";
+import { dimensionOf, isQuantityUnit } from "./quantity.js";
 import type { MemberAllergen } from "./rules.js";
 import type { SettingsStore } from "./settings.js";
 
@@ -96,6 +95,7 @@ export type RecipeMacros = {
     sugar_g: number | null;
     alcohol_g: number | null;
     incomplete: boolean;
+    incompleteReasons: string[];
 };
 
 export type RecipesStore = {
@@ -346,27 +346,15 @@ export function isNutritionComplete(
     );
 }
 
-function convertToUnit(
-    amount: number,
-    from: string,
-    to: string,
-): number | null {
-    if (from === to) return amount;
-    if (!isQuantityUnit(from) || !isQuantityUnit(to)) return null;
-    try {
-        return convertQuantity(
-            { amount, unit: from } as Quantity,
-            to as QuantityUnit,
-        ).amount;
-    } catch {
-        return null;
-    }
-}
-
 function scaleNutrient(value: number | null, factor: number): number | null {
     if (value == null) return null;
     return roundAmount(value * factor);
 }
+
+type MacroNutrient = Exclude<
+    keyof RecipeMacros,
+    "incomplete" | "incompleteReasons"
+>;
 
 export function macrosForPerson(
     ingredients: RecipeIngredient[],
@@ -375,6 +363,7 @@ export function macrosForPerson(
     foodsById: ReadonlyMap<string, Food> = new Map(),
 ): RecipeMacros {
     let incomplete = false;
+    const incompleteReasons: string[] = [];
     const sum: RecipeMacros = {
         calories: null,
         protein_g: null,
@@ -384,6 +373,7 @@ export function macrosForPerson(
         sugar_g: null,
         alcohol_g: null,
         incomplete: false,
+        incompleteReasons: [],
     };
     for (const ingredient of ingredients) {
         const catalog = ingredient.foodId
@@ -401,17 +391,26 @@ export function macrosForPerson(
             yieldPortions,
             portionCount,
         );
-        const eatenInBasis = convertToUnit(
-            eaten,
-            ingredient.quantity.unit,
-            nutrition.basisUnit,
+        const grams = toGrams(
+            { amount: eaten, unit: ingredient.quantity.unit },
+            catalog,
         );
-        if (eatenInBasis == null || nutrition.basisAmount <= 0) {
+        if (grams == null || nutrition.basisAmount <= 0) {
+            incomplete = true;
+            const reason = missingGramsReason(
+                ingredient.displayName,
+                ingredient.quantity,
+                catalog,
+            );
+            if (reason) incompleteReasons.push(reason);
+            continue;
+        }
+        if (nutrition.basisUnit !== "g") {
             incomplete = true;
             continue;
         }
-        const factor = eatenInBasis / nutrition.basisAmount;
-        const add = (key: keyof Omit<RecipeMacros, "incomplete">) => {
+        const factor = grams / nutrition.basisAmount;
+        const add = (key: MacroNutrient) => {
             const scaled = scaleNutrient(nutrition[key], factor);
             if (scaled == null && sum[key] == null) return;
             sum[key] = roundAmount((sum[key] ?? 0) + (scaled ?? 0));
@@ -425,6 +424,7 @@ export function macrosForPerson(
         add("alcohol_g");
     }
     sum.incomplete = incomplete;
+    sum.incompleteReasons = incompleteReasons;
     return sum;
 }
 
@@ -766,6 +766,7 @@ export async function addRecipeIngredientById(
         recipeId: string;
         foodId: string;
         amount: number;
+        unit?: string;
     },
 ): Promise<RecipeIngredient> {
     const recipe = await requireRecipe(
@@ -786,7 +787,7 @@ export async function addRecipeIngredientById(
             recipeId: recipe.id,
             kind: "food",
             displayName: food.name,
-            quantity: { amount, unit: "g" },
+            quantity: { amount, unit: storedFoodUnit(input.unit, food) },
             identity: catalogIdentity("food", food.id, food.name),
             foodId: food.id,
             nutrition: nutritionFromCatalogFood(food),
@@ -806,6 +807,7 @@ export async function addRecipeIngredientByBarcode(
         recipeId: string;
         barcode: string;
         amount: number;
+        unit?: string;
     },
     opts: {
         lookup: (barcode: string) => Promise<FoodResult | null>;
@@ -831,7 +833,7 @@ export async function addRecipeIngredientByBarcode(
             recipeId: recipe.id,
             kind: "food",
             displayName: food.name,
-            quantity: { amount, unit: "g" },
+            quantity: { amount, unit: storedFoodUnit(input.unit, food) },
             identity: catalogIdentity("food", food.id, food.name),
             foodId: food.id,
             nutrition: nutritionFromCatalogFood(food),
@@ -851,6 +853,7 @@ export async function addRecipeManualIngredient(
         recipeId: string;
         name: string;
         amount: number;
+        unit?: string;
     },
 ): Promise<RecipeIngredient> {
     const recipe = await requireRecipe(
@@ -873,7 +876,7 @@ export async function addRecipeManualIngredient(
             recipeId: recipe.id,
             kind: "food",
             displayName: food.name,
-            quantity: { amount, unit: "g" },
+            quantity: { amount, unit: storedFoodUnit(input.unit, food) },
             identity: catalogIdentity("food", food.id, food.name),
             foodId: food.id,
             nutrition: nutritionFromCatalogFood(food),
@@ -943,6 +946,7 @@ export async function addRecipeToGrocery(opts: {
     recipeId: string;
     storeId: string;
     portionCounts: number[];
+    foodsById?: ReadonlyMap<string, Food>;
 }): Promise<{
     added: GroceryLine[];
     skipped: RecipeGroceryRemainderLine[];
@@ -977,6 +981,7 @@ export async function addRecipeToGrocery(opts: {
         yieldPortions: recipe.yieldPortions,
         portionCounts: opts.portionCounts,
         stock: opts.fridgeItems,
+        foodsById: opts.foodsById,
     });
     const sectionId = await resolveGrocerySectionId(
         opts.settings,
@@ -1037,6 +1042,7 @@ export function ingredientGaps(
 export function recipeCanMakeNow(
     ingredients: RecipeIngredient[],
     fridgeStock: LinkedNeed[],
+    foodsById: ReadonlyMap<string, Food> = new Map(),
 ): boolean {
     if (ingredients.length === 0) return false;
     return ingredients.every((ingredient) => {
@@ -1047,6 +1053,7 @@ export function recipeCanMakeNow(
                 foodId: ingredient.foodId,
             },
             fridgeStock,
+            foodsById,
         );
         return tag?.cover === "full";
     });
@@ -1106,7 +1113,10 @@ export function recipeMatchesFilter(
         const tag = filter.tag.trim().toLowerCase();
         if (tag && !recipe.tags.includes(tag)) return false;
     }
-    if (filter.canMakeNow && !recipeCanMakeNow(ingredients, fridgeStock)) {
+    if (
+        filter.canMakeNow &&
+        !recipeCanMakeNow(ingredients, fridgeStock, foodsById)
+    ) {
         return false;
     }
     if (

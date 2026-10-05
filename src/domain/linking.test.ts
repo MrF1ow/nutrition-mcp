@@ -200,3 +200,91 @@ test("same food_id on eggs covers fridge stock even with different manual ids", 
         ),
     ).toEqual({ cover: "full" });
 });
+
+test("6 eggs needed with 4 in the fridge is partial", () => {
+    const foodId = "food-eggs";
+    const eggs: FoodIdentity = {
+        kind: "food",
+        via: "manual",
+        householdManualId: "hm-eggs",
+        displayName: "Eggs",
+    };
+    expect(
+        alreadyHaveTag(
+            {
+                identity: eggs,
+                quantity: { amount: 6, unit: "each" },
+                foodId,
+            },
+            [
+                {
+                    identity: eggs,
+                    quantity: { amount: 4, unit: "each" },
+                    foodId,
+                },
+            ],
+        ),
+    ).toEqual({
+        cover: "partial",
+        have: { amount: 4, unit: "each" },
+        need: { amount: 2, unit: "each" },
+    });
+});
+
+test("each vs grams compares through grams when the food has a factor", () => {
+    const foodId = "food-eggs";
+    const eggs: FoodIdentity = {
+        kind: "food",
+        via: "manual",
+        householdManualId: "hm-eggs",
+        displayName: "Eggs",
+    };
+    const foods = new Map([[foodId, { gramsPerEach: 50, gramsPerMl: null }]]);
+    expect(
+        alreadyHaveTag(
+            {
+                identity: eggs,
+                quantity: { amount: 6, unit: "each" },
+                foodId,
+            },
+            [
+                {
+                    identity: eggs,
+                    quantity: { amount: 200, unit: "g" },
+                    foodId,
+                },
+            ],
+            foods,
+        ),
+    ).toEqual({
+        cover: "partial",
+        have: { amount: 4, unit: "each" },
+        need: { amount: 2, unit: "each" },
+    });
+});
+
+test("cross-dimension stock without a factor is unknown, not zero", () => {
+    const foodId = "food-eggs";
+    const eggs: FoodIdentity = {
+        kind: "food",
+        via: "manual",
+        householdManualId: "hm-eggs",
+        displayName: "Eggs",
+    };
+    expect(
+        alreadyHaveTag(
+            {
+                identity: eggs,
+                quantity: { amount: 6, unit: "each" },
+                foodId,
+            },
+            [
+                {
+                    identity: eggs,
+                    quantity: { amount: 200, unit: "g" },
+                    foodId,
+                },
+            ],
+        ),
+    ).toBeNull();
+});

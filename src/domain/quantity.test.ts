@@ -30,6 +30,21 @@ test("convertQuantity converts cup and fl oz to ml", () => {
     });
 });
 
+test("convertQuantity converts tbsp and tsp to ml", () => {
+    expect(convertQuantity({ amount: 1, unit: "tbsp" }, "ml")).toEqual({
+        amount: 15,
+        unit: "ml",
+    });
+    expect(convertQuantity({ amount: 1, unit: "tsp" }, "ml")).toEqual({
+        amount: 5,
+        unit: "ml",
+    });
+    expect(convertQuantity({ amount: 16, unit: "tbsp" }, "cup")).toEqual({
+        amount: 1,
+        unit: "cup",
+    });
+});
+
 test("convertQuantity keeps each and gramsPerEach", () => {
     expect(
         convertQuantity({ amount: 3, unit: "each", gramsPerEach: 40 }, "each"),

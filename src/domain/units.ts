@@ -13,6 +13,8 @@ export const GRAMS_PER_LB = 453.59237; // international avoirdupois pound (exact
 export const GRAMS_PER_OZ = 28.3495;
 export const ML_PER_FL_OZ = 29.5735;
 export const ML_PER_CUP = 240;
+export const ML_PER_TBSP = 15;
+export const ML_PER_TSP = 5;
 
 // Plausible human body-weight range, used to reject gross entry errors (values
 // typed in grams, an extra digit, or a sub-unit typo). Note this cannot catch a
@@ -97,7 +99,7 @@ export function toStoredInteger(value: number): number {
     return Math.round(value);
 }
 
-export type InventoryVolumeUnit = "ml" | "fl oz" | "cup";
+export type InventoryVolumeUnit = "ml" | "fl oz" | "cup" | "tbsp" | "tsp";
 
 export function toMillilitres(
     value: number,
@@ -108,11 +110,15 @@ export function toMillilitres(
     }
     if (unit === "ml") return value;
     if (unit === "fl oz") return value * ML_PER_FL_OZ;
-    return value * ML_PER_CUP;
+    if (unit === "cup") return value * ML_PER_CUP;
+    if (unit === "tbsp") return value * ML_PER_TBSP;
+    return value * ML_PER_TSP;
 }
 
 export function fromMillilitres(ml: number, unit: InventoryVolumeUnit): number {
     if (unit === "ml") return ml;
     if (unit === "fl oz") return ml / ML_PER_FL_OZ;
-    return ml / ML_PER_CUP;
+    if (unit === "cup") return ml / ML_PER_CUP;
+    if (unit === "tbsp") return ml / ML_PER_TBSP;
+    return ml / ML_PER_TSP;
 }

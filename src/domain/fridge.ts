@@ -8,6 +8,7 @@ import {
     FoodsInputError,
     type FoodsStore,
 } from "./foods.js";
+import { storedFoodUnit } from "./food-quantity.js";
 
 export type FridgeKind = "food" | "supply";
 
@@ -228,6 +229,7 @@ export async function addFoodById(
         locationId: string;
         foodId: string;
         amount: number;
+        unit?: string;
     },
 ): Promise<FridgeItem> {
     await requireLocation(store, input.householdId, input.locationId);
@@ -241,7 +243,7 @@ export async function addFoodById(
             householdId: input.householdId,
             locationId: input.locationId,
             amount,
-            unit: "g",
+            unit: storedFoodUnit(input.unit, food),
             food,
         });
     } catch (err) {
@@ -257,6 +259,7 @@ export async function addFoodByBarcode(
         locationId: string;
         barcode: string;
         amount: number;
+        unit?: string;
     },
     opts: {
         lookup: (barcode: string) => Promise<FoodResult | null>;
@@ -275,7 +278,7 @@ export async function addFoodByBarcode(
             householdId: input.householdId,
             locationId: input.locationId,
             amount,
-            unit: "g",
+            unit: storedFoodUnit(input.unit, food),
             food,
         });
     } catch (err) {
@@ -291,6 +294,7 @@ export async function addManualFood(
         locationId: string;
         name: string;
         amount: number;
+        unit?: string;
     },
 ): Promise<FridgeItem> {
     await requireLocation(store, input.householdId, input.locationId);
@@ -306,7 +310,7 @@ export async function addManualFood(
             householdId: input.householdId,
             locationId: input.locationId,
             amount,
-            unit: "g",
+            unit: storedFoodUnit(input.unit, food),
             food,
         });
     } catch (err) {

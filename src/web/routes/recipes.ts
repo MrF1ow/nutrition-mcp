@@ -28,6 +28,7 @@ import { liveFoodsStore } from "../../db/foods.js";
 import { liveGroceryStore } from "../../db/grocery.js";
 import { liveRecipesStore } from "../../db/recipes.js";
 import { liveSettingsStore } from "../../db/settings.js";
+import { foodsByIds } from "../../domain/foods.js";
 
 export const recipesRoutes = new Hono();
 
@@ -255,6 +256,7 @@ recipesRoutes.post("/recipes/:id/ingredients", requireMember, async (c) => {
                     recipeId,
                     foodId: formText(body, "food_id"),
                     amount,
+                    unit: formText(body, "qty_unit"),
                 },
             );
         } else if (formText(body, "barcode")) {
@@ -266,6 +268,7 @@ recipesRoutes.post("/recipes/:id/ingredients", requireMember, async (c) => {
                     recipeId,
                     barcode: formText(body, "barcode"),
                     amount,
+                    unit: formText(body, "qty_unit"),
                 },
                 { lookup: fridgeBarcodeLookup },
             );
@@ -278,6 +281,7 @@ recipesRoutes.post("/recipes/:id/ingredients", requireMember, async (c) => {
                     recipeId,
                     name: formText(body, "food_name"),
                     amount,
+                    unit: formText(body, "qty_unit"),
                 },
             );
         }
@@ -333,6 +337,12 @@ recipesRoutes.post("/recipes/:id/add-to-grocery", requireMember, async (c) => {
             }),
         );
         const fridge = await listFridge(liveFridgeStore(), member.householdId);
+        const foods = await foodsByIds(liveFoodsStore(), member.householdId, [
+            ...(
+                await recipes.listIngredients(member.householdId, recipeId)
+            ).map((row) => row.foodId),
+            ...fridge.items.map((item) => item.foodId),
+        ]);
         await addRecipeToGrocery({
             recipes,
             grocery: liveGroceryStore(),
@@ -346,6 +356,7 @@ recipesRoutes.post("/recipes/:id/add-to-grocery", requireMember, async (c) => {
             recipeId,
             storeId,
             portionCounts,
+            foodsById: foods,
         });
     } catch (err) {
         const page = await recipeFormError(userId, recipeId, err);

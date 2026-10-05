@@ -236,6 +236,50 @@ test("filling food nutrition completes recipe macros", async () => {
     expect(after.calories).toBe(155);
 });
 
+test("each without grams_per_each marks macros incomplete with a named reason", async () => {
+    const store = createMemoryRecipesStore();
+    const foods = createMemoryFoodsStore();
+    const recipe = await createRecipe(store, {
+        householdId: HH,
+        creatorId: ALICE,
+        name: "Eggs",
+        yieldPortions: 1,
+    });
+    const ingredient = await addRecipeManualIngredient(store, foods, {
+        householdId: HH,
+        recipeId: recipe.id,
+        name: "Eggs",
+        amount: 3,
+        unit: "each",
+    });
+    await updateFood(foods, HH, ingredient.foodId!, {
+        calories: 155,
+        proteinG: 13,
+        carbsG: 1.1,
+        fatG: 11,
+        nutritionSource: "manual",
+    });
+    const view = await getRecipeView(store, HH, recipe.id, ALICE);
+    const macros = macrosForPerson(
+        view.ingredients,
+        view.yieldPortions,
+        1,
+        new Map((await foods.listFoods(HH)).map((row) => [row.id, row])),
+    );
+    expect(macros.incomplete).toBe(true);
+    expect(macros.calories).toBeNull();
+    expect(macros.incompleteReasons).toEqual(["Eggs: set grams per each"]);
+    await updateFood(foods, HH, ingredient.foodId!, { gramsPerEach: 50 });
+    const complete = macrosForPerson(
+        view.ingredients,
+        view.yieldPortions,
+        1,
+        new Map((await foods.listFoods(HH)).map((row) => [row.id, row])),
+    );
+    expect(complete.incomplete).toBe(false);
+    expect(complete.calories).toBe(232.5);
+});
+
 test("add-to-grocery writes remainder lines and skips full fridge cover", async () => {
     const recipes = createMemoryRecipesStore();
     const grocery = createMemoryGroceryStore();
@@ -452,6 +496,7 @@ test("recipes list page is not a stub and detail reuses shared picker", () => {
             sugar_g: 3,
             alcohol_g: null,
             incomplete: false,
+            incompleteReasons: [],
         },
         allergenWarning: "Contains peanut — Bob.",
         dislikeNote: "Bob dislikes cilantro.",

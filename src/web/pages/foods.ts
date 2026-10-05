@@ -42,6 +42,8 @@ function foodCard(food: Food & { aliases: string[] }): string {
 <input id="aliases-${escapeHtml(food.id)}" name="aliases" value="${escapeHtml(food.aliases.join(", "))}" />
 <label for="unit-${escapeHtml(food.id)}">Default unit</label>
 <input id="unit-${escapeHtml(food.id)}" name="default_unit" value="${escapeHtml(food.defaultUnit)}" />
+${nutrientInput(`each-${food.id}`, "grams_per_each", "Grams per each", food.gramsPerEach)}
+${nutrientInput(`ml-${food.id}`, "grams_per_ml", "Grams per millilitre", food.gramsPerMl)}
 ${nutrientInput(`cal-${food.id}`, "calories", "Calories / 100 g", food.calories)}
 ${nutrientInput(`pro-${food.id}`, "protein_g", "Protein g", food.proteinG)}
 ${nutrientInput(`carb-${food.id}`, "carbs_g", "Carbs g", food.carbsG)}

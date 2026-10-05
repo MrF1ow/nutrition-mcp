@@ -40,6 +40,8 @@ export interface FoodResult {
     name: string;
     brand: string | null;
     serving: string | null; // human label for the basis of the macros below
+    serving_quantity?: number | null;
+    serving_quantity_unit?: string | null;
     calories: number | null;
     protein_g: number | null;
     carbs_g: number | null;
@@ -195,6 +197,10 @@ function normalizeOFFProduct(product: OFFProduct, barcode: string): FoodResult {
         name: product.product_name?.trim() || `Product ${barcode}`,
         brand: product.brands?.split(",")[0]?.trim() || null,
         serving: hasServing ? product.serving_size!.trim() : "100 g",
+        serving_quantity: num(product.serving_quantity),
+        serving_quantity_unit: product.serving_quantity_unit
+            ? String(product.serving_quantity_unit)
+            : null,
         calories: pick("energy-kcal_serving", "energy-kcal_100g"),
         protein_g: pick("proteins_serving", "proteins_100g"),
         carbs_g: pick("carbohydrates_serving", "carbohydrates_100g"),

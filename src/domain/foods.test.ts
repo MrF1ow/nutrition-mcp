@@ -10,6 +10,7 @@ import {
     normalizeFoodName,
     searchFoodCatalog,
     updateFood,
+    gramsPerEachFromOff,
 } from "./foods.js";
 
 const HH = "hh-1";
@@ -184,4 +185,41 @@ test("memory backfill groups barcode and manual names the way the SQL does", asy
     const foods = await store.listFoods(HH);
     expect(foods).toHaveLength(2);
     expect(foods.some((row) => row.offSourceId === barcode)).toBe(true);
+});
+
+test("gramsPerEachFromOff prefills when the serving is a count", () => {
+    expect(
+        gramsPerEachFromOff({
+            serving: "1 egg (50 g)",
+            serving_quantity: 50,
+            serving_quantity_unit: "g",
+        }),
+    ).toBe(50);
+    expect(
+        gramsPerEachFromOff({
+            serving: "1 cookie (30 g)",
+            serving_quantity: 1,
+            serving_quantity_unit: "each",
+        }),
+    ).toBe(30);
+    expect(
+        gramsPerEachFromOff({
+            serving: "100 g",
+            serving_quantity: 100,
+            serving_quantity_unit: "g",
+        }),
+    ).toBeNull();
+});
+
+test("updateFood writes default_unit and gram factors", async () => {
+    const store = createMemoryFoodsStore();
+    const eggs = await findOrCreateManualFood(store, HH, "food", "Eggs");
+    const saved = await updateFood(store, HH, eggs.id, {
+        defaultUnit: "each",
+        gramsPerEach: 50,
+        gramsPerMl: null,
+    });
+    expect(saved.defaultUnit).toBe("each");
+    expect(saved.gramsPerEach).toBe(50);
+    expect(saved.gramsPerMl).toBeNull();
 });
