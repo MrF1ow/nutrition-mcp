@@ -74,6 +74,8 @@ export const WIDGET_TEMPLATES: Record<string, string> = {
     trends: "trends.html",
     "weight-trends": "weight-trends.html",
     "import-meals": "import-meals.html",
+    "grocery-list": "grocery-list.html",
+    fridge: "fridge.html",
     // Dev-only visual reference for the shared components. Listed here so it is
     // assembled and covered by widgets.test.ts, but NO ui:// resource and no
     // tool reference it, so no client can reach it. View via `bun run harness`.

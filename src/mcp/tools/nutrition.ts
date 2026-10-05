@@ -1013,7 +1013,7 @@ export function registerNutritionEditTools(
             // makes this the backfill path for a meal that went in without its
             // fiber or sugar — and what missingNutrientNote points the model at.
             description:
-                "Update fields of an existing meal entry. Only the fields you pass are changed, which also makes this the way to BACKFILL nutrition a meal was logged without: if a past meal has no fiber_g, sugar_g or (where it applies) caffeine_mg, estimate the value and pass just that field rather than telling the user the figure in prose. Meal ids come from get_meals_today, get_meals_by_date or search_meals.\n\n" +
+                "Update fields of an existing meal entry. Only the fields you pass are changed, which also makes this the way to BACKFILL nutrition a meal was logged without: if a past meal has no fiber_g, sugar_g or (where it applies) caffeine_mg, estimate the value and pass just that field rather than telling the user the figure in prose. Meal ids come from get_meals or search_meals.\n\n" +
                 NUTRIENT_COVERAGE,
             annotations: {
                 readOnlyHint: false,

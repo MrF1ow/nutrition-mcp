@@ -52,9 +52,19 @@ import { registerHouseholdTools } from "./tools/household.js";
 // question is resolved") is repeated in log_meal's own description. Keep both
 // in sync. Note this is guidance only: the client model decides whether to
 // follow it, so the loop cannot be strictly enforced from here.
-const SERVER_INSTRUCTIONS = `Foodable: meals, water, weight, goals, and trends, per-user with timezone support.
+const SERVER_INSTRUCTIONS = `Foodable is a household kitchen: nutrition, fridge, grocery, recipes, and settings, for one household.
 
 All nutrition figures are estimates and this server does not provide medical or dietary advice.
+
+Five pillars — nutrition (meals, water, weight, goals, trends), fridge (what is in the house), grocery (what to buy), recipes (what we cook), and settings (members, stores, preferences). They share one food catalog.
+
+Foods are the shared identity. Always search_food (or lookup_barcode for a packaged product) and then pass food_id into writes — add_fridge_item, add_grocery_line, add_recipe_ingredient, log_meal items, upsert_food. Do not invent a parallel name for something the catalog already has. get_food reads a catalog row; merge_foods is how duplicates get cleaned up.
+
+The loop: grocery list → put_away_grocery_lines into the fridge → cook_recipe or eat_fridge_item → meals. Checking a grocery line does not stock the fridge; put-away does. eat_fridge_item deducts stock and can log a meal; cook_recipe deducts recipe ingredients and can log one meal per member. log_meal is the direct nutrition write when stock is not involved.
+
+Member targeting — nutrition is per person. On an OAuth user token, omit user_id to act as the caller; pass target_member on writes (log_meal, update_meal, delete_meal, bulk_import_meals, log_water, delete_water, log_weight, update_weight, delete_weight, set_nutrition_goals, log_recipe_portion) to log for another household member. user_id on those writes is not a way to sudo. On a household token, pass user_id to pick whose nutrition to read or write. Call list_members when you need ids. Fridge, grocery, recipes, and the food catalog are household-scoped.
+
+Constraints the agent must honor: call get_household_rules before proposing a grocery line, a recipe, or a meal for someone. Store rules say how that store is shopped (aisle, brand, "dairy is on the back wall"). Person rules, allergens, and dislikes are hard constraints — do not add a disliked food, and never ignore an allergen. Grocery and recipe tools warn on allergen matches; treat a warning as blocking unless the user overrides it explicitly.
 
 Knowing what time it is — some hosts put the current date and time in your context and some do not, but this server always knows both the clock and the user's timezone. Never ask the user what time it is.
 - Logging something that just happened: omit logged_at entirely. The server stamps the entry with the current time, which is more accurate than any time you could reconstruct.

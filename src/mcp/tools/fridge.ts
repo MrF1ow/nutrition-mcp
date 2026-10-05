@@ -31,7 +31,13 @@ import {
 } from "../../domain/meals.js";
 import { insertMeal, snapshotToMealItemWrite } from "../../db/nutrition.js";
 import { liveRecipesStore } from "../../db/recipes.js";
-import type { ToolContext } from "../shared.js";
+import { getWidgetHtml } from "../../widgets.js";
+import { WIDGET_LOCALE } from "../../routes.js";
+import {
+    APP_UI_MIME_TYPE,
+    FRIDGE_WIDGET_URI,
+    type ToolContext,
+} from "../shared.js";
 
 function shortfallText(
     rows: { displayName: string; amount: number; unit: string }[],
@@ -52,13 +58,23 @@ export function registerFridgeTools(server: McpServer, ctx: ToolContext) {
         analytics,
         actorUserId,
         requireHouseholdMemberId,
+        uiMeta,
     } = ctx;
+    const fridgeItemSchema = z.object({
+        id: z.string(),
+        location_id: z.string(),
+        kind: z.enum(["food", "supply"]),
+        display_name: z.string(),
+        amount: z.number(),
+        unit: z.string(),
+        expires_on: z.string().nullable(),
+    });
     server.registerTool(
-        "list_fridge_locations",
+        "get_fridge",
         {
-            title: "List Fridge Locations",
+            title: "Get Fridge",
             description:
-                "List household fridge and pantry locations with ids for add_fridge_item.",
+                "List household fridge and pantry locations with the items filed in each. Use the location ids for add_fridge_item.",
             annotations: {
                 readOnlyHint: true,
                 destructiveHint: false,
@@ -66,46 +82,73 @@ export function registerFridgeTools(server: McpServer, ctx: ToolContext) {
                 openWorldHint: false,
             },
             outputSchema: z.object({
+                locale: z.string(),
                 locations: z.array(
                     z.object({
                         id: z.string(),
                         name: z.string(),
                         sort_order: z.number(),
+                        items: z.array(fridgeItemSchema),
                     }),
                 ),
             }),
+            ...uiMeta(FRIDGE_WIDGET_URI),
         },
         async () =>
             withAnalytics(
-                "list_fridge_locations",
+                "get_fridge",
                 async () => {
                     const householdId = await callerHouseholdId();
-                    const { locations } = await listFridge(
+                    const { locations, items } = await listFridge(
                         liveFridgeStore(),
                         householdId,
                     );
                     const payload = {
+                        locale: WIDGET_LOCALE,
                         locations: locations.map((row) => ({
                             id: row.id,
                             name: row.name,
                             sort_order: row.sortOrder,
+                            items: items
+                                .filter((item) => item.locationId === row.id)
+                                .map((item) => ({
+                                    id: item.id,
+                                    location_id: item.locationId,
+                                    kind: item.kind,
+                                    display_name: item.displayName,
+                                    amount: item.quantity.amount,
+                                    unit: item.quantity.unit,
+                                    expires_on: item.expiresOn ?? null,
+                                })),
                         })),
                     };
+                    const itemCount = payload.locations.reduce(
+                        (n, loc) => n + loc.items.length,
+                        0,
+                    );
+                    const text =
+                        payload.locations.length === 0
+                            ? "No fridge locations."
+                            : itemCount === 0
+                              ? payload.locations
+                                    .map((row) => `${row.name} ${row.id}`)
+                                    .join("\n") + "\nFridge is empty."
+                              : payload.locations
+                                    .map((row) => {
+                                        const lines =
+                                            row.items.length === 0
+                                                ? "  (empty)"
+                                                : row.items
+                                                      .map(
+                                                          (item) =>
+                                                              `  ${item.display_name} ${item.amount} ${item.unit}${item.expires_on ? ` exp ${item.expires_on}` : ""} ${item.id}`,
+                                                      )
+                                                      .join("\n");
+                                        return `${row.name} ${row.id}\n${lines}`;
+                                    })
+                                    .join("\n");
                     return {
-                        content: [
-                            {
-                                type: "text",
-                                text:
-                                    payload.locations.length === 0
-                                        ? "No fridge locations."
-                                        : payload.locations
-                                              .map(
-                                                  (row) =>
-                                                      `${row.name} ${row.id}`,
-                                              )
-                                              .join("\n"),
-                            },
-                        ],
+                        content: [{ type: "text", text }],
                         structuredContent: payload,
                     };
                 },
@@ -113,70 +156,27 @@ export function registerFridgeTools(server: McpServer, ctx: ToolContext) {
             ),
     );
 
-    server.registerTool(
-        "list_fridge_items",
+    server.registerResource(
+        "fridge-widget",
+        FRIDGE_WIDGET_URI,
         {
-            title: "List Fridge Items",
+            title: "Fridge",
             description:
-                "List household fridge items with quantity, location, and identity.",
-            annotations: {
-                readOnlyHint: true,
-                destructiveHint: false,
-                idempotentHint: true,
-                openWorldHint: false,
-            },
-            outputSchema: z.object({
-                items: z.array(
-                    z.object({
-                        id: z.string(),
-                        location_id: z.string(),
-                        kind: z.enum(["food", "supply"]),
-                        display_name: z.string(),
-                        amount: z.number(),
-                        unit: z.string(),
-                    }),
-                ),
-            }),
+                "Interactive UI for get_fridge: locations with their items, with automatic light/dark theming.",
+            mimeType: APP_UI_MIME_TYPE,
         },
-        async () =>
-            withAnalytics(
-                "list_fridge_items",
-                async () => {
-                    const householdId = await callerHouseholdId();
-                    const { items } = await listFridge(
-                        liveFridgeStore(),
-                        householdId,
-                    );
-                    const payload = {
-                        items: items.map((item) => ({
-                            id: item.id,
-                            location_id: item.locationId,
-                            kind: item.kind,
-                            display_name: item.displayName,
-                            amount: item.quantity.amount,
-                            unit: item.quantity.unit,
-                        })),
-                    };
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text:
-                                    payload.items.length === 0
-                                        ? "Fridge is empty."
-                                        : payload.items
-                                              .map(
-                                                  (item) =>
-                                                      `${item.display_name} ${item.amount} ${item.unit} ${item.id}`,
-                                              )
-                                              .join("\n"),
-                            },
-                        ],
-                        structuredContent: payload,
-                    };
-                },
-                analytics,
-            ),
+        async (uri) => {
+            return {
+                contents: [
+                    {
+                        uri: uri.href,
+                        mimeType: APP_UI_MIME_TYPE,
+                        text: await getWidgetHtml("fridge"),
+                        _meta: { ui: { prefersBorder: true } },
+                    },
+                ],
+            };
+        },
     );
 
     server.registerTool(
