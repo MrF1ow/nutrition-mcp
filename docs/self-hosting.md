@@ -45,7 +45,7 @@ When a new version brings migrations and the database already holds data:
     bun run db:dryrun --data prod-data.sql
     ```
 
-    This uses a throwaway local Postgres and never touches the remote database. Set `PG_BIN` if `initdb` is not on your `PATH`. `DEFAULT_PENDING_FROM` in `scripts/migration-dryrun.ts` must name the first migration your database has not applied.
+    This uses a throwaway local Postgres and never touches the remote database. Set `PG_BIN` if `initdb` is not on your `PATH`. Add `--pending-from <version>` naming the first migration your database has not applied (`supabase migration list` shows which).
 
 3. `supabase db push`, then deploy the matching code. The new code expects the new tables, so do not deploy it first.
 

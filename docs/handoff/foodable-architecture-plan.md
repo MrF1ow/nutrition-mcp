@@ -10,7 +10,7 @@ The goal is one cohesive system. Every pillar refers to the same foods. Buying, 
 
 `main` passes 1057 tests, `bun run typecheck` and `bun run format:check`. A checked box below means the code is on `main` and was checked against it. It does not mean the item has run in production. Nothing from Phase 2 on has.
 
-**Before production:**
+**Before production:** superseded on 2026-10-05. The user chose to start fresh on a new Supabase project hosted on Railway, with no data carried over. Follow `docs/handoff/foodable-launch-handoff.md`. The list below was the in-place upgrade path and is kept for reference.
 
 1. Back up: a dashboard backup or `pg_dump`, plus `export_all_data` for each member.
 2. `bun run db:dryrun --data prod-data.sql` against a data-only dump of production. See `docs/self-hosting.md`, "Upgrading an existing deploy".

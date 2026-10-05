@@ -12,15 +12,17 @@
 // Real data: take a data-only dump of the public schema with plain pg_dump,
 //   pg_dump "$DATABASE_URL" --data-only --schema=public -f prod-data.sql
 // It loads with session_replication_role = replica, so foreign keys into
-// auth.users (not in the dump) are not checked. The dump must come from a
-// database whose applied migrations end right before --pending-from.
+// auth.users (not in the dump) are not checked. Pass --pending-from with the
+// first migration that database has not applied.
 //
 // Needs initdb, pg_ctl and psql. Set PG_BIN to their directory when they are
 // not on PATH (pg_config --bindir is tried first).
 
 import { $ } from "bun";
 
-// First migration production has not applied. Move it forward after each push.
+// The fixture (seed.sql) is written against the schema before this version,
+// and everything from here on, including future migrations, runs on top of it.
+// Leave it alone; with --data, pass --pending-from to match the real database.
 const DEFAULT_PENDING_FROM = "20261004230000";
 
 // Pending migrations that claim to be safe to run twice; each is re-applied
