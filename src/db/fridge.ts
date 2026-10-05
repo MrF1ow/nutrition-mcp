@@ -9,7 +9,7 @@ import { getSupabase } from "./client.js";
 
 const FRIDGE_LOCATION_COLS = "id, household_id, name, sort_order";
 const FRIDGE_ITEM_COLS =
-    "id, household_id, location_id, kind, display_name, amount, unit, identity";
+    "id, household_id, location_id, kind, display_name, amount, unit, identity, food_id";
 
 export function liveFridgeStore(): FridgeStore {
     return {

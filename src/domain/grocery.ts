@@ -1,5 +1,13 @@
+import { catalogIdentity } from "./food-identity.js";
 import type { FoodIdentity, SupplyIdentity } from "./food-identity.js";
-import { normalizeBarcode, type FoodResult } from "../foods.js";
+import type { FoodResult } from "../foods.js";
+import {
+    findFoodById,
+    findOrCreateFoodByBarcode,
+    findOrCreateManualFood,
+    FoodsInputError,
+    type FoodsStore,
+} from "./foods.js";
 import type {
     GrocerySection,
     GroceryStore,
@@ -24,6 +32,7 @@ export type GroceryLine = {
     displayName: string;
     quantity: GroceryQuantity;
     identity: FoodIdentity | SupplyIdentity;
+    foodId: string | null;
     checked: boolean;
 };
 
@@ -145,9 +154,83 @@ export async function listGrocery(
     return { stores, sections, lines };
 }
 
+function wrapFoodsError(err: unknown): never {
+    if (err instanceof FoodsInputError) {
+        throw new GroceryInputError(err.message);
+    }
+    throw err;
+}
+
+async function insertFromFood(
+    grocery: GroceryListStore,
+    input: {
+        householdId: string;
+        storeId: string;
+        sectionId: string;
+        amount: number;
+        unit: string;
+        food: Awaited<ReturnType<typeof findFoodById>>;
+    },
+): Promise<GroceryLine> {
+    return grocery.insertLine({
+        id: crypto.randomUUID(),
+        householdId: input.householdId,
+        storeId: input.storeId,
+        sectionId: input.sectionId,
+        kind: input.food.kind,
+        displayName: input.food.name,
+        quantity: { amount: input.amount, unit: input.unit },
+        identity: catalogIdentity(
+            input.food.kind,
+            input.food.id,
+            input.food.name,
+        ),
+        foodId: input.food.id,
+        checked: false,
+    });
+}
+
+export async function addGroceryFoodById(
+    grocery: GroceryListStore,
+    settings: SettingsStore,
+    foods: FoodsStore,
+    input: {
+        householdId: string;
+        storeId: string;
+        sectionId?: string;
+        foodId: string;
+        amount: number;
+    },
+): Promise<GroceryLine> {
+    await requireStore(settings, input.householdId, input.storeId);
+    const sectionId = await resolveGrocerySectionId(
+        settings,
+        input.storeId,
+        input.sectionId,
+    );
+    const amount = parseAmount(input.amount);
+    try {
+        const food = await findFoodById(foods, input.householdId, input.foodId);
+        if (food.kind !== "food") {
+            throw new GroceryInputError("That catalog item is a supply.");
+        }
+        return insertFromFood(grocery, {
+            householdId: input.householdId,
+            storeId: input.storeId,
+            sectionId,
+            amount,
+            unit: "g",
+            food,
+        });
+    } catch (err) {
+        wrapFoodsError(err);
+    }
+}
+
 export async function addGroceryFoodByBarcode(
     grocery: GroceryListStore,
     settings: SettingsStore,
+    foods: FoodsStore,
     input: {
         householdId: string;
         storeId: string;
@@ -165,33 +248,31 @@ export async function addGroceryFoodByBarcode(
         input.storeId,
         input.sectionId,
     );
-    const barcode = normalizeBarcode(input.barcode);
-    if (!barcode) throw new GroceryInputError("Enter a valid barcode.");
     const amount = parseAmount(input.amount);
-    const food = await opts.lookup(barcode);
-    if (food == null) throw new GroceryInputError("Unknown barcode.");
-    const identity: FoodIdentity = {
-        kind: "food",
-        via: "barcode",
-        barcode,
-        displayName: food.name,
-    };
-    return grocery.insertLine({
-        id: crypto.randomUUID(),
-        householdId: input.householdId,
-        storeId: input.storeId,
-        sectionId,
-        kind: "food",
-        displayName: food.name,
-        quantity: { amount, unit: "g" },
-        identity,
-        checked: false,
-    });
+    try {
+        const food = await findOrCreateFoodByBarcode(
+            foods,
+            input.householdId,
+            input.barcode,
+            opts.lookup,
+        );
+        return insertFromFood(grocery, {
+            householdId: input.householdId,
+            storeId: input.storeId,
+            sectionId,
+            amount,
+            unit: "g",
+            food,
+        });
+    } catch (err) {
+        wrapFoodsError(err);
+    }
 }
 
 export async function addGroceryManualFood(
     grocery: GroceryListStore,
     settings: SettingsStore,
+    foods: FoodsStore,
     input: {
         householdId: string;
         storeId: string;
@@ -206,31 +287,31 @@ export async function addGroceryManualFood(
         input.storeId,
         input.sectionId,
     );
-    const name = input.name.trim();
-    if (!name) throw new GroceryInputError("Enter a food name.");
     const amount = parseAmount(input.amount);
-    const identity: FoodIdentity = {
-        kind: "food",
-        via: "manual",
-        householdManualId: crypto.randomUUID(),
-        displayName: name,
-    };
-    return grocery.insertLine({
-        id: crypto.randomUUID(),
-        householdId: input.householdId,
-        storeId: input.storeId,
-        sectionId,
-        kind: "food",
-        displayName: name,
-        quantity: { amount, unit: "g" },
-        identity,
-        checked: false,
-    });
+    try {
+        const food = await findOrCreateManualFood(
+            foods,
+            input.householdId,
+            "food",
+            input.name,
+        );
+        return insertFromFood(grocery, {
+            householdId: input.householdId,
+            storeId: input.storeId,
+            sectionId,
+            amount,
+            unit: "g",
+            food,
+        });
+    } catch (err) {
+        wrapFoodsError(err);
+    }
 }
 
 export async function addGrocerySupply(
     grocery: GroceryListStore,
     settings: SettingsStore,
+    foods: FoodsStore,
     input: {
         householdId: string;
         storeId: string;
@@ -238,6 +319,7 @@ export async function addGrocerySupply(
         name: string;
         amount: number;
         unit: string;
+        foodId?: string;
     },
 ): Promise<GroceryLine> {
     await requireStore(settings, input.householdId, input.storeId);
@@ -246,28 +328,32 @@ export async function addGrocerySupply(
         input.storeId,
         input.sectionId,
     );
-    const name = input.name.trim();
-    if (!name) throw new GroceryInputError("Enter a supply name.");
     const unit = input.unit.trim();
     if (!unit) throw new GroceryInputError("Enter a unit.");
     const amount = parseAmount(input.amount);
-    const identity: SupplyIdentity = {
-        kind: "supply",
-        via: "manual",
-        householdManualId: crypto.randomUUID(),
-        displayName: name,
-    };
-    return grocery.insertLine({
-        id: crypto.randomUUID(),
-        householdId: input.householdId,
-        storeId: input.storeId,
-        sectionId,
-        kind: "supply",
-        displayName: name,
-        quantity: { amount, unit },
-        identity,
-        checked: false,
-    });
+    try {
+        const food = input.foodId
+            ? await findFoodById(foods, input.householdId, input.foodId)
+            : await findOrCreateManualFood(
+                  foods,
+                  input.householdId,
+                  "supply",
+                  input.name,
+              );
+        if (food.kind !== "supply") {
+            throw new GroceryInputError("That catalog item is a food.");
+        }
+        return insertFromFood(grocery, {
+            householdId: input.householdId,
+            storeId: input.storeId,
+            sectionId,
+            amount,
+            unit,
+            food,
+        });
+    } catch (err) {
+        wrapFoodsError(err);
+    }
 }
 
 export async function checkGroceryLine(
@@ -308,7 +394,44 @@ function allergenNeedle(
 export function groceryAllergenWarning(
     displayName: string,
     members: GroceryAllergenMember[],
+    foodAllergens?: readonly string[] | null,
 ): GroceryAllergenWarning | null {
+    if (foodAllergens != null) {
+        const hay = new Set(
+            foodAllergens.map((code) => code.trim().toLowerCase()),
+        );
+        const hitNames: string[] = [];
+        const hitCodes = new Set<string>();
+        for (const member of members) {
+            const matched = member.allergens.filter((row) => {
+                if (row.allergen === "other") {
+                    const label = row.otherLabel?.trim().toLowerCase();
+                    return (
+                        hay.has("other") ||
+                        (label
+                            ? displayName.toLowerCase().includes(label)
+                            : false)
+                    );
+                }
+                return hay.has(row.allergen);
+            });
+            if (matched.length === 0) continue;
+            hitNames.push(member.displayName);
+            for (const row of matched) {
+                hitCodes.add(
+                    row.allergen === "other"
+                        ? (row.otherLabel ?? "allergen")
+                        : ALLERGEN_LABELS[row.allergen].toLowerCase(),
+                );
+            }
+        }
+        if (hitNames.length === 0) return null;
+        const label = [...hitCodes][0] ?? "allergen";
+        return {
+            blocking: true,
+            text: `Contains ${label} — ${hitNames.join(", ")}.`,
+        };
+    }
     const haystack = displayName.toLowerCase();
     const hitNames: string[] = [];
     const hitCodes = new Set<string>();
@@ -349,6 +472,7 @@ export function groceryLineFromRow(row: {
     unit: unknown;
     identity: unknown;
     checked: unknown;
+    food_id?: unknown;
 }): GroceryLine {
     const kind = row.kind === "supply" ? "supply" : "food";
     return {
@@ -363,6 +487,10 @@ export function groceryLineFromRow(row: {
             unit: String(row.unit),
         },
         identity: row.identity as FoodIdentity | SupplyIdentity,
+        foodId:
+            row.food_id == null || row.food_id === ""
+                ? null
+                : String(row.food_id),
         checked: Boolean(row.checked),
     };
 }
@@ -378,6 +506,7 @@ export function groceryLineToRow(row: GroceryLine) {
         amount: row.quantity.amount,
         unit: row.quantity.unit,
         identity: row.identity,
+        food_id: row.foodId,
         checked: row.checked,
     };
 }

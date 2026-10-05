@@ -1,5 +1,13 @@
+import { catalogIdentity } from "./food-identity.js";
 import type { FoodIdentity, SupplyIdentity } from "./food-identity.js";
-import { normalizeBarcode, type FoodResult } from "../foods.js";
+import type { FoodResult } from "../foods.js";
+import {
+    findFoodById,
+    findOrCreateFoodByBarcode,
+    findOrCreateManualFood,
+    FoodsInputError,
+    type FoodsStore,
+} from "./foods.js";
 
 export type FridgeKind = "food" | "supply";
 
@@ -20,6 +28,7 @@ export type FridgeItem = {
     displayName: string;
     quantity: FridgeQuantity;
     identity: FoodIdentity | SupplyIdentity;
+    foodId: string | null;
 };
 
 export type FridgeSnapshot = {
@@ -178,8 +187,71 @@ function parseAmount(amount: number): number {
     return amount;
 }
 
+function wrapFoodsError(err: unknown): never {
+    if (err instanceof FoodsInputError) {
+        throw new FridgeInputError(err.message);
+    }
+    throw err;
+}
+
+async function insertFromFood(
+    store: FridgeStore,
+    input: {
+        householdId: string;
+        locationId: string;
+        amount: number;
+        unit: string;
+        food: Awaited<ReturnType<typeof findFoodById>>;
+    },
+): Promise<FridgeItem> {
+    return store.insertItem({
+        id: crypto.randomUUID(),
+        householdId: input.householdId,
+        locationId: input.locationId,
+        kind: input.food.kind,
+        displayName: input.food.name,
+        quantity: { amount: input.amount, unit: input.unit },
+        identity: catalogIdentity(
+            input.food.kind,
+            input.food.id,
+            input.food.name,
+        ),
+        foodId: input.food.id,
+    });
+}
+
+export async function addFoodById(
+    store: FridgeStore,
+    foods: FoodsStore,
+    input: {
+        householdId: string;
+        locationId: string;
+        foodId: string;
+        amount: number;
+    },
+): Promise<FridgeItem> {
+    await requireLocation(store, input.householdId, input.locationId);
+    const amount = parseAmount(input.amount);
+    try {
+        const food = await findFoodById(foods, input.householdId, input.foodId);
+        if (food.kind !== "food") {
+            throw new FridgeInputError("That catalog item is a supply.");
+        }
+        return insertFromFood(store, {
+            householdId: input.householdId,
+            locationId: input.locationId,
+            amount,
+            unit: "g",
+            food,
+        });
+    } catch (err) {
+        wrapFoodsError(err);
+    }
+}
+
 export async function addFoodByBarcode(
     store: FridgeStore,
+    foods: FoodsStore,
     input: {
         householdId: string;
         locationId: string;
@@ -191,30 +263,29 @@ export async function addFoodByBarcode(
     },
 ): Promise<FridgeItem> {
     await requireLocation(store, input.householdId, input.locationId);
-    const barcode = normalizeBarcode(input.barcode);
-    if (!barcode) throw new FridgeInputError("Enter a valid barcode.");
     const amount = parseAmount(input.amount);
-    const food = await opts.lookup(barcode);
-    if (food == null) throw new FridgeInputError("Unknown barcode.");
-    const identity: FoodIdentity = {
-        kind: "food",
-        via: "barcode",
-        barcode,
-        displayName: food.name,
-    };
-    return store.insertItem({
-        id: crypto.randomUUID(),
-        householdId: input.householdId,
-        locationId: input.locationId,
-        kind: "food",
-        displayName: food.name,
-        quantity: { amount, unit: "g" },
-        identity,
-    });
+    try {
+        const food = await findOrCreateFoodByBarcode(
+            foods,
+            input.householdId,
+            input.barcode,
+            opts.lookup,
+        );
+        return insertFromFood(store, {
+            householdId: input.householdId,
+            locationId: input.locationId,
+            amount,
+            unit: "g",
+            food,
+        });
+    } catch (err) {
+        wrapFoodsError(err);
+    }
 }
 
 export async function addManualFood(
     store: FridgeStore,
+    foods: FoodsStore,
     input: {
         householdId: string;
         locationId: string;
@@ -223,57 +294,64 @@ export async function addManualFood(
     },
 ): Promise<FridgeItem> {
     await requireLocation(store, input.householdId, input.locationId);
-    const name = input.name.trim();
-    if (!name) throw new FridgeInputError("Enter a food name.");
     const amount = parseAmount(input.amount);
-    const identity: FoodIdentity = {
-        kind: "food",
-        via: "manual",
-        householdManualId: crypto.randomUUID(),
-        displayName: name,
-    };
-    return store.insertItem({
-        id: crypto.randomUUID(),
-        householdId: input.householdId,
-        locationId: input.locationId,
-        kind: "food",
-        displayName: name,
-        quantity: { amount, unit: "g" },
-        identity,
-    });
+    try {
+        const food = await findOrCreateManualFood(
+            foods,
+            input.householdId,
+            "food",
+            input.name,
+        );
+        return insertFromFood(store, {
+            householdId: input.householdId,
+            locationId: input.locationId,
+            amount,
+            unit: "g",
+            food,
+        });
+    } catch (err) {
+        wrapFoodsError(err);
+    }
 }
 
 export async function addSupply(
     store: FridgeStore,
+    foods: FoodsStore,
     input: {
         householdId: string;
         locationId: string;
         name: string;
         amount: number;
         unit: string;
+        foodId?: string;
     },
 ): Promise<FridgeItem> {
     await requireLocation(store, input.householdId, input.locationId);
-    const name = input.name.trim();
-    if (!name) throw new FridgeInputError("Enter a supply name.");
     const unit = input.unit.trim();
     if (!unit) throw new FridgeInputError("Enter a unit.");
     const amount = parseAmount(input.amount);
-    const identity: SupplyIdentity = {
-        kind: "supply",
-        via: "manual",
-        householdManualId: crypto.randomUUID(),
-        displayName: name,
-    };
-    return store.insertItem({
-        id: crypto.randomUUID(),
-        householdId: input.householdId,
-        locationId: input.locationId,
-        kind: "supply",
-        displayName: name,
-        quantity: { amount, unit },
-        identity,
-    });
+    try {
+        const food = input.foodId
+            ? await findFoodById(foods, input.householdId, input.foodId)
+            : await findOrCreateManualFood(
+                  foods,
+                  input.householdId,
+                  "supply",
+                  input.name,
+              );
+        if (food.kind !== "supply") {
+            throw new FridgeInputError("That catalog item is a food.");
+        }
+        return insertFromFood(store, {
+            householdId: input.householdId,
+            locationId: input.locationId,
+            amount,
+            unit,
+            food,
+        });
+    } catch (err) {
+        wrapFoodsError(err);
+    }
 }
 
 export async function updateItemQuantity(
@@ -351,6 +429,7 @@ export function fridgeItemFromRow(row: {
     amount: unknown;
     unit: unknown;
     identity: unknown;
+    food_id?: unknown;
 }): FridgeItem {
     const kind = row.kind === "supply" ? "supply" : "food";
     return {
@@ -364,6 +443,10 @@ export function fridgeItemFromRow(row: {
             unit: String(row.unit),
         },
         identity: row.identity as FoodIdentity | SupplyIdentity,
+        foodId:
+            row.food_id == null || row.food_id === ""
+                ? null
+                : String(row.food_id),
     };
 }
 
@@ -386,5 +469,6 @@ export function fridgeItemToRow(row: FridgeItem) {
         amount: row.quantity.amount,
         unit: row.quantity.unit,
         identity: row.identity,
+        food_id: row.foodId,
     };
 }

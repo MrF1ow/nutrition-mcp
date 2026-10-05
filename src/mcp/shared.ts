@@ -23,6 +23,7 @@ import {
     listHouseholdMembers,
 } from "../db/household.js";
 import { liveFridgeStore } from "../db/fridge.js";
+import { liveFoodsStore } from "../db/foods.js";
 import { liveRecipesStore } from "../db/recipes.js";
 import { liveRulesStore } from "../db/rules.js";
 import type {
@@ -1051,6 +1052,7 @@ export async function groceryLineExtras(
         displayName: string;
         identity: Parameters<typeof alreadyHaveTag>[0]["identity"];
         quantity: { amount: number; unit: string };
+        foodId?: string | null;
     },
 ): Promise<{ alreadyHave: string | null; warning: string | null }> {
     const [fridge, members] = await Promise.all([
@@ -1058,10 +1060,15 @@ export async function groceryLineExtras(
         listHouseholdMembers(householdId),
     ]);
     const tag = alreadyHaveTag(
-        { identity: line.identity, quantity: line.quantity },
+        {
+            identity: line.identity,
+            quantity: line.quantity,
+            foodId: line.foodId,
+        },
         fridge.items.map((item) => ({
             identity: item.identity,
             quantity: item.quantity,
+            foodId: item.foodId,
         })),
     );
     const rules = liveRulesStore();
@@ -1071,7 +1078,14 @@ export async function groceryLineExtras(
             allergens: await rules.listAllergens(householdId, member.userId),
         })),
     );
-    const warning = groceryAllergenWarning(line.displayName, allergenMembers);
+    const catalog = line.foodId
+        ? await liveFoodsStore().getFood(householdId, line.foodId)
+        : null;
+    const warning = groceryAllergenWarning(
+        line.displayName,
+        allergenMembers,
+        catalog ? catalog.allergens : null,
+    );
     return {
         alreadyHave:
             tag == null

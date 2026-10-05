@@ -61,11 +61,13 @@
     "list_person_dislikes",
     "set_person_dislikes",
     "search_food",
+    "get_food",
+    "upsert_food",
+    "merge_foods",
     "list_members",
     "add_household_member",
     "get_household_config",
     "update_household_config",
-    "update_fridge_locations",
     "rotate_household_token",
     "delete_account"
 ]

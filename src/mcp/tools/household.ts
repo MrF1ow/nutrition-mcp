@@ -4,7 +4,6 @@ import { HOUSEHOLD_CANNOT_DELETE_ACCOUNT } from "../../auth-context.js";
 import {
     householdConfigToWire,
     mergeHouseholdConfig,
-    parseFridgeLocationsInput,
     parseHouseholdConfigPatch,
     parseMemberInput,
 } from "../../household.js";
@@ -160,7 +159,6 @@ export function registerHouseholdTools(server: McpServer, ctx: ToolContext) {
     ]);
     const HOUSEHOLD_CONFIG_OUTPUT_SCHEMA = z.object({
         name: z.string(),
-        fridge_locations: z.array(z.string()),
         recipe_search_places: z.array(
             z.object({
                 name: z.string(),
@@ -174,16 +172,13 @@ export function registerHouseholdTools(server: McpServer, ctx: ToolContext) {
             shopping_cadence: z.string().nullable(),
         }),
     });
-    const FRIDGE_LOCATIONS_OUTPUT_SCHEMA = z.object({
-        fridge_locations: z.array(z.string()),
-    });
 
     server.registerTool(
         "get_household_config",
         {
             title: "Get Household Config",
             description:
-                "Read the household name, fridge locations, recipe search places, and shared preferences. A household bot token and any household member may call this. Writes are household-scoped, not a person user_id.",
+                "Read the household name, recipe search places, and shared preferences. A household bot token and any household member may call this. Writes are household-scoped, not a person user_id.",
             annotations: {
                 readOnlyHint: true,
                 destructiveHint: false,
@@ -204,7 +199,7 @@ export function registerHouseholdTools(server: McpServer, ctx: ToolContext) {
                         content: [
                             {
                                 type: "text",
-                                text: `${config.name}\nFridge: ${config.fridge_locations.join(", ") || "(none)"}`,
+                                text: `${config.name}\nPlaces: ${config.recipe_search_places.map((place) => place.name).join(", ") || "(none)"}`,
                             },
                         ],
                         structuredContent: config,
@@ -220,7 +215,7 @@ export function registerHouseholdTools(server: McpServer, ctx: ToolContext) {
         {
             title: "Update Household Config",
             description:
-                "Merge household name, fridge locations, recipe search places, or shared preferences. Only the household owner or the household bot may call this. Places are labels only, not a recipe table.",
+                "Merge household name, recipe search places, or shared preferences. Only the household owner or the household bot may call this. Places are labels only, not a recipe table.",
             annotations: {
                 readOnlyHint: false,
                 destructiveHint: false,
@@ -229,7 +224,6 @@ export function registerHouseholdTools(server: McpServer, ctx: ToolContext) {
             },
             inputSchema: z.object({
                 name: z.string().min(1).optional(),
-                fridge_locations: z.array(z.string()).optional(),
                 recipe_search_places: z
                     .array(
                         z.object({
@@ -271,58 +265,6 @@ export function registerHouseholdTools(server: McpServer, ctx: ToolContext) {
                             },
                         ],
                         structuredContent: config,
-                    };
-                },
-                analytics,
-            );
-        },
-    );
-
-    server.registerTool(
-        "update_fridge_locations",
-        {
-            title: "Update Fridge Locations",
-            description:
-                "Replace the household fridge and freezer location list. Only the household owner or the household bot may call this.",
-            annotations: {
-                readOnlyHint: false,
-                destructiveHint: false,
-                idempotentHint: true,
-                openWorldHint: false,
-            },
-            inputSchema: z.object({
-                locations: z.array(z.string()),
-            }),
-            outputSchema: FRIDGE_LOCATIONS_OUTPUT_SCHEMA,
-        },
-        async (args) => {
-            return withAnalytics(
-                "update_fridge_locations",
-                async () => {
-                    const parsed = parseFridgeLocationsInput(args);
-                    if (!parsed.ok) throw new Error(parsed.error);
-                    const householdId = await callerOwnerHouseholdId();
-                    const current = await getHouseholdConfig(householdId);
-                    const written = await updateHouseholdConfig(
-                        householdId,
-                        mergeHouseholdConfig(current, {
-                            fridgeLocations: parsed.value,
-                        }),
-                    );
-                    const payload = {
-                        fridge_locations: written.fridgeLocations,
-                    };
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text:
-                                    payload.fridge_locations.length === 0
-                                        ? "Fridge locations cleared."
-                                        : `Fridge locations: ${payload.fridge_locations.join(", ")}`,
-                            },
-                        ],
-                        structuredContent: payload,
                     };
                 },
                 analytics,

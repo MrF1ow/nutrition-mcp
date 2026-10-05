@@ -1,11 +1,11 @@
 import { Hono } from "hono";
-import { PICKER_DEMO_FOODS } from "../components/food-picker.js";
 import { renderFridgeInventoryPage } from "../dashboard.js";
 import { formAmount, formText } from "../form.js";
 import { requireMember, requireSiteUser, siteMember } from "../middleware.js";
-import { lookupBarcode, type FoodResult } from "../../foods.js";
+import { lookupBarcode } from "../../foods.js";
 import {
     addFoodByBarcode,
+    addFoodById,
     addLocation,
     addManualFood,
     addSupply,
@@ -16,36 +16,11 @@ import {
     updateItemQuantity,
 } from "../../domain/fridge.js";
 import { liveFridgeStore } from "../../db/fridge.js";
+import { liveFoodsStore } from "../../db/foods.js";
 
 export const fridgeRoutes = new Hono();
 
-function demoFridgeFood(barcode: string): FoodResult | null {
-    const demo = PICKER_DEMO_FOODS.find((food) => food.barcode === barcode);
-    if (!demo) return null;
-    return {
-        name: demo.name,
-        brand: demo.brand,
-        serving: null,
-        calories: 98,
-        protein_g: 11,
-        carbs_g: 3.4,
-        fat_g: 4.3,
-        fiber_g: 0,
-        sugar_g: 3.2,
-        alcohol_g: null,
-        nutriscore_grade: null,
-        nova_group: null,
-        source: `off:${demo.barcode}`,
-        source_name: "openfoodfacts",
-        barcode: demo.barcode,
-    };
-}
-
-export async function fridgeBarcodeLookup(
-    barcode: string,
-): Promise<FoodResult | null> {
-    const demo = demoFridgeFood(barcode);
-    if (demo) return demo;
+export async function fridgeBarcodeLookup(barcode: string) {
     try {
         return await lookupBarcode(barcode);
     } catch {
@@ -101,21 +76,31 @@ fridgeRoutes.post("/fridge/items", requireMember, async (c) => {
     const member = siteMember(c);
     const body = await c.req.parseBody();
     const store = liveFridgeStore();
+    const foods = liveFoodsStore();
     const locationId = formText(body, "location_id");
     const kind = formText(body, "kind");
     const amount = formAmount(body, "qty_amount");
     try {
         if (kind === "supply") {
-            await addSupply(store, {
+            await addSupply(store, foods, {
                 householdId: member.householdId,
                 locationId,
                 name: formText(body, "name"),
                 amount,
                 unit: formText(body, "qty_unit"),
+                foodId: formText(body, "food_id") || undefined,
+            });
+        } else if (formText(body, "food_id")) {
+            await addFoodById(store, foods, {
+                householdId: member.householdId,
+                locationId,
+                foodId: formText(body, "food_id"),
+                amount,
             });
         } else if (formText(body, "barcode")) {
             await addFoodByBarcode(
                 store,
+                foods,
                 {
                     householdId: member.householdId,
                     locationId,
@@ -125,7 +110,7 @@ fridgeRoutes.post("/fridge/items", requireMember, async (c) => {
                 { lookup: fridgeBarcodeLookup },
             );
         } else {
-            await addManualFood(store, {
+            await addManualFood(store, foods, {
                 householdId: member.householdId,
                 locationId,
                 name: formText(body, "food_name"),

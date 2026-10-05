@@ -13,6 +13,7 @@ import { registerDiscoveryRoutes } from "./discovery.js";
 import { maskIp } from "./net.js";
 import { warmWidgets } from "./widgets.js";
 import { clearSiteCookieHeader } from "./site-session.js";
+import { foodsRoutes } from "./web/routes/foods.js";
 import { fridgeRoutes } from "./web/routes/fridge.js";
 import { groceryRoutes } from "./web/routes/grocery.js";
 import { nutritionRoutes } from "./web/routes/nutrition.js";
@@ -190,6 +191,7 @@ app.all(
 );
 
 app.route("/", nutritionRoutes);
+app.route("/", foodsRoutes);
 app.route("/", fridgeRoutes);
 app.route("/", groceryRoutes);
 app.route("/", recipesRoutes);

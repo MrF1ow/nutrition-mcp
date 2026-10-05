@@ -13,12 +13,20 @@ import { renderFridgePage } from "../pages/fridge.js";
 import { renderGroceryPage } from "../pages/grocery.js";
 import { renderRecipeDetailPage, renderRecipesPage } from "../pages/recipes.js";
 import { ACCENT_SWATCHES } from "../../app/shell.js";
-import {
-    DEMO_HOUSEHOLD_MEMBERS,
-    renderMemberMultiSelect,
-} from "./member-multi-select.js";
+import { renderMemberMultiSelect } from "./member-multi-select.js";
 import { renderStoreSectionList } from "./store-section-list.js";
 import type { FoodResult } from "../../foods.js";
+
+const FIXTURE_MEMBERS = [
+    {
+        userId: "11111111-1111-4111-8111-111111111111",
+        displayName: "Alice",
+    },
+    {
+        userId: "22222222-2222-4222-8222-222222222222",
+        displayName: "Bob",
+    },
+] as const;
 
 const appDir = join(import.meta.dir, "..");
 
@@ -114,13 +122,13 @@ test("fridge page and grocery page import the same quantity-field and food-picke
             yieldPortions: 4,
         },
         ingredients: [],
-        members: DEMO_HOUSEHOLD_MEMBERS.map((member) => ({
+        members: FIXTURE_MEMBERS.map((member) => ({
             userId: member.userId,
             displayName: member.displayName,
         })),
         stores: [{ id: "st-1", name: "Safeway" }],
-        viewerId: DEMO_HOUSEHOLD_MEMBERS[0]!.userId,
-        filterUserId: DEMO_HOUSEHOLD_MEMBERS[0]!.userId,
+        viewerId: FIXTURE_MEMBERS[0]!.userId,
+        filterUserId: FIXTURE_MEMBERS[0]!.userId,
         portionCount: 1,
         macros: {
             calories: null,
@@ -191,6 +199,7 @@ test("household pages call shared markup helpers for banners, empty states, and 
                     barcode: "070852010016",
                     displayName: "Cottage Cheese",
                 },
+                foodId: null,
             },
         ],
         chrome: { theme: "light", accent: ACCENT_SWATCHES.sky },
@@ -258,6 +267,7 @@ test("household pages call shared markup helpers for banners, empty states, and 
                                     barcode: "070852010016",
                                     displayName: "Cottage Cheese",
                                 },
+                                foodId: null,
                                 checked: false,
                                 alreadyHave: null,
                             },
@@ -318,49 +328,39 @@ function searchFormHtml(html: string): string {
     return match[0];
 }
 
-function catalogFrom(html: string): { name: string; brand: string }[] {
-    const raw = html.match(
-        /<script type="application\/json" data-demo-foods>([\s\S]*?)<\/script>/,
-    )?.[1];
-    if (raw == null) throw new Error("catalog missing");
-    return JSON.parse(raw.replace(/\\u003c/g, "<"));
-}
-
-function hitsForQuery(html: string, query: string): string {
-    const foods = catalogFrom(html);
-    const searchPosts = /data-search-form method="post"/.test(html);
-    const q = String(query || "")
-        .trim()
-        .toLowerCase();
-    if (!q) return "";
-    const hits = foods.filter(
-        (food) =>
-            (food.name + " " + (food.brand || "")).toLowerCase().indexOf(q) !==
-            -1,
-    );
+function hitHtml(
+    method: "get" | "post",
+    food: {
+        food_id: string | null;
+        name: string;
+        brand: string | null;
+        barcode: string | null;
+    },
+): string {
     const esc = (s: string) =>
         String(s)
             .replace(/&/g, "&amp;")
             .replace(/"/g, "&quot;")
             .replace(/</g, "&lt;")
             .replace(/>/g, "&gt;");
-    return hits
-        .map((food) => {
-            const label = food.brand
-                ? food.brand + " · " + food.name
-                : food.name;
-            if (searchPosts) {
-                return (
-                    '<li><button type="submit" name="food_name" value="' +
-                    esc(food.name) +
-                    '">' +
-                    esc(label) +
-                    "</button></li>"
-                );
-            }
-            return "<li>" + esc(label) + "</li>";
-        })
-        .join("");
+    const label = food.brand ? food.brand + " · " + food.name : food.name;
+    if (method !== "post") return "<li>" + esc(label) + "</li>";
+    if (food.food_id) {
+        return (
+            '<li><button type="submit" name="food_id" value="' +
+            esc(food.food_id) +
+            '">' +
+            esc(label) +
+            "</button></li>"
+        );
+    }
+    return (
+        '<li><button type="submit" name="barcode" value="' +
+        esc(food.barcode || "") +
+        '">' +
+        esc(label) +
+        "</button></li>"
+    );
 }
 
 test("food picker HTML has barcode, search, and manual tabs", () => {
@@ -371,9 +371,10 @@ test("food picker HTML has barcode, search, and manual tabs", () => {
     expect(html).toContain('data-tab="manual"');
     expect(html).toContain('class="quantity-field"');
     expect(html).toContain('data-lookup-path="lookupBarcode"');
+    expect(html).not.toContain("data-demo-foods");
 });
 
-test("post picker search hits submit food_name with hidden fields and qty", () => {
+test("post picker search hits submit food_id or barcode with hidden fields and qty", () => {
     const html = renderFoodPicker({
         action: "/fridge/items",
         method: "post",
@@ -391,24 +392,34 @@ test("post picker search hits submit food_name with hidden fields and qty", () =
     expect(form).not.toContain("data-search-input");
 
     const script = pickerScript(html);
+    expect(script).toContain("/api/foods/search");
     expect(script).toContain('type="submit"');
-    expect(script).toContain('name="food_name"');
+    expect(script).toContain('name="food_id"');
+    expect(script).toContain('name="barcode"');
+    expect(script).not.toContain('name="food_name"');
     expect(script).toContain('searchResults.innerHTML = ""');
 
-    const nutella = hitsForQuery(html, "Nutella");
-    expect(nutella).toContain('type="submit"');
-    expect(nutella).toContain('name="food_name"');
-    expect(nutella).toContain('value="Nutella"');
-    expect(nutella).toContain("Ferrero · Nutella");
-    expect(nutella).not.toContain("Cottage");
+    const household = hitHtml("post", {
+        food_id: "food-1",
+        name: "Eggs",
+        brand: null,
+        barcode: null,
+    });
+    expect(household).toContain('name="food_id"');
+    expect(household).toContain('value="food-1"');
+    expect(household).toContain("Eggs");
+    expect(household).not.toContain('name="barcode"');
 
-    const cottage = hitsForQuery(html, "cottage");
-    expect(cottage).toContain('value="Good Culture Cottage Cheese"');
-    expect(cottage).toContain('value="Organic Cottage Cheese"');
-
-    expect(hitsForQuery(html, "")).toBe("");
-    expect(hitsForQuery(html, "   ")).toBe("");
-    expect(hitsForQuery(html, "no-such-food")).toBe("");
+    const off = hitHtml("post", {
+        food_id: null,
+        name: "Nutella",
+        brand: "Ferrero",
+        barcode: "3017620422003",
+    });
+    expect(off).toContain('name="barcode"');
+    expect(off).toContain('value="3017620422003"');
+    expect(off).toContain("Ferrero · Nutella");
+    expect(off).not.toContain('name="food_id"');
 });
 
 test("get picker search hits stay non-submitting text", () => {
@@ -416,17 +427,22 @@ test("get picker search hits stay non-submitting text", () => {
     expect(html).not.toContain('class="food-picker-search"');
     expect(html).not.toContain("data-search-form");
     const script = pickerScript(html);
+    expect(script).toContain("/api/foods/search");
     expect(script).toContain('return "<li>" + esc(label) + "</li>"');
+    expect(script).not.toContain('name="food_id"');
     expect(script).not.toContain('name="food_name"');
 
-    const nutella = hitsForQuery(html, "Nutella");
-    expect(nutella).toBe("<li>Ferrero · Nutella</li>");
-    expect(nutella).not.toContain("submit");
-    expect(nutella).not.toContain("food_name");
-    expect(hitsForQuery(html, "no-such-food")).toBe("");
+    expect(
+        hitHtml("get", {
+            food_id: "food-1",
+            name: "Nutella",
+            brand: "Ferrero",
+            barcode: "3017620422003",
+        }),
+    ).toBe("<li>Ferrero · Nutella</li>");
 });
 
-test("post picker without quantity still posts food_name and hidden fields", () => {
+test("post picker without quantity still posts food_id and hidden fields", () => {
     const html = renderFoodPicker({
         action: "/fridge/items",
         method: "post",
@@ -437,12 +453,12 @@ test("post picker without quantity still posts food_name and hidden fields", () 
     expect(form).toContain('name="location_id" value="loc-1"');
     expect(form).not.toContain("qty_amount");
     expect(form).not.toContain("qty_unit");
-    expect(hitsForQuery(html, "Nutella")).toContain('name="food_name"');
+    expect(pickerScript(html)).toContain('name="food_id"');
 });
 
 test("member multi-select, already-have, and store sections still render", () => {
-    const members = renderMemberMultiSelect(DEMO_HOUSEHOLD_MEMBERS, [
-        DEMO_HOUSEHOLD_MEMBERS[0]!.userId,
+    const members = renderMemberMultiSelect(FIXTURE_MEMBERS, [
+        FIXTURE_MEMBERS[0]!.userId,
     ]);
     expect(members).toContain('class="member-multi-select"');
     expect(members).toContain('type="checkbox"');
@@ -481,6 +497,7 @@ test("member multi-select, already-have, and store sections still render", () =>
                                     barcode: "070852010016",
                                     displayName: "Cottage Cheese",
                                 },
+                                foodId: null,
                                 checked: false,
                                 alreadyHave: {
                                     cover: "partial",

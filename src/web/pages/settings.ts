@@ -108,7 +108,7 @@ export function renderSettingsPage(view: SettingsPageView): string {
     const body = `
         <h1>Settings</h1>
         ${error}
-        <p class="settings-lead"><a href="/settings/household">Household</a></p>
+        <p class="settings-lead"><a href="/settings/household">Household</a> · <a href="/settings/foods">Foods</a></p>
         <form method="POST" action="/settings" class="appearance">
             <input type="hidden" name="group" value="account" />
             <fieldset>

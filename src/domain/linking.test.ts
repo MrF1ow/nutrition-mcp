@@ -168,3 +168,35 @@ test("recipe grocery remainder does not net a name-only identity mismatch", () =
     expect(plan[0]?.remainder).toEqual({ amount: 200, unit: "g" });
     expect(plan[0]?.tag).toBeNull();
 });
+
+test("same food_id on eggs covers fridge stock even with different manual ids", () => {
+    const foodId = "food-eggs";
+    const recipeEggs: FoodIdentity = {
+        kind: "food",
+        via: "manual",
+        householdManualId: "hm-recipe-eggs",
+        displayName: "Eggs",
+    };
+    const fridgeEggs: FoodIdentity = {
+        kind: "food",
+        via: "manual",
+        householdManualId: "hm-fridge-eggs",
+        displayName: "eggs",
+    };
+    expect(
+        alreadyHaveTag(
+            {
+                identity: recipeEggs,
+                quantity: { amount: 200, unit: "g" },
+                foodId,
+            },
+            [
+                {
+                    identity: fridgeEggs,
+                    quantity: { amount: 200, unit: "g" },
+                    foodId,
+                },
+            ],
+        ),
+    ).toEqual({ cover: "full" });
+});

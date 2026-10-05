@@ -11,6 +11,7 @@ import { fridgeBarcodeLookup } from "./fridge.js";
 import { normalizeBarcode } from "../../foods.js";
 import {
     addGroceryFoodByBarcode,
+    addGroceryFoodById,
     addGroceryManualFood,
     addGrocerySupply,
     checkGroceryLine,
@@ -20,7 +21,9 @@ import {
 } from "../../domain/grocery.js";
 import { createGroceryStore } from "../../domain/settings.js";
 import { liveGroceryStore } from "../../db/grocery.js";
+import { liveFoodsStore } from "../../db/foods.js";
 import { liveSettingsStore } from "../../db/settings.js";
+import { findFoodById } from "../../domain/foods.js";
 
 export const groceryRoutes = new Hono();
 
@@ -68,39 +71,66 @@ groceryRoutes.post("/grocery/lines", requireMember, async (c) => {
     const amount = formAmount(body, "qty_amount");
     const grocery = liveGroceryStore();
     const settings = liveSettingsStore();
+    const foods = liveFoodsStore();
     const confirmed = formText(body, "confirm_allergen") === "1";
     try {
         const kind = formText(body, "kind");
         if (kind === "supply") {
-            await addGrocerySupply(grocery, settings, {
+            await addGrocerySupply(grocery, settings, foods, {
                 householdId: member.householdId,
                 storeId,
                 sectionId,
                 name: formText(body, "name"),
                 amount,
                 unit: formText(body, "qty_unit"),
+                foodId: formText(body, "food_id") || undefined,
             });
         } else {
             const members = await groceryAllergenMembers(member.householdId);
-            const previewName = formText(body, "barcode")
-                ? ((
-                      await fridgeBarcodeLookup(
-                          normalizeBarcode(formText(body, "barcode")) ??
-                              formText(body, "barcode"),
-                      )
-                  )?.name ?? formText(body, "food_name"))
-                : formText(body, "food_name");
-            const warning = groceryAllergenWarning(previewName, members);
+            const foodId = formText(body, "food_id");
+            let previewName = formText(body, "food_name");
+            let catalogAllergens: string[] | null = null;
+            if (foodId) {
+                const food = await findFoodById(
+                    foods,
+                    member.householdId,
+                    foodId,
+                );
+                previewName = food.name;
+                catalogAllergens = food.allergens;
+            } else if (formText(body, "barcode")) {
+                previewName =
+                    (
+                        await fridgeBarcodeLookup(
+                            normalizeBarcode(formText(body, "barcode")) ??
+                                formText(body, "barcode"),
+                        )
+                    )?.name ?? previewName;
+            }
+            const warning = groceryAllergenWarning(
+                previewName,
+                members,
+                catalogAllergens,
+            );
             if (warning?.blocking && !confirmed) {
                 const page = await renderGroceryListPage(userId, {
                     allergenWarning: warning.text,
                 });
                 return c.html(page.html, 400);
             }
-            if (formText(body, "barcode")) {
+            if (foodId) {
+                await addGroceryFoodById(grocery, settings, foods, {
+                    householdId: member.householdId,
+                    storeId,
+                    sectionId,
+                    foodId,
+                    amount,
+                });
+            } else if (formText(body, "barcode")) {
                 await addGroceryFoodByBarcode(
                     grocery,
                     settings,
+                    foods,
                     {
                         householdId: member.householdId,
                         storeId,
@@ -111,7 +141,7 @@ groceryRoutes.post("/grocery/lines", requireMember, async (c) => {
                     { lookup: fridgeBarcodeLookup },
                 );
             } else {
-                await addGroceryManualFood(grocery, settings, {
+                await addGroceryManualFood(grocery, settings, foods, {
                     householdId: member.householdId,
                     storeId,
                     sectionId,

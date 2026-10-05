@@ -9,6 +9,7 @@ import { fridgeBarcodeLookup } from "./fridge.js";
 import { listFridge } from "../../domain/fridge.js";
 import {
     addRecipeIngredientByBarcode,
+    addRecipeIngredientById,
     addRecipeManualIngredient,
     addRecipeToGrocery,
     createRecipe,
@@ -19,6 +20,7 @@ import {
 } from "../../domain/recipes.js";
 import { listHouseholdMembers } from "../../db/household.js";
 import { liveFridgeStore } from "../../db/fridge.js";
+import { liveFoodsStore } from "../../db/foods.js";
 import { liveGroceryStore } from "../../db/grocery.js";
 import { liveRecipesStore } from "../../db/recipes.js";
 import { liveSettingsStore } from "../../db/settings.js";
@@ -120,9 +122,21 @@ recipesRoutes.post("/recipes/:id/ingredients", requireMember, async (c) => {
     const body = await c.req.parseBody();
     const amount = formAmount(body, "qty_amount");
     try {
-        if (formText(body, "barcode")) {
+        if (formText(body, "food_id")) {
+            await addRecipeIngredientById(
+                liveRecipesStore(),
+                liveFoodsStore(),
+                {
+                    householdId: member.householdId,
+                    recipeId,
+                    foodId: formText(body, "food_id"),
+                    amount,
+                },
+            );
+        } else if (formText(body, "barcode")) {
             await addRecipeIngredientByBarcode(
                 liveRecipesStore(),
+                liveFoodsStore(),
                 {
                     householdId: member.householdId,
                     recipeId,
@@ -132,12 +146,16 @@ recipesRoutes.post("/recipes/:id/ingredients", requireMember, async (c) => {
                 { lookup: fridgeBarcodeLookup },
             );
         } else {
-            await addRecipeManualIngredient(liveRecipesStore(), {
-                householdId: member.householdId,
-                recipeId,
-                name: formText(body, "food_name"),
-                amount,
-            });
+            await addRecipeManualIngredient(
+                liveRecipesStore(),
+                liveFoodsStore(),
+                {
+                    householdId: member.householdId,
+                    recipeId,
+                    name: formText(body, "food_name"),
+                    amount,
+                },
+            );
         }
     } catch (err) {
         const page = await recipeFormError(userId, recipeId, err);
@@ -198,6 +216,7 @@ recipesRoutes.post("/recipes/:id/add-to-grocery", requireMember, async (c) => {
             fridgeItems: fridge.items.map((item) => ({
                 identity: item.identity,
                 quantity: item.quantity,
+                foodId: item.foodId,
             })),
             householdId: member.householdId,
             recipeId,

@@ -1,6 +1,7 @@
 import { type McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { liveFridgeStore } from "../../db/fridge.js";
+import { liveFoodsStore } from "../../db/foods.js";
 import { liveGroceryStore } from "../../db/grocery.js";
 import { liveRecipesStore } from "../../db/recipes.js";
 import { liveSettingsStore } from "../../db/settings.js";
@@ -9,6 +10,7 @@ import { lookupBarcode } from "../../foods.js";
 import { listFridge } from "../../domain/fridge.js";
 import {
     addRecipeIngredientByBarcode,
+    addRecipeIngredientById,
     addRecipeManualIngredient,
     addRecipeToGrocery,
     createRecipe,
@@ -234,6 +236,7 @@ export function registerRecipesTools(server: McpServer, ctx: ToolContext) {
                 amount: z.coerce.number(),
                 name: z.string().optional(),
                 barcode: z.string().optional(),
+                food_id: z.string().optional(),
             }),
         },
         async (args) =>
@@ -242,23 +245,32 @@ export function registerRecipesTools(server: McpServer, ctx: ToolContext) {
                 async () => {
                     const householdId = await callerHouseholdId();
                     const store = liveRecipesStore();
-                    const ingredient = args.barcode
-                        ? await addRecipeIngredientByBarcode(
-                              store,
-                              {
-                                  householdId,
-                                  recipeId: args.recipe_id,
-                                  barcode: args.barcode,
-                                  amount: args.amount,
-                              },
-                              { lookup: lookupBarcode },
-                          )
-                        : await addRecipeManualIngredient(store, {
+                    const foods = liveFoodsStore();
+                    const ingredient = args.food_id
+                        ? await addRecipeIngredientById(store, foods, {
                               householdId,
                               recipeId: args.recipe_id,
-                              name: args.name ?? "",
+                              foodId: args.food_id,
                               amount: args.amount,
-                          });
+                          })
+                        : args.barcode
+                          ? await addRecipeIngredientByBarcode(
+                                store,
+                                foods,
+                                {
+                                    householdId,
+                                    recipeId: args.recipe_id,
+                                    barcode: args.barcode,
+                                    amount: args.amount,
+                                },
+                                { lookup: lookupBarcode },
+                            )
+                          : await addRecipeManualIngredient(store, foods, {
+                                householdId,
+                                recipeId: args.recipe_id,
+                                name: args.name ?? "",
+                                amount: args.amount,
+                            });
                     return {
                         content: [
                             {
@@ -415,6 +427,7 @@ export function registerRecipesTools(server: McpServer, ctx: ToolContext) {
                         fridgeItems: fridge.items.map((item) => ({
                             identity: item.identity,
                             quantity: item.quantity,
+                            foodId: item.foodId,
                         })),
                         householdId,
                         recipeId: args.recipe_id,

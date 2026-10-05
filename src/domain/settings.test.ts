@@ -41,6 +41,7 @@ test("theme save form posts account fields to /settings", () => {
     });
     expect(html).toContain("<h1>Settings</h1>");
     expect(html).toContain('href="/settings/household"');
+    expect(html).toContain('href="/settings/foods"');
     expect(html).toContain('name="theme" value="dark" checked');
     expect(html).toContain('value="rose" checked');
     expect(html).toContain('data-theme="dark"');
@@ -104,6 +105,7 @@ test("owner household page has add-member form on /settings/household only", () 
         isOwner: true,
     });
     expect(html).toContain("<h1>Household</h1>");
+    expect(html).toContain('href="/settings/foods"');
     expect(html).toContain('action="/settings/household"');
     expect(html).toContain("Add household member");
     expect(html).toContain("Alice");

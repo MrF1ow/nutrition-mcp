@@ -7,24 +7,6 @@ import {
 import { escapeHtml } from "../../app/shell.js";
 import { renderQuantityField } from "./quantity-field.js";
 
-export const PICKER_DEMO_FOODS = [
-    {
-        name: "Good Culture Cottage Cheese",
-        brand: "Good Culture",
-        barcode: "070852010016",
-    },
-    {
-        name: "Organic Cottage Cheese",
-        brand: "Nancy's",
-        barcode: "072830001234",
-    },
-    {
-        name: "Nutella",
-        brand: "Ferrero",
-        barcode: "3017620422003",
-    },
-] as const;
-
 type SearchHooks = Parameters<typeof searchFoodsByName>[2];
 
 export async function searchPickerFoods(
@@ -60,7 +42,10 @@ function hiddenInputs(fields: Record<string, string>): string {
 function pickerScript(id: string, method: "get" | "post"): string {
     const hitHtml =
         method === "post"
-            ? `return '<li><button type="submit" name="food_name" value="' + esc(food.name) + '">' + esc(label) + "</button></li>";`
+            ? `if (food.food_id) {
+                return '<li><button type="submit" name="food_id" value="' + esc(food.food_id) + '">' + esc(label) + "</button></li>";
+            }
+            return '<li><button type="submit" name="barcode" value="' + esc(food.barcode || "") + '">' + esc(label) + "</button></li>";`
             : `return "<li>" + esc(label) + "</li>";`;
     return `<script>
 (function () {
@@ -82,10 +67,9 @@ function pickerScript(id: string, method: "get" | "post"): string {
             show(tab.getAttribute("data-tab"));
         });
     });
-    var catalogEl = root.querySelector("[data-demo-foods]");
-    var foods = catalogEl ? JSON.parse(catalogEl.textContent || "[]") : [];
     var searchInput = root.querySelector("[data-search-input]");
     var searchResults = root.querySelector("[data-search-results]");
+    var searchTimer = null;
     function esc(s) {
         return String(s)
             .replace(/&/g, "&amp;")
@@ -102,14 +86,24 @@ function pickerScript(id: string, method: "get" | "post"): string {
     }
     if (searchInput && searchResults) {
         searchInput.addEventListener("input", function () {
-            var q = String(searchInput.value || "").trim().toLowerCase();
+            var q = String(searchInput.value || "").trim();
+            if (searchTimer) clearTimeout(searchTimer);
             if (!q) {
                 searchResults.innerHTML = "";
                 return;
             }
-            renderHits(searchResults, foods.filter(function (food) {
-                return (food.name + " " + (food.brand || "")).toLowerCase().indexOf(q) !== -1;
-            }));
+            searchTimer = setTimeout(function () {
+                fetch("/api/foods/search?q=" + encodeURIComponent(q), {
+                    credentials: "same-origin",
+                })
+                    .then(function (res) { return res.ok ? res.json() : { foods: [] }; })
+                    .then(function (data) {
+                        renderHits(searchResults, (data && data.foods) || []);
+                    })
+                    .catch(function () {
+                        searchResults.innerHTML = "";
+                    });
+            }, 200);
         });
     }
     var form = root.querySelector("[data-barcode-form]");
@@ -129,12 +123,6 @@ function pickerScript(id: string, method: "get" | "post"): string {
                 return;
             }
             if (barcodeResults) barcodeResults.setAttribute("data-barcode", digits);
-            var hit = foods.filter(function (food) { return food.barcode === digits; })[0];
-            if (barcodeResults) {
-                barcodeResults.innerHTML = hit
-                    ? '<li data-source="lookupBarcode">' + hit.name + "</li>"
-                    : '<li data-source="lookupBarcode">Unknown barcode ' + digits + "</li>";
-            }
         });
     }
 })();
@@ -162,7 +150,6 @@ export function renderFoodPicker(opts: FoodPickerOptions = {}): string {
               required: method === "post",
           })
         : "";
-    const catalog = JSON.stringify(PICKER_DEMO_FOODS).replace(/</g, "\\u003c");
     const barcodePanel = `${id}-barcode`;
     const searchPanel = `${id}-search`;
     const manualPanel = `${id}-manual`;
@@ -227,7 +214,6 @@ ${searchFields}
 <div class="food-picker-panel" role="tabpanel" id="${escapeHtml(manualPanel)}" data-panel="manual" aria-labelledby="${escapeHtml(id)}-tab-manual" hidden>
 ${manualBlock}
 </div>
-<script type="application/json" data-demo-foods>${catalog}</script>
 </div>
 ${pickerScript(id, method)}`;
 }

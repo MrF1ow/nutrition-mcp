@@ -6,6 +6,7 @@ import {
     forbiddenDashboardHtml,
     renderHouseholdSettingsRoute,
     renderSettingsAccountPage,
+    renderSettingsFoodsPage,
 } from "../dashboard.js";
 import { formText } from "../form.js";
 import {
@@ -47,7 +48,9 @@ import {
 import { upsertProfile } from "../../db/profiles.js";
 import { liveRulesStore } from "../../db/rules.js";
 import { liveSettingsStore } from "../../db/settings.js";
+import { liveFoodsStore } from "../../db/foods.js";
 import { validateTz } from "../../domain/tz.js";
+import { FoodsInputError, mergeFoods, updateFood } from "../../domain/foods.js";
 
 export const settingsRoutes = new Hono();
 
@@ -69,6 +72,11 @@ settingsRoutes.get("/settings", requireSiteUser, async (c) => {
 
 settingsRoutes.get("/settings/household", requireSiteUser, async (c) => {
     const page = await renderHouseholdSettingsRoute(c.get("userId"));
+    return c.html(page.html, page.status);
+});
+
+settingsRoutes.get("/settings/foods", requireSiteUser, async (c) => {
+    const page = await renderSettingsFoodsPage(c.get("userId"));
     return c.html(page.html, page.status);
 });
 
@@ -336,3 +344,91 @@ settingsRoutes.post(
         return c.redirect("/settings/household");
     },
 );
+
+function formAllergens(
+    body: Record<string, string | File | (string | File)[]>,
+): string[] {
+    const raw = body.allergens;
+    if (Array.isArray(raw)) {
+        return raw.filter(
+            (value): value is string => typeof value === "string",
+        );
+    }
+    if (typeof raw === "string" && raw) return [raw];
+    return [];
+}
+
+function formOptionalNutrient(
+    body: Record<string, string | File>,
+    key: string,
+): number | null {
+    const raw = formText(body, key).trim();
+    if (raw === "") return null;
+    return Number(raw);
+}
+
+async function foodsFormError(userId: string, err: unknown) {
+    const message =
+        err instanceof FoodsInputError
+            ? err.message
+            : err instanceof Error
+              ? err.message
+              : "Could not update foods.";
+    const page = await renderSettingsFoodsPage(userId, message);
+    return { html: page.html, status: 400 as const };
+}
+
+settingsRoutes.post("/settings/foods/merge", requireMember, async (c) => {
+    const userId = c.get("userId");
+    const member = siteMember(c);
+    const body = await c.req.parseBody();
+    try {
+        await mergeFoods(
+            liveFoodsStore(),
+            member.householdId,
+            formText(body, "keep_id"),
+            formText(body, "drop_id"),
+        );
+    } catch (err) {
+        const page = await foodsFormError(userId, err);
+        return c.html(page.html, page.status);
+    }
+    return c.redirect("/settings/foods");
+});
+
+settingsRoutes.post("/settings/foods/:id", requireMember, async (c) => {
+    const userId = c.get("userId");
+    const member = siteMember(c);
+    const body = await c.req.parseBody({ all: true });
+    const asText = body as Record<string, string | File>;
+    try {
+        await updateFood(
+            liveFoodsStore(),
+            member.householdId,
+            c.req.param("id"),
+            {
+                name: formText(asText, "name"),
+                brand: formText(asText, "brand"),
+                aliases: formText(asText, "aliases")
+                    .split(",")
+                    .map((part) => part.trim())
+                    .filter(Boolean),
+                defaultUnit: formText(asText, "default_unit"),
+                calories: formOptionalNutrient(asText, "calories"),
+                proteinG: formOptionalNutrient(asText, "protein_g"),
+                carbsG: formOptionalNutrient(asText, "carbs_g"),
+                fatG: formOptionalNutrient(asText, "fat_g"),
+                fiberG: formOptionalNutrient(asText, "fiber_g"),
+                sugarG: formOptionalNutrient(asText, "sugar_g"),
+                alcoholG: formOptionalNutrient(asText, "alcohol_g"),
+                caffeineMg: formOptionalNutrient(asText, "caffeine_mg"),
+                allergens: formAllergens(body),
+                archived: formText(asText, "archived") === "1",
+            },
+        );
+    } catch (err) {
+        const page = await foodsFormError(userId, err);
+        return c.html(page.html, page.status);
+    }
+    return c.redirect("/settings/foods");
+});

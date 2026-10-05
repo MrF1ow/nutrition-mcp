@@ -140,6 +140,23 @@ describe("runtime surfaces that stay", () => {
         expect(r.status).toBe(401);
     });
 
+    test("unauthenticated app routes return login HTML", async () => {
+        for (const path of [
+            "/",
+            "/fridge",
+            "/grocery",
+            "/recipes",
+            "/settings",
+            "/settings/foods",
+        ]) {
+            const r = await app.request(`http://x${path}`);
+            expect(r.status).toBe(200);
+            const body = await r.text();
+            expect(body, path).toContain('action="/approve"');
+            expect(body, path).toContain("Foodable");
+        }
+    });
+
     test("GET /authorize without OAuth params is JSON 400, not login HTML", async () => {
         const r = await app.request("http://x/authorize");
         expect(r.status).toBe(400);
