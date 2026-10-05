@@ -123,6 +123,14 @@ describe("mealIdempotencyKey", () => {
         expect(key(meal(), USER, "2026-03-15T12:00:00.000Z")).not.toBe(base);
     });
 
+    test("item_digest is hashed when present and ignored when absent", () => {
+        const base = key(meal());
+        expect(key(meal({ item_digest: undefined }))).toBe(base);
+        expect(key({ ...meal(), item_digest: '[{"food_id":"f1"}]' })).not.toBe(
+            base,
+        );
+    });
+
     test("is deterministic and marked as server-derived", () => {
         expect(key(meal())).toBe(key(meal()));
         expect(key(meal())).toMatch(/^auto:[0-9a-f]{64}$/);
