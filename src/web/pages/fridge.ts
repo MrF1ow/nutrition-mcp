@@ -15,8 +15,10 @@ import {
     renderAddItemPrompt,
     renderEmptyFridge,
     renderErrorBanner,
+    renderExpiringStrip,
     renderFridgeItemRow,
 } from "../components/page-markup.js";
+import { listExpiring } from "../../domain/stock.js";
 
 const SUPPLY_UNITS = [
     "roll",
@@ -89,7 +91,18 @@ function itemRow(item: FridgeItem, locations: FridgeLocation[]): string {
         quantityLabel: quantityLabel(item),
         editFields: `${qty}
 <label for="move-${escapeHtml(item.id)}">Location</label>
-${locationSelect(locations, item.locationId, "location_id", `move-${item.id}`)}`,
+${locationSelect(locations, item.locationId, "location_id", `move-${item.id}`)}
+<label for="expires-${escapeHtml(item.id)}">Expires</label>
+<input id="expires-${escapeHtml(item.id)}" name="expires_on" type="date" value="${escapeHtml(item.expiresOn ?? "")}" />`,
+        extraActions:
+            item.foodId == null
+                ? ""
+                : `<form class="fridge-item-eat" method="post" action="/fridge/items/${escapeHtml(item.id)}/eat">
+<button type="submit">Ate it</button>
+</form>
+<form class="fridge-item-discard" method="post" action="/fridge/items/${escapeHtml(item.id)}/discard">
+<button type="submit">Toss</button>
+</form>`,
     });
 }
 
@@ -145,6 +158,13 @@ ${renderQuantityField({
 export function renderFridgePage(view: FridgePageView): string {
     const error = renderErrorBanner(view.error);
     const emptyPrompt = view.locations.length === 0 ? renderEmptyFridge() : "";
+    const expiring = renderExpiringStrip(
+        listExpiring(view.items, 3).map((item) => ({
+            id: item.id,
+            displayName: item.displayName,
+            expiresOn: item.expiresOn ?? "",
+        })),
+    );
     const sections = view.locations
         .map((loc) => locationSection(loc, view.items, view.locations))
         .join("");
@@ -152,6 +172,7 @@ export function renderFridgePage(view: FridgePageView): string {
         <h1>Fridge</h1>
         ${error}
         ${emptyPrompt}
+        ${expiring}
         <form class="fridge-add-location" method="post" action="/fridge/locations">
             <label for="location_name">Location name</label>
             <input id="location_name" name="name" type="text" required maxlength="80" autocomplete="off" />

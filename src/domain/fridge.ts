@@ -30,6 +30,9 @@ export type FridgeItem = {
     quantity: FridgeQuantity;
     identity: FoodIdentity | SupplyIdentity;
     foodId: string | null;
+    purchasedOn?: string | null;
+    openedOn?: string | null;
+    expiresOn?: string | null;
 };
 
 export type FridgeSnapshot = {
@@ -112,6 +115,9 @@ export function createMemoryFridgeStore(): FridgeStore {
             const saved = {
                 ...row,
                 quantity: { ...row.quantity },
+                purchasedOn: row.purchasedOn ?? null,
+                openedOn: row.openedOn ?? null,
+                expiresOn: row.expiresOn ?? null,
             };
             items.push(saved);
             return {
@@ -125,8 +131,20 @@ export function createMemoryFridgeStore(): FridgeStore {
                     item.id === row.id && item.householdId === row.householdId,
             );
             if (idx < 0) return null;
-            items[idx] = { ...row, quantity: { ...row.quantity } };
-            return { ...row, quantity: { ...row.quantity } };
+            items[idx] = {
+                ...row,
+                quantity: { ...row.quantity },
+                purchasedOn: row.purchasedOn ?? null,
+                openedOn: row.openedOn ?? null,
+                expiresOn: row.expiresOn ?? null,
+            };
+            return {
+                ...row,
+                quantity: { ...row.quantity },
+                purchasedOn: row.purchasedOn ?? null,
+                openedOn: row.openedOn ?? null,
+                expiresOn: row.expiresOn ?? null,
+            };
         },
         async deleteItem(householdId, id) {
             const before = items.length;
@@ -218,6 +236,9 @@ async function insertFromFood(
             input.food.name,
         ),
         foodId: input.food.id,
+        purchasedOn: null,
+        openedOn: null,
+        expiresOn: null,
     });
 }
 
@@ -434,8 +455,13 @@ export function fridgeItemFromRow(row: {
     unit: unknown;
     identity: unknown;
     food_id?: unknown;
+    purchased_on?: unknown;
+    opened_on?: unknown;
+    expires_on?: unknown;
 }): FridgeItem {
     const kind = row.kind === "supply" ? "supply" : "food";
+    const dateOrNull = (value: unknown): string | null =>
+        value == null || value === "" ? null : String(value).slice(0, 10);
     return {
         id: String(row.id),
         householdId: String(row.household_id),
@@ -451,6 +477,9 @@ export function fridgeItemFromRow(row: {
             row.food_id == null || row.food_id === ""
                 ? null
                 : String(row.food_id),
+        purchasedOn: dateOrNull(row.purchased_on),
+        openedOn: dateOrNull(row.opened_on),
+        expiresOn: dateOrNull(row.expires_on),
     };
 }
 
@@ -474,5 +503,8 @@ export function fridgeItemToRow(row: FridgeItem) {
         unit: row.quantity.unit,
         identity: row.identity,
         food_id: row.foodId,
+        purchased_on: row.purchasedOn ?? null,
+        opened_on: row.openedOn ?? null,
+        expires_on: row.expiresOn ?? null,
     };
 }

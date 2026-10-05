@@ -242,6 +242,16 @@ export async function renderGroceryListPage(
                             fridge.items,
                             catalog,
                         ),
+                        lastLocationId:
+                            fridge.items
+                                .filter(
+                                    (item) =>
+                                        item.foodId &&
+                                        item.foodId === line.foodId,
+                                )
+                                .at(-1)?.locationId ??
+                            fridge.locations[0]?.id ??
+                            null,
                     })),
             }));
         return {
@@ -268,6 +278,10 @@ export async function renderGroceryListPage(
             error: opts.error,
             allergenWarning: opts.allergenWarning,
             unknownAllergen: unknownAllergen && !opts.allergenWarning,
+            locations: fridge.locations.map((loc) => ({
+                id: loc.id,
+                name: loc.name,
+            })),
         }),
     };
 }

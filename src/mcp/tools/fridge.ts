@@ -2,6 +2,7 @@ import { type McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { liveFridgeStore } from "../../db/fridge.js";
 import { liveFoodsStore } from "../../db/foods.js";
+import { liveStockStore } from "../../db/stock.js";
 import { withAnalytics } from "../../analytics.js";
 import { lookupBarcode } from "../../foods.js";
 import {
@@ -16,10 +17,42 @@ import {
     moveItem,
     updateItemQuantity,
 } from "../../domain/fridge.js";
+import {
+    discardFridgeItem,
+    eatFridgeItem,
+    listExpiring,
+    StockInputError,
+} from "../../domain/stock.js";
+import {
+    descriptionFromItems,
+    itemListDigest,
+    MealItemsError,
+    resolveAndBuildMeal,
+} from "../../domain/meals.js";
+import { insertMeal, snapshotToMealItemWrite } from "../../db/nutrition.js";
+import { liveRecipesStore } from "../../db/recipes.js";
 import type { ToolContext } from "../shared.js";
 
+function shortfallText(
+    rows: { displayName: string; amount: number; unit: string }[],
+): string {
+    if (rows.length === 0) return "";
+    return (
+        " Shortfall: " +
+        rows
+            .map((row) => `${row.displayName} ${row.amount} ${row.unit}`)
+            .join("; ") +
+        "."
+    );
+}
+
 export function registerFridgeTools(server: McpServer, ctx: ToolContext) {
-    const { callerHouseholdId, analytics } = ctx;
+    const {
+        callerHouseholdId,
+        analytics,
+        actorUserId,
+        requireHouseholdMemberId,
+    } = ctx;
     server.registerTool(
         "list_fridge_locations",
         {
@@ -427,6 +460,251 @@ export function registerFridgeTools(server: McpServer, ctx: ToolContext) {
                             },
                         ],
                     };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "list_expiring",
+        {
+            title: "List Expiring",
+            description:
+                "List fridge items that expire within the given number of days (default 3), including already expired items. Oldest first.",
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                days: z.coerce.number().int().min(0).max(365).optional(),
+            }),
+            outputSchema: z.object({
+                items: z.array(
+                    z.object({
+                        id: z.string(),
+                        display_name: z.string(),
+                        amount: z.number(),
+                        unit: z.string(),
+                        expires_on: z.string(),
+                    }),
+                ),
+            }),
+        },
+        async (args) =>
+            withAnalytics(
+                "list_expiring",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    const { items } = await listFridge(
+                        liveFridgeStore(),
+                        householdId,
+                    );
+                    const expiring = listExpiring(items, args.days ?? 3);
+                    const payload = {
+                        items: expiring.map((item) => ({
+                            id: item.id,
+                            display_name: item.displayName,
+                            amount: item.quantity.amount,
+                            unit: item.quantity.unit,
+                            expires_on: item.expiresOn ?? "",
+                        })),
+                    };
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text:
+                                    payload.items.length === 0
+                                        ? "Nothing expiring soon."
+                                        : payload.items
+                                              .map(
+                                                  (item) =>
+                                                      `${item.display_name} ${item.amount} ${item.unit} expires ${item.expires_on}`,
+                                              )
+                                              .join("\n"),
+                            },
+                        ],
+                        structuredContent: payload,
+                    };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "eat_fridge_item",
+        {
+            title: "Eat Fridge Item",
+            description:
+                "Deduct a fridge item as eaten (oldest-lot item, never negative) and log a food-backed meal through the same meal-items path as log_meal.",
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                id: z.string(),
+                amount: z.coerce.number().optional(),
+                meal_type: z
+                    .enum(["breakfast", "lunch", "dinner", "snack"])
+                    .optional(),
+                member_id: z.string().optional(),
+            }),
+            outputSchema: z.object({
+                shortfall: z
+                    .object({
+                        amount: z.number(),
+                        unit: z.string(),
+                    })
+                    .nullable(),
+                meal_id: z.string().nullable(),
+            }),
+        },
+        async (args) =>
+            withAnalytics(
+                "eat_fridge_item",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    const eaterId = args.member_id
+                        ? await requireHouseholdMemberId(args.member_id)
+                        : await actorUserId(undefined);
+                    try {
+                        const eaten = await eatFridgeItem(
+                            liveFridgeStore(),
+                            liveStockStore(),
+                            liveFoodsStore(),
+                            {
+                                householdId,
+                                itemId: args.id,
+                                amount: args.amount,
+                                actorUserId: eaterId,
+                            },
+                        );
+                        const applied = Math.abs(eaten.movement.delta);
+                        let mealId: string | null = null;
+                        if (applied > 0 && eaten.itemBefore.foodId) {
+                            const { built, specs } = await resolveAndBuildMeal({
+                                householdId,
+                                foods: liveFoodsStore(),
+                                recipes: liveRecipesStore(),
+                                items: [
+                                    {
+                                        foodId: eaten.itemBefore.foodId,
+                                        amount: applied,
+                                        unit: eaten.itemBefore.quantity.unit,
+                                        name: eaten.itemBefore.displayName,
+                                    },
+                                ],
+                            });
+                            const { meal } = await insertMeal(eaterId, {
+                                description: descriptionFromItems(built.items),
+                                meal_type: args.meal_type ?? "snack",
+                                calories: built.totals.calories ?? undefined,
+                                protein_g: built.totals.protein_g ?? undefined,
+                                carbs_g: built.totals.carbs_g ?? undefined,
+                                fat_g: built.totals.fat_g ?? undefined,
+                                fiber_g: built.totals.fiber_g ?? undefined,
+                                sugar_g: built.totals.sugar_g ?? undefined,
+                                alcohol_g: built.totals.alcohol_g ?? undefined,
+                                caffeine_mg:
+                                    built.totals.caffeine_mg ?? undefined,
+                                items: built.items.map((item) =>
+                                    snapshotToMealItemWrite(item, householdId),
+                                ),
+                                item_digest: itemListDigest(specs),
+                            });
+                            mealId = meal.id;
+                        }
+                        const payload = {
+                            shortfall: eaten.shortfall
+                                ? {
+                                      amount: eaten.shortfall.amount,
+                                      unit: eaten.shortfall.unit,
+                                  }
+                                : null,
+                            meal_id: mealId,
+                        };
+                        return {
+                            content: [
+                                {
+                                    type: "text",
+                                    text: `Ate ${applied} ${eaten.itemBefore.quantity.unit} ${eaten.itemBefore.displayName}.${shortfallText(
+                                        eaten.shortfall
+                                            ? [eaten.shortfall]
+                                            : [],
+                                    )}`,
+                                },
+                            ],
+                            structuredContent: payload,
+                        };
+                    } catch (err) {
+                        if (
+                            err instanceof StockInputError ||
+                            err instanceof MealItemsError
+                        ) {
+                            throw new Error(err.message);
+                        }
+                        throw err;
+                    }
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "discard_fridge_item",
+        {
+            title: "Discard Fridge Item",
+            description:
+                "Toss a fridge item. Records a discard movement and never goes negative.",
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: true,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                id: z.string(),
+                amount: z.coerce.number().optional(),
+            }),
+        },
+        async (args) =>
+            withAnalytics(
+                "discard_fridge_item",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    try {
+                        const tossed = await discardFridgeItem(
+                            liveFridgeStore(),
+                            liveStockStore(),
+                            liveFoodsStore(),
+                            {
+                                householdId,
+                                itemId: args.id,
+                                amount: args.amount,
+                            },
+                        );
+                        return {
+                            content: [
+                                {
+                                    type: "text",
+                                    text: `Tossed ${Math.abs(tossed.movement.delta)} ${tossed.movement.unit}.${shortfallText(
+                                        tossed.shortfall
+                                            ? [tossed.shortfall]
+                                            : [],
+                                    )}`,
+                                },
+                            ],
+                        };
+                    } catch (err) {
+                        if (err instanceof StockInputError) {
+                            throw new Error(err.message);
+                        }
+                        throw err;
+                    }
                 },
                 analytics,
             ),

@@ -4,6 +4,7 @@ import { liveFridgeStore } from "../../db/fridge.js";
 import { liveFoodsStore } from "../../db/foods.js";
 import { liveGroceryStore } from "../../db/grocery.js";
 import { liveSettingsStore } from "../../db/settings.js";
+import { liveStockStore } from "../../db/stock.js";
 import { withAnalytics } from "../../analytics.js";
 import { lookupBarcode } from "../../foods.js";
 import { alreadyHaveTag } from "../../domain/linking.js";
@@ -18,6 +19,7 @@ import {
     clearCheckedLines,
     listGrocery,
 } from "../../domain/grocery.js";
+import { putAwayGroceryLines, StockInputError } from "../../domain/stock.js";
 import { groceryLineExtras } from "../shared.js";
 import type { ToolContext } from "../shared.js";
 
@@ -355,6 +357,84 @@ export function registerGroceryTools(server: McpServer, ctx: ToolContext) {
                             },
                         ],
                     };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "put_away_grocery_lines",
+        {
+            title: "Put Away Grocery Lines",
+            description:
+                "Move grocery lines into the fridge as a purchase. Defaults to each food's last-used location. Deletes the lines. Clear checked stays for lines you do not want stocked.",
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                line_ids: z.array(z.string()).min(1),
+                location_id: z.string().optional(),
+            }),
+            outputSchema: z.object({
+                put_away: z.array(
+                    z.object({
+                        line_id: z.string(),
+                        display_name: z.string(),
+                        fridge_item_id: z.string().nullable(),
+                    }),
+                ),
+            }),
+        },
+        async (args) =>
+            withAnalytics(
+                "put_away_grocery_lines",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    try {
+                        const results = await putAwayGroceryLines(
+                            liveGroceryStore(),
+                            liveFridgeStore(),
+                            liveStockStore(),
+                            liveFoodsStore(),
+                            {
+                                householdId,
+                                lineIds: args.line_ids,
+                                locationId: args.location_id,
+                            },
+                        );
+                        const payload = {
+                            put_away: results.map((row) => ({
+                                line_id: row.line.id,
+                                display_name: row.line.displayName,
+                                fridge_item_id: row.item?.id ?? null,
+                            })),
+                        };
+                        return {
+                            content: [
+                                {
+                                    type: "text",
+                                    text:
+                                        results.length === 0
+                                            ? "Nothing to put away."
+                                            : results
+                                                  .map(
+                                                      (row) =>
+                                                          `Put away ${row.line.displayName}.`,
+                                                  )
+                                                  .join("\n"),
+                                },
+                            ],
+                            structuredContent: payload,
+                        };
+                    } catch (err) {
+                        if (err instanceof StockInputError) {
+                            throw new Error(err.message);
+                        }
+                        throw err;
+                    }
                 },
                 analytics,
             ),

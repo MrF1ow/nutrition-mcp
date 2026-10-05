@@ -25,6 +25,22 @@ export function renderAddItemPrompt(locationName: string): string {
     return `<p class="add-item-prompt">Add an item to ${escapeHtml(locationName)}.</p>`;
 }
 
+export function renderExpiringStrip(
+    items: { id: string; displayName: string; expiresOn: string }[],
+): string {
+    if (items.length === 0) return "";
+    const rows = items
+        .map(
+            (item) =>
+                `<li data-item-id="${escapeHtml(item.id)}">${escapeHtml(item.displayName)} — ${escapeHtml(item.expiresOn)}</li>`,
+        )
+        .join("");
+    return `<section class="fridge-expiring">
+<h2>Expiring soon</h2>
+<ul>${rows}</ul>
+</section>`;
+}
+
 export function renderGroceryLineRow(opts: {
     id: string;
     kind: string;
@@ -32,6 +48,7 @@ export function renderGroceryLineRow(opts: {
     displayName: string;
     quantityLabel: string;
     alreadyHaveHtml: string;
+    putAwayHtml?: string;
 }): string {
     const checked = opts.checked ? "true" : "false";
     const next = opts.checked ? "0" : "1";
@@ -45,6 +62,7 @@ ${opts.alreadyHaveHtml}
 <input type="hidden" name="checked" value="${next}" />
 <button type="submit">${opts.checked ? "Checked" : "Check"}</button>
 </form>
+${opts.putAwayHtml ?? ""}
 </li>`;
 }
 
@@ -54,6 +72,7 @@ export function renderFridgeItemRow(opts: {
     displayName: string;
     quantityLabel: string;
     editFields: string;
+    extraActions?: string;
 }): string {
     return `<li class="fridge-item" data-item-id="${escapeHtml(opts.id)}" data-kind="${opts.kind}">
 <div class="fridge-item-head">
@@ -64,6 +83,7 @@ export function renderFridgeItemRow(opts: {
 ${opts.editFields}
 <button type="submit">Save</button>
 </form>
+${opts.extraActions ?? ""}
 <form class="fridge-item-delete" method="post" action="/fridge/items/${escapeHtml(opts.id)}/delete">
 <button type="submit">Delete</button>
 </form>

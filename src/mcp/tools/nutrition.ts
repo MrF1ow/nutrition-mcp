@@ -335,7 +335,7 @@ function specsFromToolItems(
     }));
 }
 
-async function mealWriteFromItems(
+export async function mealWriteFromItems(
     householdId: string,
     items: z.infer<typeof MEAL_ITEM_INPUT_SCHEMA>[],
 ): Promise<{

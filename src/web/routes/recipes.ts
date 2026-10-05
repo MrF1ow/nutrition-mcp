@@ -28,6 +28,7 @@ import { liveFoodsStore } from "../../db/foods.js";
 import { liveGroceryStore } from "../../db/grocery.js";
 import { liveRecipesStore } from "../../db/recipes.js";
 import { liveSettingsStore } from "../../db/settings.js";
+import { liveStockStore } from "../../db/stock.js";
 import { foodsByIds } from "../../domain/foods.js";
 import { insertMeal, snapshotToMealItemWrite } from "../../db/nutrition.js";
 import {
@@ -36,6 +37,7 @@ import {
     MealItemsError,
     resolveAndBuildMeal,
 } from "../../domain/meals.js";
+import { cookRecipe } from "../../domain/stock.js";
 
 export const recipesRoutes = new Hono();
 
@@ -160,6 +162,81 @@ recipesRoutes.post("/recipes/:id/log-portion", requireMember, async (c) => {
             err instanceof MealItemsError ? err : err,
             formText(body, "member") || undefined,
         );
+        return c.html(page.html, page.status);
+    }
+});
+
+recipesRoutes.post("/recipes/:id/cook", requireMember, async (c) => {
+    const userId = c.get("userId");
+    const member = siteMember(c);
+    const recipeId = c.req.param("id");
+    const body = await c.req.parseBody();
+    const mealTypeRaw = formText(body, "meal_type").trim().toLowerCase();
+    const meal_type =
+        mealTypeRaw === "breakfast" ||
+        mealTypeRaw === "lunch" ||
+        mealTypeRaw === "dinner" ||
+        mealTypeRaw === "snack"
+            ? mealTypeRaw
+            : "dinner";
+    const deductStock = formText(body, "deduct_stock") === "1";
+    const logMeals = formText(body, "log_meals") === "1";
+    try {
+        const householdMembers = await listHouseholdMembers(member.householdId);
+        const portions: { userId: string; portions: number }[] = [];
+        for (const person of householdMembers) {
+            const raw = formText(body, `portion:${person.userId}`).trim();
+            if (!raw) continue;
+            const count = Number(raw);
+            if (!Number.isFinite(count) || count <= 0) continue;
+            portions.push({ userId: person.userId, portions: count });
+        }
+        const totalPortions = portions.reduce(
+            (sum, row) => sum + row.portions,
+            0,
+        );
+        await cookRecipe(
+            liveRecipesStore(),
+            liveFridgeStore(),
+            liveStockStore(),
+            liveFoodsStore(),
+            {
+                householdId: member.householdId,
+                recipeId,
+                totalPortions,
+                deductStock,
+                actorUserId: userId,
+            },
+        );
+        if (logMeals) {
+            for (const row of portions) {
+                const { built, specs } = await resolveAndBuildMeal({
+                    householdId: member.householdId,
+                    foods: liveFoodsStore(),
+                    recipes: liveRecipesStore(),
+                    items: [{ recipeId, portions: row.portions }],
+                });
+                await insertMeal(row.userId, {
+                    description: descriptionFromItems(built.items),
+                    meal_type,
+                    calories: built.totals.calories ?? undefined,
+                    protein_g: built.totals.protein_g ?? undefined,
+                    carbs_g: built.totals.carbs_g ?? undefined,
+                    fat_g: built.totals.fat_g ?? undefined,
+                    fiber_g: built.totals.fiber_g ?? undefined,
+                    sugar_g: built.totals.sugar_g ?? undefined,
+                    alcohol_g: built.totals.alcohol_g ?? undefined,
+                    caffeine_mg: built.totals.caffeine_mg ?? undefined,
+                    items: built.items.map((item) =>
+                        snapshotToMealItemWrite(item, member.householdId),
+                    ),
+                    item_digest: itemListDigest(specs),
+                });
+            }
+        }
+        return c.redirect(`/recipes/${recipeId}`);
+    } catch (err) {
+        const page = await recipeFormError(userId, recipeId, err);
         return c.html(page.html, page.status);
     }
 });

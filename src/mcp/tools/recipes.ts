@@ -4,9 +4,11 @@ import { liveFridgeStore } from "../../db/fridge.js";
 import { liveFoodsStore } from "../../db/foods.js";
 import { liveGroceryStore } from "../../db/grocery.js";
 import { getHouseholdConfig } from "../../db/household.js";
+import { insertMeal } from "../../db/nutrition.js";
 import { liveRecipesStore } from "../../db/recipes.js";
 import { liveRulesStore } from "../../db/rules.js";
 import { liveSettingsStore } from "../../db/settings.js";
+import { liveStockStore } from "../../db/stock.js";
 import { withAnalytics } from "../../analytics.js";
 import { lookupBarcode } from "../../foods.js";
 import { foodsByIds } from "../../domain/foods.js";
@@ -31,6 +33,8 @@ import {
     updateRecipeIngredient,
     type Recipe,
 } from "../../domain/recipes.js";
+import { cookRecipe, StockInputError } from "../../domain/stock.js";
+import { mealWriteFromItems } from "./nutrition.js";
 import { QUANTITY_ITEM } from "../shared.js";
 import type { ToolContext } from "../shared.js";
 
@@ -578,6 +582,160 @@ export function registerRecipesTools(server: McpServer, ctx: ToolContext) {
                         ],
                         structuredContent: { remainder },
                     };
+                },
+                analytics,
+            ),
+    );
+
+    server.registerTool(
+        "cook_recipe",
+        {
+            title: "Cook Recipe",
+            description:
+                "Deduct scaled ingredients from the fridge (cook movements, oldest expiry first) and optionally log one recipe-portion meal per member through log_recipe_portion's meal-items path. Returns shortfalls instead of going negative.",
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            inputSchema: z.object({
+                recipe_id: z.string(),
+                portions_by_member: z
+                    .array(
+                        z.object({
+                            user_id: z.string(),
+                            portions: z.coerce.number(),
+                        }),
+                    )
+                    .min(1),
+                deduct_stock: z.boolean().optional(),
+                log_meals: z.boolean().optional(),
+                meal_type: z
+                    .enum(["breakfast", "lunch", "dinner", "snack"])
+                    .optional(),
+            }),
+            outputSchema: z.object({
+                total_portions: z.number(),
+                shortfalls: z.array(
+                    z.object({
+                        food_id: z.string(),
+                        display_name: z.string(),
+                        amount: z.number(),
+                        unit: z.string(),
+                    }),
+                ),
+                meal_ids: z.array(z.string()),
+            }),
+        },
+        async (args) =>
+            withAnalytics(
+                "cook_recipe",
+                async () => {
+                    const householdId = await callerHouseholdId();
+                    const deductStock = args.deduct_stock !== false;
+                    const logMeals = args.log_meals !== false;
+                    try {
+                        const portions: {
+                            userId: string;
+                            portions: number;
+                        }[] = [];
+                        for (const row of args.portions_by_member) {
+                            const userId = await requireHouseholdMemberId(
+                                row.user_id,
+                            );
+                            if (
+                                !Number.isFinite(row.portions) ||
+                                row.portions <= 0
+                            ) {
+                                continue;
+                            }
+                            portions.push({
+                                userId,
+                                portions: row.portions,
+                            });
+                        }
+                        const totalPortions = portions.reduce(
+                            (sum, row) => sum + row.portions,
+                            0,
+                        );
+                        if (!(totalPortions > 0)) {
+                            throw new StockInputError(
+                                "Enter portions greater than zero.",
+                            );
+                        }
+                        const cooked = await cookRecipe(
+                            liveRecipesStore(),
+                            liveFridgeStore(),
+                            liveStockStore(),
+                            liveFoodsStore(),
+                            {
+                                householdId,
+                                recipeId: args.recipe_id,
+                                totalPortions,
+                                deductStock,
+                            },
+                        );
+                        const mealIds: string[] = [];
+                        if (logMeals) {
+                            for (const row of portions) {
+                                const computed = await mealWriteFromItems(
+                                    householdId,
+                                    [
+                                        {
+                                            recipe_id: args.recipe_id,
+                                            portions: row.portions,
+                                        },
+                                    ],
+                                );
+                                const { meal } = await insertMeal(row.userId, {
+                                    description: computed.description,
+                                    meal_type: args.meal_type ?? "dinner",
+                                    ...computed.totals,
+                                    items: computed.items,
+                                    item_digest: computed.item_digest,
+                                });
+                                mealIds.push(meal.id);
+                            }
+                        }
+                        const payload = {
+                            total_portions: cooked.totalPortions,
+                            shortfalls: cooked.shortfalls.map((row) => ({
+                                food_id: row.foodId,
+                                display_name: row.displayName,
+                                amount: row.amount,
+                                unit: row.unit,
+                            })),
+                            meal_ids: mealIds,
+                        };
+                        const shortfallText =
+                            cooked.shortfalls.length === 0
+                                ? ""
+                                : ` Shortfall: ${cooked.shortfalls
+                                      .map(
+                                          (row) =>
+                                              `${row.displayName} ${row.amount} ${row.unit}`,
+                                      )
+                                      .join("; ")}.`;
+                        return {
+                            content: [
+                                {
+                                    type: "text",
+                                    text: `Cooked ${cooked.totalPortions} portion${cooked.totalPortions === 1 ? "" : "s"}.${shortfallText}${
+                                        mealIds.length > 0
+                                            ? ` Logged ${mealIds.length} meal${mealIds.length === 1 ? "" : "s"}.`
+                                            : ""
+                                    }`,
+                                },
+                            ],
+                            structuredContent: payload,
+                        };
+                    } catch (err) {
+                        if (err instanceof StockInputError) {
+                            throw new Error(err.message);
+                        }
+                        throw err;
+                    }
                 },
                 analytics,
             ),

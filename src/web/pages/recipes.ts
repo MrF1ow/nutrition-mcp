@@ -257,6 +257,31 @@ ${renderMemberMultiSelect(view.members, [view.viewerId])}
             </select>
             <button type="submit">Log a portion</button>
         </form>
+        <form class="recipe-cook" method="post" action="/recipes/${recipeId}/cook">
+            <fieldset>
+                <legend>Cooked it</legend>
+                ${view.members
+                    .map((member) => {
+                        const value =
+                            member.userId === view.viewerId
+                                ? String(view.portionCount)
+                                : "1";
+                        return `<label for="cook-portion-${escapeHtml(member.userId)}">${escapeHtml(member.displayName)}</label>
+<input id="cook-portion-${escapeHtml(member.userId)}" name="portion:${escapeHtml(member.userId)}" type="number" min="0" step="any" value="${escapeHtml(value)}" />`;
+                    })
+                    .join("")}
+                <label for="cook-meal-type">Meal type</label>
+                <select id="cook-meal-type" name="meal_type">
+                    <option value="breakfast">Breakfast</option>
+                    <option value="lunch">Lunch</option>
+                    <option value="dinner" selected>Dinner</option>
+                    <option value="snack">Snack</option>
+                </select>
+                <label><input type="checkbox" name="deduct_stock" value="1" checked /> Deduct stock</label>
+                <label><input type="checkbox" name="log_meals" value="1" checked /> Log meals</label>
+                <button type="submit">Cooked it</button>
+            </fieldset>
+        </form>
         <ul class="recipe-ingredients">${rows}</ul>
         <h2>Add ingredient</h2>
         ${renderFoodPicker({
