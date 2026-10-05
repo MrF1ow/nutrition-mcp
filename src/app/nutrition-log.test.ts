@@ -55,6 +55,56 @@ test("rejects an empty meal description without inserting", async () => {
     expect(calls).toEqual([]);
 });
 
+test("logs a food-backed meal with computed totals", async () => {
+    const { createMemoryFoodsStore, findOrCreateManualFood, updateFood } =
+        await import("../domain/foods.js");
+    const { createMemoryRecipesStore } = await import("../domain/recipes.js");
+    const foods = createMemoryFoodsStore();
+    const eggs = await findOrCreateManualFood(foods, "hh-1", "food", "Eggs");
+    await updateFood(foods, "hh-1", eggs.id, {
+        defaultUnit: "each",
+        gramsPerEach: 50,
+        calories: 155,
+        proteinG: 13,
+        carbsG: 1.1,
+        fatG: 11,
+        fiberG: 0,
+        sugarG: 1.1,
+    });
+    const calls: { userId: string; input: MealInput }[] = [];
+    const result = await logMealFromForm(
+        USER,
+        {
+            meal_type: "breakfast",
+            items: [
+                {
+                    food_id: eggs.id,
+                    name: "Eggs",
+                    amount: "2",
+                    unit: "each",
+                },
+            ],
+        },
+        async (userId, input) => {
+            calls.push({ userId, input });
+            return {
+                meal: { id: "m1" },
+                deduplicated: false,
+            } as MealInsertResult;
+        },
+        {
+            householdId: "hh-1",
+            foods,
+            recipes: createMemoryRecipesStore(),
+        },
+    );
+    expect(result).toEqual({ ok: true });
+    expect(calls[0]!.input.meal_type).toBe("breakfast");
+    expect(calls[0]!.input.calories).toBe(155);
+    expect(calls[0]!.input.items).toHaveLength(1);
+    expect(calls[0]!.input.item_digest).toBeTruthy();
+});
+
 test("logs water through insertWater", async () => {
     const calls: { userId: string; input: WaterInput }[] = [];
     const result = await logWaterFromForm(

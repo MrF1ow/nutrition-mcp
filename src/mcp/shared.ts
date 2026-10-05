@@ -938,6 +938,17 @@ export function formatMeal(meal: Meal, alcohol: AlcoholDisplay = null): string {
         meal.caffeine_mg != null
             ? `Caffeine: ${formatMg(meal.caffeine_mg)}`
             : null,
+        ...(meal.items ?? []).map((item) => {
+            const qty =
+                item.portions != null
+                    ? `${item.portions} portion${item.portions === 1 ? "" : "s"}`
+                    : item.amount != null && item.unit
+                      ? `${item.amount} ${item.unit}`
+                      : null;
+            const kcal =
+                item.calories != null ? ` — ${item.calories} kcal` : "";
+            return `Item: ${item.label}${qty ? ` (${qty})` : ""}${kcal}`;
+        }),
         meal.notes ? `Notes: ${meal.notes}` : null,
     ];
     return parts.filter(Boolean).join("\n");

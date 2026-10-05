@@ -1,5 +1,6 @@
 [
     "log_meal",
+    "log_recipe_portion",
     "start_meal_import",
     "bulk_import_meals",
     "lookup_barcode",

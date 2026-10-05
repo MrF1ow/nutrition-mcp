@@ -245,6 +245,18 @@ ${renderMemberMultiSelect(view.members, [view.viewerId])}
         ${portion}
         ${macrosBlock(perPortion, "portion")}
         ${personMacros}
+        <form class="recipe-log-portion" method="post" action="/recipes/${recipeId}/log-portion">
+            <label for="log-portion-count">Portions</label>
+            <input id="log-portion-count" name="portions" type="number" min="0" step="any" required value="${escapeHtml(String(view.portionCount))}" />
+            <label for="log-portion-type">Meal type</label>
+            <select id="log-portion-type" name="meal_type">
+                <option value="breakfast">Breakfast</option>
+                <option value="lunch">Lunch</option>
+                <option value="dinner">Dinner</option>
+                <option value="snack" selected>Snack</option>
+            </select>
+            <button type="submit">Log a portion</button>
+        </form>
         <ul class="recipe-ingredients">${rows}</ul>
         <h2>Add ingredient</h2>
         ${renderFoodPicker({

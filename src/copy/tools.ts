@@ -56,9 +56,23 @@ const TOOLS_BASE: ToolIdentity[] = [
             { name: "caffeine_mg", required: false },
             { name: "logged_at", required: false },
             { name: "notes", required: false },
+            { name: "items", required: false },
             { name: "target_member", required: false },
         ],
         hasPhotoHint: true,
+    },
+    {
+        name: "log_recipe_portion",
+        category: "logging-food-meals",
+        badges: ["log", "widget"],
+        params: [
+            { name: "recipe_id", required: true },
+            { name: "portions", required: true },
+            { name: "meal_type", required: false },
+            { name: "logged_at", required: false },
+            { name: "target_member", required: false },
+        ],
+        hasPhotoHint: false,
     },
     {
         name: "lookup_barcode",
@@ -106,6 +120,7 @@ const TOOLS_BASE: ToolIdentity[] = [
             { name: "caffeine_mg", required: false },
             { name: "logged_at", required: false },
             { name: "notes", required: false },
+            { name: "items", required: false },
             { name: "target_member", required: false },
         ],
         hasPhotoHint: false,
@@ -837,6 +852,7 @@ export const HOUSEHOLD_SCOPED_TOOL_NAMES = [
 
 export const NUTRITION_WRITE_TOOL_NAMES = [
     "log_meal",
+    "log_recipe_portion",
     "update_meal",
     "delete_meal",
     "bulk_import_meals",

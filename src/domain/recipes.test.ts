@@ -502,6 +502,8 @@ test("recipes list page is not a stub and detail reuses shared picker", () => {
         dislikeNote: "Bob dislikes cilantro.",
         isOwner: true,
     });
+    expect(detail).toContain("Log a portion");
+    expect(detail).toContain('action="/recipes/r1/log-portion"');
     expect(detail).toContain('class="quantity-field"');
     expect(detail).toContain('class="food-picker"');
     expect(detail).toContain('class="member-multi-select"');

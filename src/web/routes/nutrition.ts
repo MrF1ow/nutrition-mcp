@@ -6,9 +6,11 @@ import {
     withNutritionError,
 } from "../../app/nutrition.js";
 import { renderDashboardPage } from "../dashboard.js";
-import { formText } from "../form.js";
-import { requireMember, requireSiteUser } from "../middleware.js";
+import { formMealItems, formText } from "../form.js";
+import { requireMember, requireSiteUser, siteMember } from "../middleware.js";
 import { insertMeal, insertWater, insertWeight } from "../../db/nutrition.js";
+import { liveFoodsStore } from "../../db/foods.js";
+import { liveRecipesStore } from "../../db/recipes.js";
 
 export const nutritionRoutes = new Hono();
 
@@ -30,11 +32,29 @@ nutritionRoutes.get("/", requireSiteUser, async (c) => {
 
 nutritionRoutes.post("/log-meal", requireMember, async (c) => {
     const userId = c.get("userId");
-    const body = await c.req.parseBody();
+    const member = siteMember(c);
+    const body = await c.req.parseBody({ all: true });
     const result = await logMealFromForm(
         userId,
-        { description: formText(body, "description") },
+        {
+            description: formText(body, "description"),
+            meal_type: formText(body, "meal_type"),
+            calories: formText(body, "calories"),
+            protein_g: formText(body, "protein_g"),
+            carbs_g: formText(body, "carbs_g"),
+            fat_g: formText(body, "fat_g"),
+            fiber_g: formText(body, "fiber_g"),
+            sugar_g: formText(body, "sugar_g"),
+            alcohol_g: formText(body, "alcohol_g"),
+            caffeine_mg: formText(body, "caffeine_mg"),
+            items: formMealItems(body),
+        },
         insertMeal,
+        {
+            householdId: member.householdId,
+            foods: liveFoodsStore(),
+            recipes: liveRecipesStore(),
+        },
     );
     if (!result.ok) {
         const page = await nutritionFormError(userId, result.error);
