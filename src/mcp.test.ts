@@ -4829,6 +4829,23 @@ describe("authenticated dashboard HTTP", () => {
     });
 
     test("POST /fridge/items adds barcode food in grams", async () => {
+        db.barcodeFoods["070852010016"] = {
+            name: "Good Culture Cottage Cheese",
+            brand: "Good Culture",
+            serving: "100 g",
+            calories: 98,
+            protein_g: 11,
+            carbs_g: 3.4,
+            fat_g: 4.3,
+            fiber_g: 0,
+            sugar_g: 3.2,
+            alcohol_g: null,
+            nutriscore_grade: null,
+            nova_group: null,
+            source: "off:070852010016",
+            source_name: "openfoodfacts",
+            barcode: "070852010016",
+        };
         await siteApp.request("http://x/fridge/locations", {
             method: "POST",
             headers: {
