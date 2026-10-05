@@ -10,7 +10,7 @@ import {
     moveItem,
     updateItemQuantity,
 } from "./fridge.js";
-import { renderFridgePage } from "./app/fridge/page.js";
+import { renderFridgePage } from "./web/pages/fridge.js";
 import { ACCENT_SWATCHES } from "./app/shell.js";
 
 const HH = "hh-1";

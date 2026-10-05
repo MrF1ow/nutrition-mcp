@@ -1,5 +1,5 @@
 import type { QuantityUnit } from "../../quantity.js";
-import { escapeHtml } from "../shell.js";
+import { escapeHtml } from "../../app/shell.js";
 
 export type QuantityFieldKind = "food" | "supply";
 

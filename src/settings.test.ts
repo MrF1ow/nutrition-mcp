@@ -6,7 +6,7 @@ import {
     renameSection,
     SettingsInputError,
 } from "./settings.js";
-import { renderSettingsPage } from "./app/settings/page.js";
+import { renderSettingsPage } from "./web/pages/settings.js";
 import { renderHouseholdSettingsPage } from "./app/settings/household.js";
 import { ACCENT_SWATCHES } from "./app/shell.js";
 import type { HouseholdMember } from "./household.js";

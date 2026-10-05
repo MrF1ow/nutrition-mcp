@@ -4,7 +4,7 @@ import {
     renderAppShell,
     type AccentSwatch,
     type ViewerChrome,
-} from "../shell.js";
+} from "../../app/shell.js";
 import { DRINK_UNITS, isDrinkUnit, type DrinkUnit } from "../../alcohol.js";
 import { WEIGHT_UNITS, isWeightUnit, type WeightUnit } from "../../units.js";
 

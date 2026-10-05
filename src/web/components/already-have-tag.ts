@@ -1,5 +1,5 @@
 import { formatQuantity, type Quantity } from "../../quantity.js";
-import { escapeHtml } from "../shell.js";
+import { escapeHtml } from "../../app/shell.js";
 
 export type AlreadyHaveState =
     { cover: "full" } | { cover: "partial"; have: Quantity; need: Quantity };

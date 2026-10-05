@@ -1,4 +1,4 @@
-import { tabIcon } from "./components/bottom-nav.js";
+import { tabIcon } from "../web/components/bottom-nav.js";
 
 export const APP_TABS = [
     { id: "fridge", href: "/fridge", label: "Fridge" },

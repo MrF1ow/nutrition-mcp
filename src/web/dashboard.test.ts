@@ -1,8 +1,8 @@
 import { test, expect } from "bun:test";
-import { withWidgetData } from "./widgets.js";
+import { withWidgetData } from "../widgets.js";
 import { createHouseholdFormHtml, renderDashboardHtml } from "./dashboard.js";
-import { ACCENT_SWATCHES } from "./app/shell.js";
-import type { HouseholdMember } from "./household.js";
+import { ACCENT_SWATCHES } from "../app/shell.js";
+import type { HouseholdMember } from "../household.js";
 
 const alice: HouseholdMember = {
     householdId: "hh-1",

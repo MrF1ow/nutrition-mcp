@@ -17,7 +17,7 @@ import {
     resolveTheme,
     type ViewerChrome,
 } from "./shell.js";
-import { renderErrorBanner } from "./components/page-markup.js";
+import { renderErrorBanner } from "../web/components/page-markup.js";
 
 export type NutritionView = {
     access: Extract<DashboardAccess, { ok: true }>;

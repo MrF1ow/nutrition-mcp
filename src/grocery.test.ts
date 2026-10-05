@@ -18,7 +18,7 @@ import {
 } from "./grocery.js";
 import { alreadyHaveTag } from "./linking.js";
 import { createGroceryStore, createMemorySettingsStore } from "./settings.js";
-import { renderGroceryPage } from "./app/grocery/page.js";
+import { renderGroceryPage } from "./web/pages/grocery.js";
 import { ACCENT_SWATCHES } from "./app/shell.js";
 import { addAllergen, createMemoryRulesStore } from "./rules.js";
 

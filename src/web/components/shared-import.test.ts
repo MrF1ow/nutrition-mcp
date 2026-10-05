@@ -1,7 +1,7 @@
 import { test, expect } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { bottomNav as shellBottomNav } from "../shell.js";
+import { bottomNav as shellBottomNav } from "../../app/shell.js";
 import { bottomNav as componentBottomNav } from "./bottom-nav.js";
 import { renderQuantityField } from "./quantity-field.js";
 import {
@@ -9,10 +9,10 @@ import {
     searchPickerFoods,
     runBarcodeLookupAction,
 } from "./food-picker.js";
-import { renderFridgePage } from "../fridge/page.js";
-import { renderGroceryPage } from "../grocery/page.js";
-import { renderRecipeDetailPage, renderRecipesPage } from "../recipes/page.js";
-import { ACCENT_SWATCHES } from "../shell.js";
+import { renderFridgePage } from "../pages/fridge.js";
+import { renderGroceryPage } from "../pages/grocery.js";
+import { renderRecipeDetailPage, renderRecipesPage } from "../pages/recipes.js";
+import { ACCENT_SWATCHES } from "../../app/shell.js";
 import {
     DEMO_HOUSEHOLD_MEMBERS,
     renderMemberMultiSelect,
@@ -48,9 +48,9 @@ function food(
 }
 
 test("fridge page and grocery page import the same quantity-field and food-picker modules", () => {
-    const fridgeSrc = stubSource("fridge/page.ts");
-    const grocerySrc = stubSource("grocery/page.ts");
-    const recipesSrc = stubSource("recipes/page.ts");
+    const fridgeSrc = stubSource("pages/fridge.ts");
+    const grocerySrc = stubSource("pages/grocery.ts");
+    const recipesSrc = stubSource("pages/recipes.ts");
     expect(fridgeSrc).toContain('from "../components/quantity-field.js"');
     expect(grocerySrc).not.toContain('from "../components/quantity-field.js"');
     expect(fridgeSrc).toContain('from "../components/food-picker.js"');
@@ -141,10 +141,10 @@ test("fridge page and grocery page import the same quantity-field and food-picke
 
 test("household pages call shared markup helpers for banners, empty states, and item rows", () => {
     const helperSrc = stubSource("components/page-markup.ts");
-    const fridgeSrc = stubSource("fridge/page.ts");
-    const grocerySrc = stubSource("grocery/page.ts");
-    const recipesSrc = stubSource("recipes/page.ts");
-    const nutritionSrc = stubSource("nutrition.ts");
+    const fridgeSrc = stubSource("pages/fridge.ts");
+    const grocerySrc = stubSource("pages/grocery.ts");
+    const recipesSrc = stubSource("pages/recipes.ts");
+    const nutritionSrc = stubSource("../app/nutrition.ts");
 
     expect(helperSrc).toContain('class="error-banner"');
     expect(helperSrc).toContain('class="empty-grocery"');

@@ -27,7 +27,7 @@ import { createGroceryStore, createMemorySettingsStore } from "./settings.js";
 import {
     renderRecipeDetailPage,
     renderRecipesPage,
-} from "./app/recipes/page.js";
+} from "./web/pages/recipes.js";
 import { ACCENT_SWATCHES } from "./app/shell.js";
 import type { FoodResult } from "./foods.js";
 
