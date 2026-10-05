@@ -1,8 +1,4 @@
-import {
-    foodFromRow,
-    foodToRow,
-    type FoodsStore,
-} from "../domain/foods.js";
+import { foodFromRow, foodToRow, type FoodsStore } from "../domain/foods.js";
 import { getSupabase } from "./client.js";
 
 const FOOD_COLS =

@@ -4,10 +4,7 @@ import { normalizeBarcode, type FoodResult } from "../foods.js";
 export type FoodKind = "food" | "supply";
 
 export type NutritionSource =
-    | "openfoodfacts"
-    | "manual"
-    | "estimate"
-    | "recipe";
+    "openfoodfacts" | "manual" | "estimate" | "recipe";
 
 export type Food = {
     id: string;
@@ -78,12 +75,18 @@ export type FoodsStore = {
         barcode: string,
         foodId: string,
     ): Promise<void>;
-    deleteBarcodesForFood(householdId: string, foodId: string): Promise<string[]>;
+    deleteBarcodesForFood(
+        householdId: string,
+        foodId: string,
+    ): Promise<string[]>;
     getAliasFoodId(householdId: string, alias: string): Promise<string | null>;
     listAliases(householdId: string, foodId: string): Promise<string[]>;
     setAlias(householdId: string, alias: string, foodId: string): Promise<void>;
     deleteAlias(householdId: string, alias: string): Promise<void>;
-    deleteAliasesForFood(householdId: string, foodId: string): Promise<string[]>;
+    deleteAliasesForFood(
+        householdId: string,
+        foodId: string,
+    ): Promise<string[]>;
     searchFoods(householdId: string, query: string): Promise<Food[]>;
     repointFoodRefs(
         householdId: string,
@@ -157,7 +160,10 @@ export function catalogNutritionFromOff(food: FoodResult): {
     sugarG: number | null;
     alcoholG: number | null;
 } {
-    const serving = (food.serving ?? "").trim().toLowerCase().replace(/\s+/g, "");
+    const serving = (food.serving ?? "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, "");
     if (serving === "100g") {
         return {
             calories: food.calories,
@@ -222,7 +228,8 @@ export function createMemoryFoodsStore(): MemoryFoodsStore {
             return foods
                 .filter(
                     (row) =>
-                        row.householdId === householdId && row.archivedAt == null,
+                        row.householdId === householdId &&
+                        row.archivedAt == null,
                 )
                 .map(copyFood)
                 .sort((a, b) => a.name.localeCompare(b.name));
@@ -237,7 +244,9 @@ export function createMemoryFoodsStore(): MemoryFoodsStore {
             const key = foodKey(row);
             if (
                 key &&
-                foods.some((food) => foodKey(food) === key && food.id !== row.id)
+                foods.some(
+                    (food) => foodKey(food) === key && food.id !== row.id,
+                )
             ) {
                 throw new FoodsInputError("That food already exists.");
             }
@@ -254,7 +263,9 @@ export function createMemoryFoodsStore(): MemoryFoodsStore {
             const key = foodKey(row);
             if (
                 key &&
-                foods.some((food) => foodKey(food) === key && food.id !== row.id)
+                foods.some(
+                    (food) => foodKey(food) === key && food.id !== row.id,
+                )
             ) {
                 throw new FoodsInputError("That food already exists.");
             }
@@ -293,7 +304,8 @@ export function createMemoryFoodsStore(): MemoryFoodsStore {
             return barcodes
                 .filter(
                     (row) =>
-                        row.householdId === householdId && row.foodId === foodId,
+                        row.householdId === householdId &&
+                        row.foodId === foodId,
                 )
                 .map((row) => row.barcode);
         },
@@ -309,7 +321,8 @@ export function createMemoryFoodsStore(): MemoryFoodsStore {
             const removed = barcodes
                 .filter(
                     (row) =>
-                        row.householdId === householdId && row.foodId === foodId,
+                        row.householdId === householdId &&
+                        row.foodId === foodId,
                 )
                 .map((row) => row.barcode);
             const keep = barcodes.filter(
@@ -332,7 +345,8 @@ export function createMemoryFoodsStore(): MemoryFoodsStore {
             return aliases
                 .filter(
                     (row) =>
-                        row.householdId === householdId && row.foodId === foodId,
+                        row.householdId === householdId &&
+                        row.foodId === foodId,
                 )
                 .map((row) => row.alias);
         },
@@ -355,7 +369,8 @@ export function createMemoryFoodsStore(): MemoryFoodsStore {
             const removed = aliases
                 .filter(
                     (row) =>
-                        row.householdId === householdId && row.foodId === foodId,
+                        row.householdId === householdId &&
+                        row.foodId === foodId,
                 )
                 .map((row) => row.alias);
             const keep = aliases.filter(
@@ -554,7 +569,9 @@ export async function findFoodById(
     return food;
 }
 
-function parseOptionalNutrient(value: number | null | undefined): number | null {
+function parseOptionalNutrient(
+    value: number | null | undefined,
+): number | null {
     if (value == null) return null;
     if (!Number.isFinite(value) || value < 0) {
         throw new FoodsInputError("Nutrition values cannot be negative.");
