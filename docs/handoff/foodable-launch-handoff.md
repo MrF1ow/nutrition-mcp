@@ -1,8 +1,33 @@
 # Foodable launch handoff
 
-Written 2026-10-05 at `main` = `d1c68e7`. For an agent with access to GitHub, Supabase, and Railway. It takes Foodable from "merged" to "live for the household", starting with an empty database.
+Written 2026-10-05. For an agent with access to GitHub, Supabase, and Railway. It takes Foodable from "merged" to "live for the household", starting with an empty database.
 
 Read `CLAUDE.md` and `docs/handoff/foodable-architecture-plan.md` (its "Status at handoff" section) first. This file does not repeat them.
+
+## Status (2026-10-05)
+
+**Done**
+
+- Preflight was green at `ee7f06f`: `bun test`, `bun run typecheck`, `bun run format:check`, `bun run gen:all`, and `bun run db:dryrun` all passed.
+- A new empty Supabase project exists: ref `dapbxswqfiqvxutsobhr`, region `us-east-1`, name **Foodable**. All 39 migrations are applied there. `public` has 31 tables. The `exports` storage bucket exists. Email and password sign-in is enabled; confirmation email is off (mailer autoconfirm). No data was copied from the old project. The old Supabase project and the old server were not touched.
+- Local server checks on an agent machine against that project passed: `GET /health` returned `ok`, `GET /` served the Foodable sign-in page, and OAuth discovery URLs used host `127.0.0.1` with `PUBLIC_ORIGIN` unset. The server was then stopped (port 8080); it is **not** still running.
+
+**Not done**
+
+- The two-person household sign-in (step 4) has not been done.
+- The end-to-end walk (step 5) has not been done.
+- Railway was not created. DNS was not changed. Phase 8 has not started.
+- The fridge ledger gap and the old-name leftovers are still open on `main`. Separate pull requests for them were opened at the same time as the doc update that recorded this status; they are **not** on `main` yet.
+
+**Unchanged gates:** repo name `MrF1ow/nutrition-mcp`, sky accent, version `0.1.0`.
+
+**Deploy day is still ahead.** Remaining work, in order:
+
+1. Create the Railway service.
+2. Set its variables.
+3. Set `PUBLIC_ORIGIN` from the generated domain.
+4. Connect the AI clients.
+5. Retire the old Supabase project and the old server (with explicit user confirmation).
 
 ## Decisions already made
 
@@ -44,30 +69,39 @@ Get these from the user before starting. Do not paste secrets into PRs, commits,
 
 ## 1. Preflight
 
-- [ ] `git clone`, `bun install`, `bun run gen:all`.
-- [ ] `bun test`, `bun run typecheck`, `bun run format:check` all pass.
-- [ ] `bun run db:dryrun` passes. Set `PG_BIN` if `initdb` is not on `PATH`. This exercises the migration chain and the Phase 2 backfill on a fixture.
+- [x] `git clone`, `bun install`, `bun run gen:all`. (Green at `ee7f06f` on 2026-10-05.)
+- [x] `bun test`, `bun run typecheck`, `bun run format:check` all pass.
+- [x] `bun run db:dryrun` passes. Set `PG_BIN` if `initdb` is not on `PATH`. This exercises the migration chain and the Phase 2 backfill on a fixture.
 
 ## 2. New Supabase project
 
 Why a new project and not `supabase db reset --linked`: a remote reset only rebuilds the `public` schema. Auth users survive, and storage files are orphaned. Foodable's first-user flow signs up a new account only while Auth is empty (`docs/self-hosting.md`, "First-user flow"). Leftover Auth users would turn the first visit into a sign-in with no household. A new project gives an empty Auth, empty storage, and empty migration history in one step.
 
-- [ ] Create the project in the Supabase dashboard. Pick the region closest to the Railway service's region.
-- [ ] Authentication: email and password enabled. **Confirm email off**, so the owner can sign in immediately.
-- [ ] Note the project URL (`SUPABASE_URL`) and the **service role** secret (`SUPABASE_SECRET_KEY`). The anon or publishable key is not enough.
-- [ ] Apply the schema:
+- [x] Create the project in the Supabase dashboard. Pick the region closest to the Railway service's region. (2026-10-05: ref `dapbxswqfiqvxutsobhr`, `us-east-1`, name Foodable.)
+- [x] Authentication: email and password enabled. **Confirm email off**, so the owner can sign in immediately.
+- [x] Note the project URL (`SUPABASE_URL`) and the **service role** secret (`SUPABASE_SECRET_KEY`). The anon or publishable key is not enough. (Recorded outside this doc; do not commit secrets.)
+- [x] Apply the schema:
 
     ```bash
-    bunx supabase link --project-ref <new-ref>
+    bunx supabase link --project-ref dapbxswqfiqvxutsobhr
     bunx supabase db push --dry-run   # must list all 39 migrations
     bunx supabase db push
     bunx supabase migration list      # local and remote columns match, 39 rows
     ```
 
-- [ ] Verify the result in the SQL editor:
+- [x] Verify the result in the SQL editor:
     - `select count(*) from pg_tables where schemaname = 'public'` returns 31.
     - `select id from storage.buckets` includes `exports`.
 - [ ] Know the free-plan catch. Supabase pauses a free project after a week without database activity. Daily household use keeps it awake. If it is ever paused, restore it from the dashboard. A paid Supabase plan never pauses.
+
+### Local smoke (2026-10-05, not production)
+
+Against the new project, with env vars set locally and `PUBLIC_ORIGIN` unset:
+
+- [x] `GET /health` returned `ok`.
+- [x] `GET /` served the Foodable sign-in page.
+- [x] OAuth discovery URLs used host `127.0.0.1`.
+- [x] Server stopped afterward; port 8080 is not in use.
 
 ## 3. Railway
 
@@ -154,11 +188,11 @@ The decision is to delete all old user data. Confirm with the user once, right b
 - [ ] Delete the old Supabase project from its project settings in the dashboard. Deleting the project removes its Auth users, data, and storage together. No export or dump of it is wanted.
 - [ ] Revoke anything that still points at the old deploy: OAuth connections in AI clients, and any DNS record for the old host.
 
-## 7. Repo follow-up (one PR after launch)
+## 7. Repo follow-up (after launch)
 
-- [ ] `docs/handoff/foodable-architecture-plan.md`: in "Status at handoff", replace "Before production" with the launch facts. Record the date, the Railway domain (not secrets), the fresh start, and the walk result.
-- [ ] `docs/self-hosting.md`: add a short Railway section, with the `railway.toml` above, the variables, "do not set `PORT`", and `PUBLIC_ORIGIN` from the generated domain.
-- [ ] Update the memory or notes the user keeps on hosting: Railway, chosen 2026-10-05, "for now".
+- [x] `docs/handoff/foodable-architecture-plan.md`: "Status at handoff" updated on 2026-10-05 with preflight, the new Supabase project ref, local smoke, and what remains before deploy day. Walk result stays unchecked until step 5 runs.
+- [ ] `docs/self-hosting.md`: add a short Railway section, with the `railway.toml` above, the variables, "do not set `PORT`", and `PUBLIC_ORIGIN` from the generated domain. (After Railway exists.)
+- [ ] Update the memory or notes the user keeps on hosting: Railway, chosen 2026-10-05, "for now". (After Railway exists.)
 
 ## 8. After launch, in order
 
