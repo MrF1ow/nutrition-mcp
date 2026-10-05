@@ -31,6 +31,7 @@ import {
 import {
     registerLookupBarcodeTool,
     registerSearchFoodTool,
+    registerCatalogFoodTools,
 } from "./tools/food.js";
 import { registerGoalsTools } from "./tools/goals.js";
 import { registerWaterTools } from "./tools/water.js";
@@ -119,6 +120,7 @@ export function registerTools(
     registerRecipesTools(server, ctx);
     registerRulesTools(server, ctx);
     registerSearchFoodTool(server, ctx);
+    registerCatalogFoodTools(server, ctx);
     registerHouseholdTools(server, ctx);
 }
 

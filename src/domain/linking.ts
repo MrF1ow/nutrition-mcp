@@ -15,6 +15,7 @@ export type LinkedQuantity = { amount: number; unit: string };
 export type LinkedNeed = {
     identity: FoodIdentity | SupplyIdentity;
     quantity: LinkedQuantity;
+    foodId?: string | null;
 };
 
 export type AlreadyHaveTag =
@@ -38,12 +39,17 @@ function convertToUnit(q: LinkedQuantity, to: string): number | null {
     }
 }
 
+function sameFood(a: LinkedNeed, b: LinkedNeed): boolean {
+    if (a.foodId && b.foodId) return a.foodId === b.foodId;
+    if (a.foodId || b.foodId) return false;
+    return identityKey(a.identity) === identityKey(b.identity);
+}
+
 export function alreadyHaveTag(
     need: LinkedNeed,
     stock: LinkedNeed[],
 ): AlreadyHaveTag | null {
-    const key = identityKey(need.identity);
-    const matches = stock.filter((row) => identityKey(row.identity) === key);
+    const matches = stock.filter((row) => sameFood(need, row));
     if (matches.length === 0) return null;
     const targetUnit = need.quantity.unit;
     let have = 0;
@@ -70,6 +76,7 @@ export type RecipeGroceryIngredient = {
     identity: FoodIdentity | SupplyIdentity;
     displayName: string;
     quantity: LinkedQuantity;
+    foodId?: string | null;
 };
 
 export type RecipeGroceryRemainderLine = {
@@ -79,6 +86,7 @@ export type RecipeGroceryRemainderLine = {
     remainder: LinkedQuantity | null;
     skipped: boolean;
     tag: AlreadyHaveTag | null;
+    foodId?: string | null;
 };
 
 export function recipeToGroceryRemainder(input: {
@@ -95,7 +103,11 @@ export function recipeToGroceryRemainder(input: {
             unit: ingredient.quantity.unit,
         };
         const tag = alreadyHaveTag(
-            { identity: ingredient.identity, quantity: need },
+            {
+                identity: ingredient.identity,
+                quantity: need,
+                foodId: ingredient.foodId,
+            },
             input.stock,
         );
         if (need.amount <= 0 || tag?.cover === "full") {
@@ -106,6 +118,7 @@ export function recipeToGroceryRemainder(input: {
                 remainder: null,
                 skipped: true,
                 tag,
+                foodId: ingredient.foodId ?? null,
             };
         }
         if (tag?.cover === "partial") {
@@ -116,6 +129,7 @@ export function recipeToGroceryRemainder(input: {
                 remainder: tag.need,
                 skipped: false,
                 tag,
+                foodId: ingredient.foodId ?? null,
             };
         }
         return {
@@ -125,6 +139,7 @@ export function recipeToGroceryRemainder(input: {
             remainder: need,
             skipped: false,
             tag: null,
+            foodId: ingredient.foodId ?? null,
         };
     });
 }

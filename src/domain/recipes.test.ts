@@ -23,6 +23,7 @@ import {
     RecipeInputError,
     setPersonPortion,
 } from "./recipes.js";
+import { createMemoryFoodsStore, updateFood } from "./foods.js";
 import { createGroceryStore, createMemorySettingsStore } from "./settings.js";
 import {
     renderRecipeDetailPage,
@@ -71,18 +72,23 @@ test("yield math splits batch totals into per-portion amounts", async () => {
         name: "Mac",
         yieldPortions: 4,
     });
-    const ingredient = await addRecipeManualIngredient(store, {
-        householdId: HH,
-        recipeId: recipe.id,
-        name: "Pasta",
-        amount: 400,
-    });
+    const ingredient = await addRecipeManualIngredient(
+        store,
+        createMemoryFoodsStore(),
+        {
+            householdId: HH,
+            recipeId: recipe.id,
+            name: "Pasta",
+            amount: 400,
+        },
+    );
     expect(perPortionAmount(ingredient.quantity.amount, 4)).toBe(100);
     expect(amountForPortion(ingredient.quantity.amount, 4, 1)).toBe(100);
 });
 
 test("person portion override scales that person's amounts and macros", async () => {
     const store = createMemoryRecipesStore();
+    const foods = createMemoryFoodsStore();
     const recipe = await createRecipe(store, {
         householdId: HH,
         creatorId: ALICE,
@@ -91,6 +97,7 @@ test("person portion override scales that person's amounts and macros", async ()
     });
     await addRecipeIngredientByBarcode(
         store,
+        foods,
         {
             householdId: HH,
             recipeId: recipe.id,
@@ -114,7 +121,12 @@ test("person portion override scales that person's amounts and macros", async ()
     const view = await getRecipeView(store, HH, recipe.id, ALICE);
     expect(view.portionCount).toBe(2);
     expect(view.ingredients[0]?.personAmount).toBe(200);
-    const macros = macrosForPerson(view.ingredients, view.yieldPortions, 2);
+    const macros = macrosForPerson(
+        view.ingredients,
+        view.yieldPortions,
+        2,
+        new Map((await foods.listFoods(HH)).map((row) => [row.id, row])),
+    );
     expect(macros.incomplete).toBe(false);
     expect(macros.calories).toBe(196);
     expect(macros.protein_g).toBe(22);
@@ -166,7 +178,7 @@ test("manual ingredients without nutrition mark macros incomplete", async () => 
         name: "Mystery",
         yieldPortions: 2,
     });
-    await addRecipeManualIngredient(store, {
+    await addRecipeManualIngredient(store, createMemoryFoodsStore(), {
         householdId: HH,
         recipeId: recipe.id,
         name: "Whatever",
@@ -178,38 +190,79 @@ test("manual ingredients without nutrition mark macros incomplete", async () => 
     expect(macros.calories).toBeNull();
 });
 
+test("filling food nutrition completes recipe macros", async () => {
+    const store = createMemoryRecipesStore();
+    const foods = createMemoryFoodsStore();
+    const recipe = await createRecipe(store, {
+        householdId: HH,
+        creatorId: ALICE,
+        name: "Eggs",
+        yieldPortions: 1,
+    });
+    const ingredient = await addRecipeManualIngredient(store, foods, {
+        householdId: HH,
+        recipeId: recipe.id,
+        name: "Eggs",
+        amount: 100,
+    });
+    const view = await getRecipeView(store, HH, recipe.id, ALICE);
+    const before = macrosForPerson(
+        view.ingredients,
+        view.yieldPortions,
+        1,
+        new Map((await foods.listFoods(HH)).map((row) => [row.id, row])),
+    );
+    expect(before.incomplete).toBe(true);
+    await updateFood(foods, HH, ingredient.foodId!, {
+        calories: 155,
+        proteinG: 13,
+        carbsG: 1.1,
+        fatG: 11,
+        nutritionSource: "manual",
+    });
+    const after = macrosForPerson(
+        view.ingredients,
+        view.yieldPortions,
+        1,
+        new Map((await foods.listFoods(HH)).map((row) => [row.id, row])),
+    );
+    expect(after.incomplete).toBe(false);
+    expect(after.calories).toBe(155);
+});
+
 test("add-to-grocery writes remainder lines and skips full fridge cover", async () => {
     const recipes = createMemoryRecipesStore();
     const grocery = createMemoryGroceryStore();
     const fridge = createMemoryFridgeStore();
+    const foods = createMemoryFoodsStore();
     const settings = createMemorySettingsStore();
     const store = await createGroceryStore(settings, HH, "Safeway");
     const loc = await addLocation(fridge, HH, "Fridge");
+    const lookup = async (barcode: string) =>
+        barcode === "070852010016"
+            ? food({ name: "Cottage Cheese", barcode: "070852010016" })
+            : food({ name: "Pasta", barcode: "8076809513388" });
     await addFoodByBarcode(
         fridge,
+        foods,
         {
             householdId: HH,
             locationId: loc.id,
             barcode: "070852010016",
             amount: 50,
         },
-        {
-            lookup: async () =>
-                food({ name: "Cottage Cheese", barcode: "070852010016" }),
-        },
+        { lookup },
     );
     await addFoodByBarcode(
         fridge,
+        foods,
         {
             householdId: HH,
             locationId: loc.id,
             barcode: "8076809513388",
             amount: 200,
         },
-        {
-            lookup: async () =>
-                food({ name: "Pasta", barcode: "8076809513388" }),
-        },
+        { lookup },
     );
     const recipe = await createRecipe(recipes, {
         householdId: HH,
@@ -219,33 +272,30 @@ test("add-to-grocery writes remainder lines and skips full fridge cover", async 
     });
     await addRecipeIngredientByBarcode(
         recipes,
+        foods,
         {
             householdId: HH,
             recipeId: recipe.id,
             barcode: "070852010016",
             amount: 400,
         },
-        {
-            lookup: async () =>
-                food({ name: "Cottage Cheese", barcode: "070852010016" }),
-        },
+        { lookup },
     );
     await addRecipeIngredientByBarcode(
         recipes,
+        foods,
         {
             householdId: HH,
             recipeId: recipe.id,
             barcode: "8076809513388",
             amount: 200,
         },
-        {
-            lookup: async () =>
-                food({ name: "Pasta", barcode: "8076809513388" }),
-        },
+        { lookup },
     );
     const fridgeItems = (await fridge.listItems(HH)).map((item) => ({
         identity: item.identity,
         quantity: item.quantity,
+        foodId: item.foodId,
     }));
     const recipeRow = (await listRecipes(recipes, HH))[0]!;
     const ingredients = (await getRecipeView(recipes, HH, recipe.id, ALICE))
@@ -255,6 +305,7 @@ test("add-to-grocery writes remainder lines and skips full fridge cover", async 
             identity: row.identity,
             displayName: row.displayName,
             quantity: row.quantity,
+            foodId: row.foodId,
         })),
         yieldPortions: recipeRow.yieldPortions,
         portionCounts: [1],
@@ -285,7 +336,8 @@ test("add-to-grocery writes remainder lines and skips full fridge cover", async 
     expect(listed.lines).toHaveLength(1);
     expect(listed.lines[0]?.displayName).toBe("Cottage Cheese");
     expect(listed.lines[0]?.quantity).toEqual({ amount: 50, unit: "g" });
-    expect(listed.lines[0]?.identity).toEqual(cottage);
+    expect(listed.lines[0]?.foodId).toBe(cottageLine?.foodId);
+    expect(listed.lines[0]?.identity.via).toBe("catalog");
 });
 
 test("create recipe requires a name and a positive yield", async () => {
@@ -347,6 +399,7 @@ test("recipes list page is not a stub and detail reuses shared picker", () => {
                 displayName: "Cottage Cheese",
                 quantity: { amount: 400, unit: "g" },
                 identity: cottage,
+                foodId: null,
                 nutrition: {
                     calories: 98,
                     protein_g: 11,

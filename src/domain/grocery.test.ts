@@ -6,6 +6,7 @@ import {
     createMemoryFridgeStore,
     listFridge,
 } from "./fridge.js";
+import { createMemoryFoodsStore } from "./foods.js";
 import {
     addGroceryFoodByBarcode,
     addGrocerySupply,
@@ -56,10 +57,12 @@ async function seedStore() {
 
 test("add grocery line then lists it under the chosen section", async () => {
     const grocery = createMemoryGroceryStore();
+    const foods = createMemoryFoodsStore();
     const { settings, store, dairy } = await seedStore();
     const line = await addGroceryFoodByBarcode(
         grocery,
         settings,
+        foods,
         {
             householdId: HH,
             storeId: store.id,
@@ -78,6 +81,7 @@ test("add grocery line then lists it under the chosen section", async () => {
     expect(line.displayName).toBe("Good Culture Cottage Cheese");
     expect(line.checked).toBe(false);
     expect(line.quantity).toEqual({ amount: 1360.8, unit: "g" });
+    expect(line.foodId).toBeTruthy();
     const listed = await listGrocery(grocery, settings, HH);
     expect(listed.lines).toHaveLength(1);
     expect(listed.lines[0]?.sectionId).toBe(dairy.id);
@@ -88,14 +92,19 @@ test("check line stays on the list and does not insert into fridge", async () =>
     const fridge = createMemoryFridgeStore();
     const { settings, store, dairy } = await seedStore();
     await addLocation(fridge, HH, "Fridge");
-    const line = await addGrocerySupply(grocery, settings, {
-        householdId: HH,
-        storeId: store.id,
-        sectionId: dairy.id,
-        name: "Foil",
-        amount: 1,
-        unit: "roll",
-    });
+    const line = await addGrocerySupply(
+        grocery,
+        settings,
+        createMemoryFoodsStore(),
+        {
+            householdId: HH,
+            storeId: store.id,
+            sectionId: dairy.id,
+            name: "Foil",
+            amount: 1,
+            unit: "roll",
+        },
+    );
     const checked = await checkGroceryLine(grocery, HH, line.id, true);
     expect(checked?.checked).toBe(true);
     const listed = await listGrocery(grocery, settings, HH);
@@ -107,22 +116,32 @@ test("check line stays on the list and does not insert into fridge", async () =>
 test("clear checked removes only checked rows", async () => {
     const grocery = createMemoryGroceryStore();
     const { settings, store, dairy } = await seedStore();
-    const keep = await addGrocerySupply(grocery, settings, {
-        householdId: HH,
-        storeId: store.id,
-        sectionId: dairy.id,
-        name: "Wipes",
-        amount: 1,
-        unit: "pack",
-    });
-    const drop = await addGrocerySupply(grocery, settings, {
-        householdId: HH,
-        storeId: store.id,
-        sectionId: dairy.id,
-        name: "Foil",
-        amount: 1,
-        unit: "roll",
-    });
+    const keep = await addGrocerySupply(
+        grocery,
+        settings,
+        createMemoryFoodsStore(),
+        {
+            householdId: HH,
+            storeId: store.id,
+            sectionId: dairy.id,
+            name: "Wipes",
+            amount: 1,
+            unit: "pack",
+        },
+    );
+    const drop = await addGrocerySupply(
+        grocery,
+        settings,
+        createMemoryFoodsStore(),
+        {
+            householdId: HH,
+            storeId: store.id,
+            sectionId: dairy.id,
+            name: "Foil",
+            amount: 1,
+            unit: "roll",
+        },
+    );
     await checkGroceryLine(grocery, HH, drop.id, true);
     const removed = await clearCheckedLines(grocery, HH);
     expect(removed).toBe(1);
@@ -136,23 +155,30 @@ test("unknown section files the line under Other", async () => {
     expect(await resolveGrocerySectionId(settings, store.id, "")).toBe(
         other.id,
     );
-    const line = await addGrocerySupply(grocery, settings, {
-        householdId: HH,
-        storeId: store.id,
-        name: "Batteries",
-        amount: 4,
-        unit: "each",
-    });
+    const line = await addGrocerySupply(
+        grocery,
+        settings,
+        createMemoryFoodsStore(),
+        {
+            householdId: HH,
+            storeId: store.id,
+            name: "Batteries",
+            amount: 4,
+            unit: "each",
+        },
+    );
     expect(line.sectionId).toBe(other.id);
 });
 
 test("matching fridge stock tags the grocery line already-have", async () => {
     const grocery = createMemoryGroceryStore();
     const fridge = createMemoryFridgeStore();
+    const foods = createMemoryFoodsStore();
     const { settings, store, dairy } = await seedStore();
     const loc = await addLocation(fridge, HH, "Fridge");
     const fridgeItem = await addFoodByBarcode(
         fridge,
+        foods,
         {
             householdId: HH,
             locationId: loc.id,
@@ -170,6 +196,7 @@ test("matching fridge stock tags the grocery line already-have", async () => {
     const line = await addGroceryFoodByBarcode(
         grocery,
         settings,
+        foods,
         {
             householdId: HH,
             storeId: store.id,
@@ -188,7 +215,7 @@ test("matching fridge stock tags the grocery line already-have", async () => {
     expect(alreadyHaveTag(line, [fridgeItem])).toEqual({ cover: "full" });
 });
 
-test("grocery allergen warning blocks peanut for an affected member", async () => {
+test("grocery allergen warning uses catalog allergens before the name", async () => {
     const rules = createMemoryRulesStore();
     await addAllergen(rules, {
         householdId: HH,
@@ -196,12 +223,17 @@ test("grocery allergen warning blocks peanut for an affected member", async () =
         allergen: "peanut",
     });
     const allergens = await rules.listAllergens(HH, "bob");
-    const warning = groceryAllergenWarning("Peanut Butter", [
-        { displayName: "Bob", allergens },
-    ]);
-    expect(warning?.blocking).toBe(true);
-    expect(warning?.text.toLowerCase()).toContain("peanut");
-    expect(warning?.text).toContain("Bob");
+    const members = [{ displayName: "Bob", allergens }];
+    const byName = groceryAllergenWarning("Peanut Butter", members);
+    expect(byName?.blocking).toBe(true);
+    expect(byName?.text.toLowerCase()).toContain("peanut");
+    expect(
+        groceryAllergenWarning("Skippy", members, ["peanut"])?.blocking,
+    ).toBe(true);
+    expect(groceryAllergenWarning("Peanut Butter", members, [])).toBeNull();
+    expect(groceryAllergenWarning("Apples", members, null)?.text).toBe(
+        "unknown allergen data",
+    );
 });
 
 test("grocery page groups by store then section and shows already-have", () => {
@@ -238,6 +270,7 @@ test("grocery page groups by store then section and shows already-have", () => {
                                     barcode: "070852010016",
                                     displayName: "Cottage Cheese",
                                 },
+                                foodId: null,
                                 checked: false,
                                 alreadyHave: { cover: "full" },
                             },

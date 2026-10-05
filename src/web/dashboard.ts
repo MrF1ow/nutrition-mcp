@@ -20,6 +20,7 @@ import {
     listHouseholdMembers,
 } from "../db/household.js";
 import { liveFridgeStore } from "../db/fridge.js";
+import { liveFoodsStore } from "../db/foods.js";
 import { liveGroceryStore } from "../db/grocery.js";
 import { liveRecipesStore } from "../db/recipes.js";
 import { liveRulesStore } from "../db/rules.js";
@@ -28,7 +29,9 @@ import { renderFridgePage } from "./pages/fridge.js";
 import { renderGroceryPage } from "./pages/grocery.js";
 import { renderRecipeDetailPage, renderRecipesPage } from "./pages/recipes.js";
 import { renderSettingsPage } from "./pages/settings.js";
+import { renderFoodsSettingsPage } from "./pages/foods.js";
 import { renderHouseholdSettingsPage } from "../app/settings/household.js";
+import { foodsByIds } from "../domain/foods.js";
 import { listFridge } from "../domain/fridge.js";
 import { groceryAllergenWarning, listGrocery } from "../domain/grocery.js";
 import { alreadyHaveTag } from "../domain/linking.js";
@@ -210,6 +213,11 @@ export async function renderGroceryListPage(
     const rulesByStore = new Map(
         storeRules.map((row) => [row.storeId, row.rules]),
     );
+    const catalog = await foodsByIds(
+        liveFoodsStore(),
+        householdId,
+        snapshot.lines.map((line) => line.foodId),
+    );
     const stores = snapshot.stores.map((store) => {
         const storeLines = snapshot.lines.filter(
             (line) => line.storeId === store.id,
@@ -238,9 +246,15 @@ export async function renderGroceryListPage(
             rules: rulesByStore.get(store.id) ?? [],
         };
     });
-    const unknownAllergen = memberAllergens.some(
-        (row) => row.allergens.length > 0,
-    );
+    const unknownAllergen = snapshot.lines.some((line) => {
+        const food = line.foodId ? catalog.get(line.foodId) : null;
+        const warning = groceryAllergenWarning(
+            line.displayName,
+            memberAllergens,
+            food ? food.allergens : null,
+        );
+        return warning != null && !warning.blocking;
+    });
     return {
         status: 200,
         html: renderGroceryPage({
@@ -287,6 +301,32 @@ export async function renderSettingsAccountPage(
             widgetsEnabled: widgetsEnabledFromProfile(profile),
             alcoholTrackingEnabled: alcoholTrackingEnabledFromProfile(profile),
             drinkUnit: preferredDrinkUnitFromProfile(profile) ?? "",
+            error,
+        }),
+    };
+}
+
+export async function renderSettingsFoodsPage(
+    viewerUserId: string,
+    error?: string,
+): Promise<{ status: 200 | 403; html: string }> {
+    const gate = await memberGate(viewerUserId);
+    if ("html" in gate) return { status: gate.status, html: gate.html };
+    const profile = await getProfile(viewerUserId);
+    const householdId = gate.viewer.householdId;
+    const store = liveFoodsStore();
+    const foods = await store.listFoods(householdId);
+    const withAliases = await Promise.all(
+        foods.map(async (food) => ({
+            ...food,
+            aliases: await store.listAliases(householdId, food.id),
+        })),
+    );
+    return {
+        status: 200,
+        html: renderFoodsSettingsPage({
+            chrome: viewerChromeFromProfile(profile),
+            foods: withAliases,
             error,
         }),
     };
@@ -394,10 +434,16 @@ export async function renderRecipeDetailRoute(
         }
         throw err;
     }
+    const catalog = await foodsByIds(
+        liveFoodsStore(),
+        householdId,
+        view.ingredients.map((row) => row.foodId),
+    );
     const macros = macrosForPerson(
         view.ingredients,
         view.yieldPortions,
         view.portionCount,
+        catalog,
     );
     const rules = liveRulesStore();
     const person = members.find((member) => member.userId === filterUserId);
@@ -406,9 +452,15 @@ export async function renderRecipeDetailRoute(
         rules.listDislikes(householdId, filterUserId),
         liveSettingsStore().listStores(householdId),
     ]);
+    const allCatalogued = view.ingredients.every(
+        (row) => row.foodId && catalog.has(row.foodId),
+    );
     const warning = groceryAllergenWarning(
         view.ingredients.map((row) => row.displayName).join(" "),
         person ? [{ displayName: person.displayName, allergens }] : [],
+        allCatalogued
+            ? [...catalog.values()].flatMap((food) => food.allergens)
+            : null,
     );
     return {
         status: 200,

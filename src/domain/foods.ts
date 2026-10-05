@@ -569,6 +569,69 @@ export async function findFoodById(
     return food;
 }
 
+export async function resolveFoodForWrite(
+    store: FoodsStore,
+    householdId: string,
+    kind: FoodKind,
+    input: {
+        foodId?: string;
+        barcode?: string;
+        name?: string;
+    },
+    lookup?: (barcode: string) => Promise<FoodResult | null>,
+): Promise<Food> {
+    const foodId = input.foodId?.trim();
+    if (foodId) {
+        const food = await findFoodById(store, householdId, foodId);
+        if (food.kind !== kind) {
+            throw new FoodsInputError(
+                kind === "supply"
+                    ? "That catalog item is a food."
+                    : "That catalog item is a supply.",
+            );
+        }
+        return food;
+    }
+    const barcode = input.barcode?.trim();
+    if (barcode) {
+        if (!lookup) throw new FoodsInputError("Enter a valid barcode.");
+        const food = await findOrCreateFoodByBarcode(
+            store,
+            householdId,
+            barcode,
+            lookup,
+        );
+        if (food.kind !== kind) {
+            throw new FoodsInputError(
+                kind === "supply"
+                    ? "That catalog item is a food."
+                    : "That catalog item is a supply.",
+            );
+        }
+        return food;
+    }
+    return findOrCreateManualFood(store, householdId, kind, input.name ?? "");
+}
+
+export async function foodsByIds(
+    store: FoodsStore,
+    householdId: string,
+    ids: Iterable<string | null | undefined>,
+): Promise<Map<string, Food>> {
+    const unique = [
+        ...new Set(
+            [...ids].filter((id): id is string => Boolean(id && id.trim())),
+        ),
+    ];
+    const entries = await Promise.all(
+        unique.map(async (id) => {
+            const food = await store.getFood(householdId, id);
+            return food ? ([id, food] as const) : null;
+        }),
+    );
+    return new Map(entries.filter((entry) => entry != null));
+}
+
 function parseOptionalNutrient(
     value: number | null | undefined,
 ): number | null {

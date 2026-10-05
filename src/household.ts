@@ -54,7 +54,6 @@ export type HouseholdColumns = {
 
 export type HouseholdConfigWire = {
     name: string;
-    fridge_locations: string[];
     recipe_search_places: Array<{
         name: string;
         kind: RecipePlaceKind;
@@ -474,7 +473,6 @@ export function householdConfigToWire(
 ): HouseholdConfigWire {
     return {
         name: config.name,
-        fridge_locations: config.fridgeLocations,
         recipe_search_places: config.recipeSearchPlaces.map((place) => ({
             name: place.name,
             kind: place.kind,
@@ -572,8 +570,6 @@ export function parseHouseholdConfigPatch(
     }
     const record = value as {
         name?: unknown;
-        fridgeLocations?: unknown;
-        fridge_locations?: unknown;
         recipeSearchPlaces?: unknown;
         recipe_search_places?: unknown;
         preferences?: unknown;
@@ -584,18 +580,6 @@ export function parseHouseholdConfigPatch(
             return { ok: false, error: "Enter a household name." };
         }
         patch.name = record.name.trim();
-    }
-    const fridgeRaw =
-        record.fridgeLocations !== undefined
-            ? record.fridgeLocations
-            : record.fridge_locations;
-    if (fridgeRaw !== undefined) {
-        const fridgeLocations = parseNameList(
-            fridgeRaw,
-            "Fridge locations must be a list of names.",
-        );
-        if (!fridgeLocations.ok) return fridgeLocations;
-        patch.fridgeLocations = fridgeLocations.value;
     }
     const placesRaw =
         record.recipeSearchPlaces !== undefined

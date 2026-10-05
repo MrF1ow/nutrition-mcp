@@ -1,10 +1,12 @@
 import { type McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { liveFridgeStore } from "../../db/fridge.js";
+import { liveFoodsStore } from "../../db/foods.js";
 import { withAnalytics } from "../../analytics.js";
 import { lookupBarcode } from "../../foods.js";
 import {
     addFoodByBarcode,
+    addFoodById,
     addLocation,
     addManualFood,
     addSupply,
@@ -249,6 +251,7 @@ export function registerFridgeTools(server: McpServer, ctx: ToolContext) {
                 amount: z.coerce.number(),
                 name: z.string().optional(),
                 barcode: z.string().optional(),
+                food_id: z.string().optional(),
                 unit: z.string().optional(),
             }),
             outputSchema: z.object({
@@ -264,32 +267,42 @@ export function registerFridgeTools(server: McpServer, ctx: ToolContext) {
                 async () => {
                     const householdId = await callerHouseholdId();
                     const store = liveFridgeStore();
+                    const foods = liveFoodsStore();
                     const item =
                         args.kind === "supply"
-                            ? await addSupply(store, {
+                            ? await addSupply(store, foods, {
                                   householdId,
                                   locationId: args.location_id,
                                   name: args.name ?? "",
                                   amount: args.amount,
                                   unit: args.unit ?? "",
+                                  foodId: args.food_id,
                               })
-                            : args.barcode
-                              ? await addFoodByBarcode(
-                                    store,
-                                    {
-                                        householdId,
-                                        locationId: args.location_id,
-                                        barcode: args.barcode,
-                                        amount: args.amount,
-                                    },
-                                    { lookup: lookupBarcode },
-                                )
-                              : await addManualFood(store, {
+                            : args.food_id
+                              ? await addFoodById(store, foods, {
                                     householdId,
                                     locationId: args.location_id,
-                                    name: args.name ?? "",
+                                    foodId: args.food_id,
                                     amount: args.amount,
-                                });
+                                })
+                              : args.barcode
+                                ? await addFoodByBarcode(
+                                      store,
+                                      foods,
+                                      {
+                                          householdId,
+                                          locationId: args.location_id,
+                                          barcode: args.barcode,
+                                          amount: args.amount,
+                                      },
+                                      { lookup: lookupBarcode },
+                                  )
+                                : await addManualFood(store, foods, {
+                                      householdId,
+                                      locationId: args.location_id,
+                                      name: args.name ?? "",
+                                      amount: args.amount,
+                                  });
                     return {
                         content: [
                             {

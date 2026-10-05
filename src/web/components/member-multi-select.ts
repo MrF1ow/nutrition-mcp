@@ -5,17 +5,6 @@ export type SelectableMember = {
     displayName: string;
 };
 
-export const DEMO_HOUSEHOLD_MEMBERS: readonly SelectableMember[] = [
-    {
-        userId: "11111111-1111-4111-8111-111111111111",
-        displayName: "Alice",
-    },
-    {
-        userId: "22222222-2222-4222-8222-222222222222",
-        displayName: "Bob",
-    },
-];
-
 export function renderMemberMultiSelect(
     members: readonly SelectableMember[],
     selectedIds: readonly string[] = [],

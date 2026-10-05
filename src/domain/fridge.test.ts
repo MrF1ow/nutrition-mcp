@@ -10,6 +10,7 @@ import {
     moveItem,
     updateItemQuantity,
 } from "./fridge.js";
+import { createMemoryFoodsStore } from "./foods.js";
 import { renderFridgePage } from "../web/pages/fridge.js";
 import { ACCENT_SWATCHES } from "../app/shell.js";
 
@@ -55,6 +56,7 @@ test("add location refuses a duplicate name", async () => {
 
 test("add food by barcode mock stores grams", async () => {
     const store = createMemoryFridgeStore();
+    const foods = createMemoryFoodsStore();
     const loc = await addLocation(store, HH, "Fridge");
     const hit = food({
         name: "Good Culture Cottage Cheese",
@@ -62,6 +64,7 @@ test("add food by barcode mock stores grams", async () => {
     });
     const item = await addFoodByBarcode(
         store,
+        foods,
         {
             householdId: HH,
             locationId: loc.id,
@@ -78,19 +81,22 @@ test("add food by barcode mock stores grams", async () => {
     expect(item.displayName).toBe("Good Culture Cottage Cheese");
     expect(item.kind).toBe("food");
     expect(item.quantity).toEqual({ amount: 1360.8, unit: "g" });
+    expect(item.foodId).toBeTruthy();
     expect(item.identity).toEqual({
         kind: "food",
-        via: "barcode",
-        barcode: "070852010016",
+        via: "catalog",
+        source: "foodable",
+        sourceId: item.foodId!,
         displayName: "Good Culture Cottage Cheese",
     });
 });
 
 test("add supply manual requires amount and unit", async () => {
     const store = createMemoryFridgeStore();
+    const foods = createMemoryFoodsStore();
     const loc = await addLocation(store, HH, "Pantry");
     await expect(
-        addSupply(store, {
+        addSupply(store, foods, {
             householdId: HH,
             locationId: loc.id,
             name: "Foil",
@@ -99,7 +105,7 @@ test("add supply manual requires amount and unit", async () => {
         }),
     ).rejects.toThrow(/unit/i);
     await expect(
-        addSupply(store, {
+        addSupply(store, foods, {
             householdId: HH,
             locationId: loc.id,
             name: "Foil",
@@ -108,7 +114,7 @@ test("add supply manual requires amount and unit", async () => {
         }),
     ).rejects.toThrow(/amount/i);
 
-    const item = await addSupply(store, {
+    const item = await addSupply(store, foods, {
         householdId: HH,
         locationId: loc.id,
         name: "Foil",
@@ -118,14 +124,15 @@ test("add supply manual requires amount and unit", async () => {
     expect(item.kind).toBe("supply");
     expect(item.displayName).toBe("Foil");
     expect(item.quantity).toEqual({ amount: 2, unit: "roll" });
+    expect(item.foodId).toBeTruthy();
     expect(item.identity.kind).toBe("supply");
-    expect(item.identity.via).toBe("manual");
+    expect(item.identity.via).toBe("catalog");
 });
 
 test("edit quantity updates the stored amount", async () => {
     const store = createMemoryFridgeStore();
     const loc = await addLocation(store, HH, "Fridge");
-    const item = await addSupply(store, {
+    const item = await addSupply(store, createMemoryFoodsStore(), {
         householdId: HH,
         locationId: loc.id,
         name: "Foil",
@@ -144,7 +151,7 @@ test("edit quantity updates the stored amount", async () => {
 test("delete item removes the row", async () => {
     const store = createMemoryFridgeStore();
     const loc = await addLocation(store, HH, "Fridge");
-    const item = await addSupply(store, {
+    const item = await addSupply(store, createMemoryFoodsStore(), {
         householdId: HH,
         locationId: loc.id,
         name: "Foil",
@@ -160,7 +167,7 @@ test("move item changes location", async () => {
     const store = createMemoryFridgeStore();
     const fridge = await addLocation(store, HH, "Fridge");
     const pantry = await addLocation(store, HH, "Pantry");
-    const item = await addSupply(store, {
+    const item = await addSupply(store, createMemoryFoodsStore(), {
         householdId: HH,
         locationId: fridge.id,
         name: "Foil",
@@ -209,6 +216,7 @@ test("fridge page reuses quantity field and food picker", () => {
                     barcode: "070852010016",
                     displayName: "Cottage Cheese",
                 },
+                foodId: null,
             },
             {
                 id: "item-2",
@@ -223,6 +231,7 @@ test("fridge page reuses quantity field and food picker", () => {
                     householdManualId: "hm-foil",
                     displayName: "Foil",
                 },
+                foodId: null,
             },
         ],
         chrome: { theme: "light", accent: ACCENT_SWATCHES.sky },

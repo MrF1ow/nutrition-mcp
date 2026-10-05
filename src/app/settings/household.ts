@@ -190,7 +190,7 @@ export function renderHouseholdSettingsPage(
         .join("");
     const body = `
         <h1>Household</h1>
-        <p class="settings-lead"><a href="/settings">Account</a></p>
+        <p class="settings-lead"><a href="/settings">Account</a> · <a href="/settings/foods">Foods</a></p>
         ${error}
         ${token}
         ${ownerForms}

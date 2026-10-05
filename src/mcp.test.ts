@@ -31,6 +31,7 @@ import * as actualDbGrocery from "./db/grocery.js";
 import * as actualDbRecipes from "./db/recipes.js";
 import * as actualDbSettings from "./db/settings.js";
 import * as actualDbRules from "./db/rules.js";
+import * as actualDbFoods from "./db/foods.js";
 import * as actualFoods from "./foods.js";
 import * as actualFoodSearch from "./food-search.js";
 
@@ -46,6 +47,7 @@ const realDbGrocery = { ...actualDbGrocery };
 const realDbRecipes = { ...actualDbRecipes };
 const realDbSettings = { ...actualDbSettings };
 const realDbRules = { ...actualDbRules };
+const realDbFoods = { ...actualDbFoods };
 const realFoods = { ...actualFoods };
 const realFoodSearch = { ...actualFoodSearch };
 import { DELETED_ACCOUNT_ANALYTICS_ID } from "./analytics.js";
@@ -60,6 +62,7 @@ import {
     type HouseholdConfig,
 } from "./household.js";
 import { createMemoryFridgeStore } from "./domain/fridge.js";
+import { createMemoryFoodsStore } from "./domain/foods.js";
 import { createMemoryGroceryStore } from "./domain/grocery.js";
 import { createMemoryRecipesStore } from "./domain/recipes.js";
 import {
@@ -255,6 +258,7 @@ const db = {
     recipesStore: createMemoryRecipesStore(),
     settingsStore: createMemorySettingsStore(),
     rulesStore: createMemoryRulesStore(),
+    foodsStore: createMemoryFoodsStore(),
     barcodeFoods: {} as Record<string, FoodResult>,
     foodSearchHits: [] as FoodResult[],
 };
@@ -521,6 +525,11 @@ mock.module("./db/rules.js", () => ({
     liveRulesStore: () => db.rulesStore,
 }));
 
+mock.module("./db/foods.js", () => ({
+    ...actualDbFoods,
+    liveFoodsStore: () => db.foodsStore,
+}));
+
 mock.module("./foods.js", () => ({
     ...actualFoods,
     lookupBarcode: async (barcode: string) => db.barcodeFoods[barcode] ?? null,
@@ -541,6 +550,7 @@ afterAll(() => {
     mock.module("./db/recipes.js", () => realDbRecipes);
     mock.module("./db/settings.js", () => realDbSettings);
     mock.module("./db/rules.js", () => realDbRules);
+    mock.module("./db/foods.js", () => realDbFoods);
     mock.module("./foods.js", () => realFoods);
     mock.module("./food-search.js", () => realFoodSearch);
 });
@@ -582,6 +592,7 @@ beforeEach(() => {
     db.recipesStore = createMemoryRecipesStore();
     db.settingsStore = createMemorySettingsStore();
     db.rulesStore = createMemoryRulesStore();
+    db.foodsStore = createMemoryFoodsStore();
     db.barcodeFoods = {};
     db.foodSearchHits = [];
 });
@@ -2708,7 +2719,7 @@ describe("household PAT has no default user", () => {
             expect(names).toContain("add_household_member");
             expect(names).toContain("get_household_config");
             expect(names).toContain("update_household_config");
-            expect(names).toContain("update_fridge_locations");
+            expect(names).not.toContain("update_fridge_locations");
         });
     });
 
@@ -3158,7 +3169,6 @@ describe("household config tools", () => {
             expect(r.isError).toBeFalsy();
             expect(r.structuredContent).toEqual({
                 name: "Home",
-                fridge_locations: [],
                 recipe_search_places: [],
                 preferences: {
                     constraints: [],
@@ -3169,20 +3179,18 @@ describe("household config tools", () => {
         });
     });
 
-    test("PAT fridge replace then get returns those names", async () => {
+    test("PAT name replace then get returns that name", async () => {
         await withHousehold(async (call) => {
-            const written = await call("update_fridge_locations", {
-                locations: ["fridge", "freezer"],
+            const written = await call("update_household_config", {
+                name: "Cabin",
             });
             expect(written.isError).toBeFalsy();
-            expect(written.structuredContent).toEqual({
-                fridge_locations: ["fridge", "freezer"],
-            });
+            expect(written.structuredContent?.name).toBe("Cabin");
             const got = await call("get_household_config");
-            expect(got.structuredContent?.fridge_locations).toEqual([
-                "fridge",
-                "freezer",
-            ]);
+            expect(got.structuredContent?.name).toBe("Cabin");
+            expect(got.structuredContent).not.toHaveProperty(
+                "fridge_locations",
+            );
         });
     });
 
@@ -3210,8 +3218,10 @@ describe("household config tools", () => {
 
     test("member OAuth reads the same config the PAT wrote", async () => {
         await withHousehold(async (call) => {
-            await call("update_fridge_locations", {
-                locations: ["garage freezer"],
+            await call("update_household_config", {
+                recipe_search_places: [
+                    { name: "Garage freezer", kind: "other" },
+                ],
             });
         });
         db.members = [
@@ -3225,23 +3235,24 @@ describe("household config tools", () => {
         await withTools(null, async (call) => {
             const r = await call("get_household_config");
             expect(r.isError).toBeFalsy();
-            expect(r.structuredContent?.fridge_locations).toEqual([
-                "garage freezer",
+            expect(r.structuredContent?.recipe_search_places).toEqual([
+                { name: "Garage freezer", kind: "other", url: null },
             ]);
+            expect(r.structuredContent).not.toHaveProperty("fridge_locations");
         });
     });
 
-    test("owner OAuth fridge write sticks", async () => {
+    test("owner OAuth config write sticks", async () => {
         await withTools(null, async (call) => {
-            const r = await call("update_fridge_locations", {
-                locations: ["crisper"],
+            const r = await call("update_household_config", {
+                name: "Crisper",
             });
             expect(r.isError).toBeFalsy();
         });
-        expect(db.household?.fridgeLocations).toEqual(["crisper"]);
+        expect(db.household?.name).toBe("Crisper");
     });
 
-    test("member OAuth fridge write is refused", async () => {
+    test("member OAuth fridge location writes are gone from the wire", async () => {
         db.members = [
             {
                 householdId: "hh-1",
@@ -3250,12 +3261,9 @@ describe("household config tools", () => {
                 displayName: "U1",
             },
         ];
-        await withTools(null, async (call) => {
-            const r = await call("update_fridge_locations", {
-                locations: ["crisper"],
-            });
-            expect(r.isError).toBe(true);
-            expect(textOf(r)).toContain("owner");
+        await withHousehold(async (_call, list) => {
+            const names = await list();
+            expect(names).not.toContain("update_fridge_locations");
         });
         expect(db.household?.fridgeLocations).toEqual([]);
     });
@@ -3306,7 +3314,7 @@ describe("household config tools", () => {
             },
         ];
         await withHousehold(async (call) => {
-            await call("update_fridge_locations", { locations: ["fridge"] });
+            await call("update_household_config", { name: "After write" });
             const r = await call("log_meal", {
                 description: "toast",
                 meal_type: "breakfast",
@@ -3323,19 +3331,19 @@ describe("household config tools", () => {
 
     test("the last of two config writes wins", async () => {
         await withHousehold(async (call) => {
-            await call("update_fridge_locations", { locations: ["a"] });
-            await call("update_fridge_locations", { locations: ["b"] });
+            await call("update_household_config", { name: "A" });
+            await call("update_household_config", { name: "B" });
             const got = await call("get_household_config");
-            expect(got.structuredContent?.fridge_locations).toEqual(["b"]);
+            expect(got.structuredContent?.name).toBe("B");
         });
     });
 
-    test("tools/list includes the three config tools", async () => {
+    test("tools/list includes the two config tools", async () => {
         await withHousehold(async (_call, list) => {
             const names = await list();
             expect(names).toContain("get_household_config");
             expect(names).toContain("update_household_config");
-            expect(names).toContain("update_fridge_locations");
+            expect(names).not.toContain("update_fridge_locations");
         });
     });
 
@@ -3608,6 +3616,7 @@ describe("phone-app domain MCP tools", () => {
                     name: "Cottage Cheese",
                     source: "off:070852010016",
                     barcode: "070852010016",
+                    food_id: null,
                     calories: 98,
                 }),
             ]);
@@ -3730,6 +3739,11 @@ describe("phone-app domain MCP tools", () => {
                 allergen: "peanut",
             });
             expect(allergen.isError).toBeFalsy();
+            const food = await call("upsert_food", {
+                name: "peanut butter",
+                allergens: ["peanut"],
+            });
+            expect(food.isError).toBeFalsy();
             const line = await call("add_grocery_line", {
                 store_id: store.id,
                 kind: "food",
@@ -5176,8 +5190,34 @@ describe("authenticated dashboard HTTP", () => {
         const html = await r.text();
         expect(html).toContain("<h1>Settings</h1>");
         expect(html).toContain('href="/settings/household"');
+        expect(html).toContain('href="/settings/foods"');
         expect(html).toContain('href="/settings" aria-current="page"');
         expect(html).not.toContain("coming-soon");
+    });
+
+    test("GET /settings/foods lists the catalog", async () => {
+        const r = await siteApp.request("http://x/settings/foods", {
+            headers: { cookie: cookieFor(alice) },
+        });
+        expect(r.status).toBe(200);
+        const html = await r.text();
+        expect(html).toContain("<h1>Foods</h1>");
+        expect(html).toContain('href="/settings"');
+        expect(html).toContain('href="/settings/household"');
+        expect(html).toContain("No foods in the catalog yet.");
+    });
+
+    test("GET /api/foods/search is member-only", async () => {
+        const empty = await siteApp.request("http://x/api/foods/search", {
+            headers: { cookie: cookieFor(alice) },
+        });
+        expect(empty.status).toBe(200);
+        expect(await empty.json()).toEqual({ foods: [] });
+        const outsiderRes = await siteApp.request(
+            "http://x/api/foods/search?q=egg",
+            { headers: { cookie: cookieFor(outsider) } },
+        );
+        expect(outsiderRes.status).toBe(403);
     });
 
     test("GET /settings/household shows owner add-member form", async () => {

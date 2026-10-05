@@ -1,6 +1,7 @@
 import { type McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { liveFridgeStore } from "../../db/fridge.js";
+import { liveFoodsStore } from "../../db/foods.js";
 import { liveGroceryStore } from "../../db/grocery.js";
 import { liveSettingsStore } from "../../db/settings.js";
 import { withAnalytics } from "../../analytics.js";
@@ -9,6 +10,7 @@ import { alreadyHaveTag } from "../../domain/linking.js";
 import { listFridge } from "../../domain/fridge.js";
 import {
     addGroceryFoodByBarcode,
+    addGroceryFoodById,
     addGroceryManualFood,
     addGrocerySupply,
     checkGroceryLine,
@@ -64,6 +66,7 @@ export function registerGroceryTools(server: McpServer, ctx: ToolContext) {
                     const stock = fridge.items.map((item) => ({
                         identity: item.identity,
                         quantity: item.quantity,
+                        foodId: item.foodId,
                     }));
                     const payload = {
                         lines: snapshot.lines.map((line) => {
@@ -71,6 +74,7 @@ export function registerGroceryTools(server: McpServer, ctx: ToolContext) {
                                 {
                                     identity: line.identity,
                                     quantity: line.quantity,
+                                    foodId: line.foodId,
                                 },
                                 stock,
                             );
@@ -133,6 +137,7 @@ export function registerGroceryTools(server: McpServer, ctx: ToolContext) {
                 amount: z.coerce.number(),
                 name: z.string().optional(),
                 barcode: z.string().optional(),
+                food_id: z.string().optional(),
                 unit: z.string().optional(),
                 section_id: z.string().optional(),
             }),
@@ -150,36 +155,57 @@ export function registerGroceryTools(server: McpServer, ctx: ToolContext) {
                     const householdId = await callerHouseholdId();
                     const grocery = liveGroceryStore();
                     const settings = liveSettingsStore();
+                    const foods = liveFoodsStore();
                     const line =
                         args.kind === "supply"
-                            ? await addGrocerySupply(grocery, settings, {
+                            ? await addGrocerySupply(grocery, settings, foods, {
                                   householdId,
                                   storeId: args.store_id,
                                   sectionId: args.section_id,
                                   name: args.name ?? "",
                                   amount: args.amount,
                                   unit: args.unit ?? "",
+                                  foodId: args.food_id,
                               })
-                            : args.barcode
-                              ? await addGroceryFoodByBarcode(
+                            : args.food_id
+                              ? await addGroceryFoodById(
                                     grocery,
                                     settings,
+                                    foods,
                                     {
                                         householdId,
                                         storeId: args.store_id,
                                         sectionId: args.section_id,
-                                        barcode: args.barcode,
+                                        foodId: args.food_id,
                                         amount: args.amount,
                                     },
-                                    { lookup: lookupBarcode },
                                 )
-                              : await addGroceryManualFood(grocery, settings, {
-                                    householdId,
-                                    storeId: args.store_id,
-                                    sectionId: args.section_id,
-                                    name: args.name ?? "",
-                                    amount: args.amount,
-                                });
+                              : args.barcode
+                                ? await addGroceryFoodByBarcode(
+                                      grocery,
+                                      settings,
+                                      foods,
+                                      {
+                                          householdId,
+                                          storeId: args.store_id,
+                                          sectionId: args.section_id,
+                                          barcode: args.barcode,
+                                          amount: args.amount,
+                                      },
+                                      { lookup: lookupBarcode },
+                                  )
+                                : await addGroceryManualFood(
+                                      grocery,
+                                      settings,
+                                      foods,
+                                      {
+                                          householdId,
+                                          storeId: args.store_id,
+                                          sectionId: args.section_id,
+                                          name: args.name ?? "",
+                                          amount: args.amount,
+                                      },
+                                  );
                     const extras = await groceryLineExtras(householdId, line);
                     const bits = [
                         `Added ${line.displayName} ${line.quantity.amount} ${line.quantity.unit}`,
