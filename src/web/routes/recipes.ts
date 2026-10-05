@@ -29,6 +29,13 @@ import { liveGroceryStore } from "../../db/grocery.js";
 import { liveRecipesStore } from "../../db/recipes.js";
 import { liveSettingsStore } from "../../db/settings.js";
 import { foodsByIds } from "../../domain/foods.js";
+import { insertMeal, snapshotToMealItemWrite } from "../../db/nutrition.js";
+import {
+    descriptionFromItems,
+    itemListDigest,
+    MealItemsError,
+    resolveAndBuildMeal,
+} from "../../domain/meals.js";
 
 export const recipesRoutes = new Hono();
 
@@ -106,6 +113,55 @@ recipesRoutes.get("/recipes/:id", requireSiteUser, async (c) => {
         },
     );
     return c.html(page.html, page.status);
+});
+
+recipesRoutes.post("/recipes/:id/log-portion", requireMember, async (c) => {
+    const userId = c.get("userId");
+    const member = siteMember(c);
+    const recipeId = c.req.param("id");
+    const body = await c.req.parseBody();
+    const portions = formAmount(body, "portions");
+    const mealTypeRaw = formText(body, "meal_type").trim().toLowerCase();
+    const meal_type =
+        mealTypeRaw === "breakfast" ||
+        mealTypeRaw === "lunch" ||
+        mealTypeRaw === "dinner" ||
+        mealTypeRaw === "snack"
+            ? mealTypeRaw
+            : "snack";
+    try {
+        const { built, specs } = await resolveAndBuildMeal({
+            householdId: member.householdId,
+            foods: liveFoodsStore(),
+            recipes: liveRecipesStore(),
+            items: [{ recipeId, portions }],
+        });
+        await insertMeal(userId, {
+            description: descriptionFromItems(built.items),
+            meal_type,
+            calories: built.totals.calories ?? undefined,
+            protein_g: built.totals.protein_g ?? undefined,
+            carbs_g: built.totals.carbs_g ?? undefined,
+            fat_g: built.totals.fat_g ?? undefined,
+            fiber_g: built.totals.fiber_g ?? undefined,
+            sugar_g: built.totals.sugar_g ?? undefined,
+            alcohol_g: built.totals.alcohol_g ?? undefined,
+            caffeine_mg: built.totals.caffeine_mg ?? undefined,
+            items: built.items.map((item) =>
+                snapshotToMealItemWrite(item, member.householdId),
+            ),
+            item_digest: itemListDigest(specs),
+        });
+        return c.redirect("/");
+    } catch (err) {
+        const page = await recipeFormError(
+            userId,
+            recipeId,
+            err instanceof MealItemsError ? err : err,
+            formText(body, "member") || undefined,
+        );
+        return c.html(page.html, page.status);
+    }
 });
 
 recipesRoutes.post("/recipes/:id", requireMember, async (c) => {

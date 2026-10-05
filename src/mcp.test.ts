@@ -63,6 +63,7 @@ import {
 } from "./household.js";
 import { createMemoryFridgeStore } from "./domain/fridge.js";
 import { createMemoryFoodsStore } from "./domain/foods.js";
+import { findOrCreateManualFood, updateFood } from "./domain/foods.js";
 import { createMemoryGroceryStore } from "./domain/grocery.js";
 import { createMemoryRecipesStore } from "./domain/recipes.js";
 import {
@@ -1124,6 +1125,42 @@ describe("log_meal and update_meal round-trip caffeine_mg", () => {
         );
         expect(keys[0]).toBe(keys[1]!);
         expect(keys[0]).toBe(PRE_CAFFEINE_KEY);
+    });
+});
+
+describe("log_meal with food items", () => {
+    test("computes totals from snapshots and ignores caller-sent totals", async () => {
+        const eggs = await findOrCreateManualFood(
+            db.foodsStore,
+            "hh-1",
+            "food",
+            "Eggs",
+        );
+        await updateFood(db.foodsStore, "hh-1", eggs.id, {
+            defaultUnit: "each",
+            gramsPerEach: 50,
+            calories: 155,
+            proteinG: 13,
+            carbsG: 1.1,
+            fatG: 11,
+            fiberG: 0,
+            sugarG: 1.1,
+        });
+        await withTools(null, async (call) => {
+            const r = await call("log_meal", {
+                description: "Breakfast",
+                meal_type: "breakfast",
+                calories: 9999,
+                items: [{ food_id: eggs.id, amount: 2, unit: "each" }],
+            });
+            expect(r.isError).toBeFalsy();
+            expect(textOf(r)).toContain(
+                "Item nutrition was computed from the food list",
+            );
+            expect(db.inserted[0]!.calories).toBe(155);
+            expect(db.inserted[0]!.item_digest).toBeTruthy();
+            expect(textOf(r)).toContain("Item: Eggs");
+        });
     });
 });
 
@@ -2640,6 +2677,7 @@ describe("export_all_data is on the tool surface", () => {
                 ?.description ?? "";
         for (const file of [
             "meals.csv",
+            "meal_items.csv",
             "water.csv",
             "weight.csv",
             "goals.csv",

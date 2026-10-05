@@ -83,11 +83,23 @@ function medianOf(
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
+function variationKey(meal: Meal): string {
+    const foodIds = (meal.items ?? [])
+        .map((item) => item.food_id)
+        .filter((id): id is string => Boolean(id))
+        .slice()
+        .sort();
+    if (foodIds.length > 0 && foodIds.length === (meal.items?.length ?? 0)) {
+        return `foods:${foodIds.join("\0")}`;
+    }
+    return normalizeDescription(meal.description);
+}
+
 /** Group meals into recurring variations, most frequent first. */
 export function groupMealVariations(meals: Meal[]): MealVariation[] {
     const groups = new Map<string, Meal[]>();
     for (const meal of meals) {
-        const key = normalizeDescription(meal.description);
+        const key = variationKey(meal);
         const group = groups.get(key);
         if (group) group.push(meal);
         else groups.set(key, [meal]);

@@ -1,11 +1,13 @@
 import { getSupabase } from "../db/client.js";
 import {
     exportArchivePath,
+    getAllMealItems,
     getAllMeals,
     getAllWater,
     getAllWeight,
     getNutritionGoals,
     type Meal,
+    type MealItem,
     type NutritionGoals,
     type WaterEntry,
     type WeightEntry,
@@ -100,6 +102,78 @@ export function buildMealsCsv(meals: Meal[], tz: string): string {
         );
     }
     return rows.join("\n");
+}
+
+const MEAL_ITEM_CSV_COLUMNS = [
+    "meal_id",
+    "id",
+    "logged_at",
+    "timezone",
+    "food_id",
+    "recipe_id",
+    "label",
+    "amount",
+    "unit",
+    "grams",
+    "portions",
+    "calories",
+    "protein_g",
+    "carbs_g",
+    "fat_g",
+    "fiber_g",
+    "sugar_g",
+    "alcohol_g",
+    "caffeine_mg",
+    "sort_order",
+] as const;
+
+export type MealItemCsvRow = MealItem & { logged_at: string };
+
+/**
+ * Build meal_items.csv. Header even with zero rows. Keyed by meal_id, and
+ * every timestamp carries a timezone column like the other files. meals.csv
+ * stays the import contract and is unchanged.
+ */
+export function buildMealItemsCsv(items: MealItemCsvRow[], tz: string): string {
+    const rows = [MEAL_ITEM_CSV_COLUMNS.join(",")];
+    for (const item of items) {
+        rows.push(
+            [
+                csvEscape(item.meal_id),
+                csvEscape(item.id),
+                csvEscape(formatLocalDateTime(item.logged_at, tz)),
+                csvEscape(tz),
+                csvEscape(item.food_id),
+                csvEscape(item.recipe_id),
+                csvEscape(item.label),
+                csvEscape(item.amount),
+                csvEscape(item.unit),
+                csvEscape(item.grams),
+                csvEscape(item.portions),
+                csvEscape(item.calories),
+                csvEscape(item.protein_g),
+                csvEscape(item.carbs_g),
+                csvEscape(item.fat_g),
+                csvEscape(item.fiber_g),
+                csvEscape(item.sugar_g),
+                csvEscape(item.alcohol_g),
+                csvEscape(item.caffeine_mg),
+                csvEscape(item.sort_order),
+            ].join(","),
+        );
+    }
+    return rows.join("\n");
+}
+
+export function mealItemsForCsv(
+    items: MealItem[],
+    meals: Meal[],
+): MealItemCsvRow[] {
+    const loggedAt = new Map(meals.map((row) => [row.id, row.logged_at]));
+    return items.map((item) => ({
+        ...item,
+        logged_at: loggedAt.get(item.meal_id) ?? item.created_at,
+    }));
 }
 
 /**
@@ -293,6 +367,7 @@ export function buildProfileCsv(profile: Profile | null, tz: string): string {
  */
 export const EXPORT_ARCHIVE_FILES = [
     "meals.csv",
+    "meal_items.csv",
     "water.csv",
     "weight.csv",
     "goals.csv",
@@ -313,7 +388,12 @@ export function buildExportReadme(opts: {
     tz: string;
     tzConfigured: boolean;
     weightUnit: WeightUnit;
-    counts: { meals: number; water: number; weight: number };
+    counts: {
+        meals: number;
+        water: number;
+        weight: number;
+        meal_items: number;
+    };
 }): string {
     const { generatedAt, tz, tzConfigured, weightUnit, counts } = opts;
     const rows = (n: number) => `${n} row${n === 1 ? "" : "s"}`;
@@ -337,6 +417,7 @@ export function buildExportReadme(opts: {
         "Files",
         "-----",
         `meals.csv    ${rows(counts.meals)} — every meal you have logged: time, description, calories and macros.`,
+        `meal_items.csv ${rows(counts.meal_items)} — foods and recipe portions that make up a meal, keyed by meal_id. Empty (header only) when meals were logged as free text. Not re-imported.`,
         `water.csv    ${rows(counts.water)} — every water entry, in millilitres.`,
         `weight.csv   ${rows(counts.weight)} — every weigh-in, as stored grams and as ${weightUnit}.`,
         "goals.csv    your current daily targets — one row, or a header alone if you have never set goals.",
@@ -356,13 +437,18 @@ export function buildExportReadme(opts: {
         "Re-importing",
         "------------",
         "Only meals.csv can be read back in. Hand it to start_meal_import (which parses it in your browser) or to bulk_import_meals; its column names are exactly the ones the importer expects, and re-importing the same file twice is a no-op rather than a set of duplicates.",
-        "water.csv, weight.csv, goals.csv and profile.csv are export-only for now — there is no import path for them, so keep this archive if you want that history back.",
+        "water.csv, weight.csv, goals.csv, profile.csv and meal_items.csv are export-only for now — there is no import path for them, so keep this archive if you want that history back.",
         "",
     ].join("\n");
 }
 
 export interface FullExportResult {
-    counts: { meals: number; water: number; weight: number };
+    counts: {
+        meals: number;
+        water: number;
+        weight: number;
+        meal_items: number;
+    };
     goals: boolean;
     profile: boolean;
     /** Absent only when the account has nothing at all to export. */
@@ -382,18 +468,22 @@ export async function exportAllData(userId: string): Promise<FullExportResult> {
     // an account with years of history pages through meals, water and weight,
     // and serialising those pushes the tool past the point where a host gives
     // up on it.
-    const [meals, water, weight, goals, profile] = await Promise.all([
-        getAllMeals(userId),
-        getAllWater(userId),
-        getAllWeight(userId),
-        getNutritionGoals(userId),
-        getProfile(userId),
-    ]);
+    const [meals, mealItems, water, weight, goals, profile] = await Promise.all(
+        [
+            getAllMeals(userId),
+            getAllMealItems(userId),
+            getAllWater(userId),
+            getAllWeight(userId),
+            getNutritionGoals(userId),
+            getProfile(userId),
+        ],
+    );
 
     const counts = {
         meals: meals.length,
         water: water.length,
         weight: weight.length,
+        meal_items: mealItems.length,
     };
 
     // Both preferences come off the profile row already in hand. The
@@ -433,6 +523,10 @@ export async function exportAllData(userId: string): Promise<FullExportResult> {
         // importer's column aliases, so a column renamed for the look of it
         // here breaks a re-import silently.
         "meals.csv": buildMealsCsv(meals, tz),
+        "meal_items.csv": buildMealItemsCsv(
+            mealItemsForCsv(mealItems, meals),
+            tz,
+        ),
         "water.csv": buildWaterCsv(water, tz),
         "weight.csv": buildWeightCsv(weight, tz, weightUnit),
         "goals.csv": buildGoalsCsv(goals, tz),

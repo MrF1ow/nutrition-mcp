@@ -10,7 +10,9 @@ import {
     countMeals,
     existingIdempotencyKeys,
     existingMealIds,
+    snapshotToMealItemWrite,
     type Meal,
+    type MealInput,
 } from "../../db/nutrition.js";
 import {
     getUserTimezone,
@@ -56,6 +58,17 @@ import {
     type AlcoholDisplay,
 } from "../shared.js";
 import type { ToolContext } from "../shared.js";
+import { liveFoodsStore } from "../../db/foods.js";
+import { liveRecipesStore } from "../../db/recipes.js";
+import {
+    callerSentTotals,
+    COMPUTED_TOTALS_WARNING,
+    descriptionFromItems,
+    itemListDigest,
+    MealItemsError,
+    resolveAndBuildMeal,
+    type MealItemSpec,
+} from "../../domain/meals.js";
 import {
     registerNutritionReadTools,
     registerNutritionInsightTools,
@@ -282,6 +295,96 @@ export async function buildMealProgress(
     return { progressSection, structuredContent };
 }
 
+export const MEAL_ITEM_INPUT_SCHEMA = z.object({
+    food_id: z
+        .string()
+        .optional()
+        .describe("Household catalog food id. Preferred when known."),
+    recipe_id: z
+        .string()
+        .optional()
+        .describe("Recipe to log as a portion of this meal."),
+    name: z
+        .string()
+        .optional()
+        .describe(
+            "Food name when you do not have a food_id. Resolved through the household catalog (find-or-create).",
+        ),
+    amount: z.coerce.number().positive().optional().describe("Amount eaten."),
+    unit: z
+        .string()
+        .optional()
+        .describe("Unit for amount (g, each, cup, ml, …)."),
+    portions: z.coerce
+        .number()
+        .positive()
+        .optional()
+        .describe("Recipe portions. Used when recipe_id is set."),
+});
+
+function specsFromToolItems(
+    items: z.infer<typeof MEAL_ITEM_INPUT_SCHEMA>[],
+): MealItemSpec[] {
+    return items.map((item) => ({
+        foodId: item.food_id,
+        recipeId: item.recipe_id,
+        name: item.name,
+        amount: item.amount,
+        unit: item.unit,
+        portions: item.portions,
+    }));
+}
+
+async function mealWriteFromItems(
+    householdId: string,
+    items: z.infer<typeof MEAL_ITEM_INPUT_SCHEMA>[],
+): Promise<{
+    totals: Pick<
+        MealInput,
+        | "calories"
+        | "protein_g"
+        | "carbs_g"
+        | "fat_g"
+        | "fiber_g"
+        | "sugar_g"
+        | "alcohol_g"
+        | "caffeine_mg"
+    >;
+    items: MealInput["items"];
+    item_digest: string;
+    unknownNote: string;
+    description: string;
+}> {
+    const specs = specsFromToolItems(items);
+    const { built, specs: resolved } = await resolveAndBuildMeal({
+        householdId,
+        foods: liveFoodsStore(),
+        recipes: liveRecipesStore(),
+        items: specs,
+    });
+    return {
+        totals: {
+            calories: built.totals.calories ?? undefined,
+            protein_g: built.totals.protein_g ?? undefined,
+            carbs_g: built.totals.carbs_g ?? undefined,
+            fat_g: built.totals.fat_g ?? undefined,
+            fiber_g: built.totals.fiber_g ?? undefined,
+            sugar_g: built.totals.sugar_g ?? undefined,
+            alcohol_g: built.totals.alcohol_g ?? undefined,
+            caffeine_mg: built.totals.caffeine_mg ?? undefined,
+        },
+        items: built.items.map((item) =>
+            snapshotToMealItemWrite(item, householdId),
+        ),
+        item_digest: itemListDigest(resolved),
+        unknownNote:
+            built.unknownItems.length > 0
+                ? `\n\nNutrition unknown for: ${built.unknownItems.join(", ")}.`
+                : "",
+        description: descriptionFromItems(built.items),
+    };
+}
+
 export function registerNutritionWriteTools(
     server: McpServer,
     ctx: ToolContext,
@@ -293,6 +396,7 @@ export function registerNutritionWriteTools(
         nutritionWriteSchema,
         actorUserId,
         writeUserId,
+        callerHouseholdId,
         analytics,
         uiMeta,
     } = ctx;
@@ -401,6 +505,12 @@ export function registerNutritionWriteTools(
                     .describe(
                         "Optional stable key for safe retries. You normally don't need to set this: when omitted, the server derives a stable key from the meal content (including logged_at), so replaying the identical call returns the original meal instead of duplicating it. Pass a UUID only to force-override that behavior. Do NOT reuse a key for genuinely different meals.",
                     ),
+                items: z
+                    .array(MEAL_ITEM_INPUT_SCHEMA)
+                    .optional()
+                    .describe(
+                        "Foods and recipe portions that make up this meal. When present, the server computes calories and macros from catalog snapshots and ignores any totals you send (a warning is returned). Omit for a free-text / estimated meal — that path is unchanged.",
+                    ),
             }),
             outputSchema: MEAL_PROGRESS_OUTPUT_SCHEMA,
             // Link the tool to its progress UI (MCP Apps). update_meal reuses
@@ -408,7 +518,7 @@ export function registerNutritionWriteTools(
             // widget renders nothing when no goals are set.
             ...uiMeta(MEAL_LOGGED_WIDGET_URI),
         },
-        async ({ user_id, target_member, ...mealArgs }) => {
+        async ({ user_id, target_member, items, ...mealArgs }) => {
             return withAnalytics(
                 "log_meal",
                 async () => {
@@ -417,10 +527,43 @@ export function registerNutritionWriteTools(
                         userId,
                         mealArgs.logged_at,
                     );
-                    const { meal, deduplicated } = await insertMeal(userId, {
+                    let extra = "";
+                    let write: MealInput = {
                         ...mealArgs,
                         logged_at: iso,
-                    });
+                    };
+                    if (items && items.length > 0) {
+                        try {
+                            const householdId = await callerHouseholdId();
+                            const computed = await mealWriteFromItems(
+                                householdId,
+                                items,
+                            );
+                            if (callerSentTotals(mealArgs)) {
+                                extra += `\n\n${COMPUTED_TOTALS_WARNING}`;
+                            }
+                            extra += computed.unknownNote;
+                            write = {
+                                description: mealArgs.description,
+                                meal_type: mealArgs.meal_type,
+                                notes: mealArgs.notes,
+                                idempotency_key: mealArgs.idempotency_key,
+                                logged_at: iso,
+                                ...computed.totals,
+                                items: computed.items,
+                                item_digest: computed.item_digest,
+                            };
+                        } catch (err) {
+                            if (err instanceof MealItemsError) {
+                                throw new Error(err.message);
+                            }
+                            throw err;
+                        }
+                    }
+                    const { meal, deduplicated } = await insertMeal(
+                        userId,
+                        write,
+                    );
                     const header = deduplicated
                         ? "Meal already logged (idempotent retry):"
                         : "Meal logged:";
@@ -441,7 +584,106 @@ export function registerNutritionWriteTools(
                                     (meal.alcohol_g ?? 0) > 0,
                                     alcohol,
                                     "Alcohol saved with this meal",
-                                )}${missingNutrientNote(meal)}${note}`,
+                                )}${missingNutrientNote(meal)}${note}${extra}`,
+                            },
+                        ],
+                        structuredContent,
+                    };
+                },
+                analytics,
+            );
+        },
+    );
+
+    server.registerTool(
+        "log_recipe_portion",
+        {
+            title: "Log Recipe Portion",
+            description:
+                "Log a meal as one recipe portion. Per-person macros come from the recipe's catalog foods (macrosForPerson). Prefer this when the user ate a known household recipe rather than estimating free-text macros.",
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            inputSchema: nutritionWriteSchema({
+                recipe_id: z.string().describe("Recipe to log a portion of."),
+                portions: z.coerce
+                    .number()
+                    .positive()
+                    .describe("How many portions of the recipe were eaten."),
+                meal_type: z
+                    .enum(["breakfast", "lunch", "dinner", "snack"])
+                    .optional()
+                    .describe("Type of meal. Defaults to snack when omitted."),
+                logged_at: z
+                    .string()
+                    .optional()
+                    .describe(
+                        "When this actually happened (defaults to now). " +
+                            LOGGED_AT_FORMS +
+                            LOGGED_AT_OMIT_IF_NOW,
+                    ),
+            }),
+            outputSchema: MEAL_PROGRESS_OUTPUT_SCHEMA,
+            ...uiMeta(MEAL_LOGGED_WIDGET_URI),
+        },
+        async ({
+            user_id,
+            target_member,
+            recipe_id,
+            portions,
+            meal_type,
+            logged_at,
+        }) => {
+            return withAnalytics(
+                "log_recipe_portion",
+                async () => {
+                    const userId = await writeUserId(user_id, target_member);
+                    const householdId = await callerHouseholdId();
+                    const { iso, note } = await resolveWriteTimestamp(
+                        userId,
+                        logged_at,
+                    );
+                    let computed;
+                    try {
+                        computed = await mealWriteFromItems(householdId, [
+                            { recipe_id, portions },
+                        ]);
+                    } catch (err) {
+                        if (err instanceof MealItemsError) {
+                            throw new Error(err.message);
+                        }
+                        throw err;
+                    }
+                    const { meal, deduplicated } = await insertMeal(userId, {
+                        description: computed.description,
+                        meal_type: meal_type ?? "snack",
+                        logged_at: iso,
+                        ...computed.totals,
+                        items: computed.items,
+                        item_digest: computed.item_digest,
+                    });
+                    const header = deduplicated
+                        ? "Meal already logged (idempotent retry):"
+                        : "Meal logged:";
+                    const { progressSection, structuredContent } =
+                        await buildMealProgress(
+                            userId,
+                            meal,
+                            "logged",
+                            alcohol,
+                        );
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `${header}\n${formatMeal(meal, alcohol)}${progressSection}${alcoholHiddenNote(
+                                    (meal.alcohol_g ?? 0) > 0,
+                                    alcohol,
+                                    "Alcohol saved with this meal",
+                                )}${missingNutrientNote(meal)}${note}${computed.unknownNote}`,
                             },
                         ],
                         structuredContent,
@@ -718,8 +960,14 @@ export function registerNutritionEditTools(
     server: McpServer,
     ctx: ToolContext,
 ) {
-    const { alcohol, nutritionWriteSchema, writeUserId, analytics, uiMeta } =
-        ctx;
+    const {
+        alcohol,
+        nutritionWriteSchema,
+        writeUserId,
+        callerHouseholdId,
+        analytics,
+        uiMeta,
+    } = ctx;
     server.registerTool(
         "delete_meal",
         {
@@ -821,6 +1069,12 @@ export function registerNutritionEditTools(
                     .optional()
                     .describe("When the meal was eaten. " + LOGGED_AT_FORMS),
                 notes: z.string().optional(),
+                items: z
+                    .array(MEAL_ITEM_INPUT_SCHEMA)
+                    .optional()
+                    .describe(
+                        "Replace this meal's foods and recipe portions. When present, totals are recomputed from snapshots and any totals you send are ignored.",
+                    ),
             }),
             outputSchema: MEAL_PROGRESS_OUTPUT_SCHEMA,
             // Reuses the SAME meal-logged widget as log_meal (see
@@ -828,7 +1082,7 @@ export function registerNutritionEditTools(
             // changes its header. Renders nothing when no goals are set.
             ...uiMeta(MEAL_LOGGED_WIDGET_URI),
         },
-        async ({ id, user_id, target_member, ...fields }) => {
+        async ({ id, user_id, target_member, items, ...fields }) => {
             return withAnalytics(
                 "update_meal",
                 async () => {
@@ -837,10 +1091,39 @@ export function registerNutritionEditTools(
                         userId,
                         fields.logged_at,
                     );
-                    const meal = await updateMeal(userId, id, {
+                    let extra = "";
+                    let patch: Partial<MealInput> = {
                         ...fields,
                         logged_at: iso,
-                    });
+                    };
+                    if (items && items.length > 0) {
+                        try {
+                            const householdId = await callerHouseholdId();
+                            const computed = await mealWriteFromItems(
+                                householdId,
+                                items,
+                            );
+                            if (callerSentTotals(fields)) {
+                                extra += `\n\n${COMPUTED_TOTALS_WARNING}`;
+                            }
+                            extra += computed.unknownNote;
+                            patch = {
+                                ...fields,
+                                logged_at: iso,
+                                description:
+                                    fields.description ?? computed.description,
+                                ...computed.totals,
+                                items: computed.items,
+                                item_digest: computed.item_digest,
+                            };
+                        } catch (err) {
+                            if (err instanceof MealItemsError) {
+                                throw new Error(err.message);
+                            }
+                            throw err;
+                        }
+                    }
+                    const meal = await updateMeal(userId, id, patch);
                     const { progressSection, structuredContent } =
                         await buildMealProgress(
                             userId,
@@ -856,7 +1139,7 @@ export function registerNutritionEditTools(
                                     (meal.alcohol_g ?? 0) > 0,
                                     alcohol,
                                     "Alcohol saved with this meal",
-                                )}${missingNutrientNote(meal)}${note}`,
+                                )}${missingNutrientNote(meal)}${note}${extra}`,
                             },
                         ],
                         structuredContent,

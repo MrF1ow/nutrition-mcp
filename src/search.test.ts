@@ -66,12 +66,49 @@ test("merges case, whitespace, and trailing-punctuation variants", () => {
     expect(variations[0]!.count).toBe(3);
 });
 
-test("keeps distinct descriptions as distinct groups", () => {
+test("keys on the sorted food_id set when every item has a food", () => {
+    const eggs = "food-eggs";
+    const toast = "food-toast";
+    const item = (
+        food_id: string,
+        label: string,
+    ): NonNullable<Meal["items"]>[number] => ({
+        id: `i-${food_id}`,
+        meal_id: "m",
+        user_id: "user-1",
+        household_id: "hh-1",
+        food_id,
+        recipe_id: null,
+        label,
+        amount: 1,
+        unit: "each",
+        grams: 50,
+        portions: null,
+        calories: 100,
+        protein_g: 10,
+        carbs_g: 1,
+        fat_g: 5,
+        fiber_g: 0,
+        sugar_g: 0,
+        alcohol_g: null,
+        caffeine_mg: null,
+        sort_order: 0,
+        created_at: "2026-06-20T14:30:00.000Z",
+    });
     const variations = groupMealVariations([
-        meal({ id: "a", description: "Oatmeal with raisins" }),
-        meal({ id: "b", description: "Oatmeal with banana" }),
+        meal({
+            id: "a",
+            description: "Eggs and toast",
+            items: [item(eggs, "Eggs"), item(toast, "Toast")],
+        }),
+        meal({
+            id: "b",
+            description: "Breakfast plate",
+            items: [item(toast, "Toast"), item(eggs, "Eggs")],
+        }),
     ]);
-    expect(variations).toHaveLength(2);
+    expect(variations).toHaveLength(1);
+    expect(variations[0]!.count).toBe(2);
 });
 
 test("sorts by count desc, ties broken by recency", () => {

@@ -2,6 +2,7 @@ import { test, expect } from "bun:test";
 import {
     buildExportReadme,
     buildGoalsCsv,
+    buildMealItemsCsv,
     buildMealsCsv,
     buildProfileCsv,
     buildWaterCsv,
@@ -10,6 +11,7 @@ import {
 } from "./export.js";
 import type {
     Meal,
+    MealItem,
     NutritionGoals,
     WaterEntry,
     WeightEntry,
@@ -100,6 +102,59 @@ function fieldsByName(csv: string, rowIndex = 1): Record<string, string> {
 
 test("emits a header even with no meals", () => {
     expect(buildMealsCsv([], "UTC")).toBe(HEADER);
+});
+
+const MEAL_ITEM_HEADER =
+    "meal_id,id,logged_at,timezone,food_id,recipe_id,label,amount,unit,grams,portions,calories,protein_g,carbs_g,fat_g,fiber_g,sugar_g,alcohol_g,caffeine_mg,sort_order";
+
+test("meal_items.csv has a header with zero rows", () => {
+    expect(buildMealItemsCsv([], "UTC")).toBe(MEAL_ITEM_HEADER);
+});
+
+test("meal_items.csv is keyed by meal_id and carries timezone", () => {
+    const item: MealItem = {
+        id: "22222222-2222-2222-2222-222222222222",
+        meal_id: "11111111-1111-1111-1111-111111111111",
+        user_id: "user-1",
+        household_id: "hh-1",
+        food_id: "food-1",
+        recipe_id: null,
+        label: "Eggs",
+        amount: 2,
+        unit: "each",
+        grams: 100,
+        portions: null,
+        calories: 155,
+        protein_g: 13,
+        carbs_g: 1.1,
+        fat_g: 11,
+        fiber_g: 0,
+        sugar_g: 1.1,
+        alcohol_g: null,
+        caffeine_mg: 0,
+        sort_order: 0,
+        created_at: "2026-06-20T14:30:00.000Z",
+    };
+    const f = fieldsByName(
+        buildMealItemsCsv(
+            [{ ...item, logged_at: "2026-06-20T14:30:00.000Z" }],
+            "UTC",
+        ),
+    );
+    expect(f.meal_id).toBe("11111111-1111-1111-1111-111111111111");
+    expect(f.timezone).toBe("UTC");
+    expect(f.label).toBe("Eggs");
+    expect(f.logged_at).toBe("2026-06-20 14:30:00");
+});
+
+test("meals.csv stays byte-identical for the same meal data", () => {
+    const meals = [meal()];
+    expect(buildMealsCsv(meals, "UTC")).toBe(
+        [
+            HEADER,
+            "11111111-1111-1111-1111-111111111111,2026-06-20 14:30:00,UTC,lunch,Grilled chicken,500,40,10,20,7,12,3,95,",
+        ].join("\n"),
+    );
 });
 
 test("header and data rows have identical field counts", () => {
@@ -632,7 +687,7 @@ const README_OPTS = {
     tz: "Europe/Berlin",
     tzConfigured: true,
     weightUnit: "kg" as const,
-    counts: { meals: 120, water: 45, weight: 12 },
+    counts: { meals: 120, water: 45, weight: 12, meal_items: 0 },
 };
 
 test("the README names every file in the archive", () => {
@@ -731,6 +786,7 @@ test("EXPORT_ARCHIVE_FILES is the archive's real, ordered file list", () => {
     // a file added on one side without the other is a compile error.
     expect([...EXPORT_ARCHIVE_FILES]).toEqual([
         "meals.csv",
+        "meal_items.csv",
         "water.csv",
         "weight.csv",
         "goals.csv",
@@ -746,6 +802,7 @@ test("an archive assembled from the builders reads back file for file", () => {
     const tz = "Europe/Berlin";
     const contents: Record<string, string> = {
         "meals.csv": buildMealsCsv([meal()], tz),
+        "meal_items.csv": buildMealItemsCsv([], tz),
         "water.csv": buildWaterCsv([water()], tz),
         "weight.csv": buildWeightCsv([weight()], tz, "kg"),
         "goals.csv": buildGoalsCsv(goals(), tz),
@@ -770,7 +827,12 @@ test("an archive assembled from the builders reads back file for file", () => {
     // the one file in here that is re-importable quietly stops being so.
     expect(entries[0]!.content).toBe(buildMealsCsv([meal()], tz));
     // Every CSV in the archive carries its header even when its table is empty.
-    for (const csv of ["meals.csv", "water.csv", "weight.csv"] as const) {
+    for (const csv of [
+        "meals.csv",
+        "meal_items.csv",
+        "water.csv",
+        "weight.csv",
+    ] as const) {
         expect(contents[csv]!.split("\n")[0]).not.toBe("");
     }
 });

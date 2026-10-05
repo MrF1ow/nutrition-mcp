@@ -48,6 +48,51 @@ export interface Meal {
     caffeine_mg: number | null;
     notes: string | null;
     idempotency_key: string | null;
+    items?: MealItem[];
+}
+
+export interface MealItem {
+    id: string;
+    meal_id: string;
+    user_id: string;
+    household_id: string | null;
+    food_id: string | null;
+    recipe_id: string | null;
+    label: string;
+    amount: number | null;
+    unit: string | null;
+    grams: number | null;
+    portions: number | null;
+    calories: number | null;
+    protein_g: number | null;
+    carbs_g: number | null;
+    fat_g: number | null;
+    fiber_g: number | null;
+    sugar_g: number | null;
+    alcohol_g: number | null;
+    caffeine_mg: number | null;
+    sort_order: number;
+    created_at: string;
+}
+
+export interface MealItemWrite {
+    household_id: string | null;
+    food_id: string | null;
+    recipe_id: string | null;
+    label: string;
+    amount: number | null;
+    unit: string | null;
+    grams: number | null;
+    portions: number | null;
+    calories: number | null;
+    protein_g: number | null;
+    carbs_g: number | null;
+    fat_g: number | null;
+    fiber_g: number | null;
+    sugar_g: number | null;
+    alcohol_g: number | null;
+    caffeine_mg: number | null;
+    sort_order: number;
 }
 
 export interface MealInput {
@@ -65,6 +110,8 @@ export interface MealInput {
     logged_at?: string;
     notes?: string;
     idempotency_key?: string;
+    items?: MealItemWrite[];
+    item_digest?: string;
 }
 
 export interface MealInsertResult {
@@ -85,19 +132,23 @@ export function mealIdempotencyKey(
 ): string {
     // DO NOT ADD FIELDS TO THIS ARRAY. It is deliberately incomplete:
     // fiber_g, sugar_g, alcohol_g and caffeine_mg are EXCLUDED on purpose, and
-    // any future meal column must be too. The digest is positional over exactly
-    // these values, so appending one changes the derived key of every future
-    // write — a user re-logging or re-importing something they already have
-    // would get a duplicate row instead of a clean no-op, and every "auto:" key
-    // already stored would be orphaned. This repo has shipped that bug once
-    // already (see CLAUDE.md, "Bulk meal import"); the mirror of this array is
-    // rowContentDigest in src/import.ts, which carries the same warning.
+    // any future meal *column* must be too. The digest is positional over
+    // exactly these values, so appending one changes the derived key of every
+    // future write — a user re-logging or re-importing something they already
+    // have would get a duplicate row instead of a clean no-op, and every
+    // "auto:" key already stored would be orphaned. This repo has shipped
+    // that bug once already (see CLAUDE.md, "Bulk meal import"); the mirror
+    // of this array is rowContentDigest in src/import.ts, which carries the
+    // same warning.
+    //
+    // Item-backed meals are the one additive exception: `item_digest` is
+    // appended only when present, so free-text meals keep today's key.
     //
     // Accepted consequence: two meals identical except for their fiber (or
     // sugar, or alcohol, or caffeine) dedupe to one. Dedup stability beats
     // precision here, and a caller who needs distinct rows can pass an explicit
     // idempotency_key.
-    return deriveIdempotencyKey([
+    const parts: (string | number | null | undefined)[] = [
         userId,
         input.description,
         input.meal_type,
@@ -107,7 +158,12 @@ export function mealIdempotencyKey(
         input.fat_g,
         input.notes,
         loggedAt,
-    ]);
+    ];
+    // Item-backed meals append the canonical item list so two different
+    // food lists cannot collide. Free-text meals omit this segment, so
+    // their keys stay byte-identical to the frozen field list above.
+    if (input.item_digest) parts.push(input.item_digest);
+    return deriveIdempotencyKey(parts);
 }
 
 /**
@@ -146,6 +202,7 @@ export function updatedMealIdempotencyKey(
         carbs_g: fields.carbs_g ?? existing.carbs_g ?? undefined,
         fat_g: fields.fat_g ?? existing.fat_g ?? undefined,
         notes: fields.notes ?? existing.notes ?? undefined,
+        item_digest: fields.item_digest,
     };
     // existing.logged_at came back through PostgREST, which renders
     // timestamptz as "+00:00" (and drops an all-zero fractional part) —
@@ -191,7 +248,11 @@ export async function insertMeal(
         .eq("idempotency_key", idempotencyKey)
         .maybeSingle();
     if (selErr) throw new Error(`Failed to look up meal: ${selErr.message}`);
-    if (existing) return { meal: existing as Meal, deduplicated: true };
+    if (existing) {
+        const found = existing as Meal;
+        found.items = await listMealItems(userId, [found.id]);
+        return { meal: found, deduplicated: true };
+    }
 
     const { data, error } = await sb
         .from("meals")
@@ -219,7 +280,7 @@ export async function insertMeal(
         // Concurrent retry with the same idempotency key — the other request
         // already inserted the row. Fetch and return it instead of failing.
         if (error.code === "23505") {
-            const { data: existing, error: raceErr } = await sb
+            const { data: raced, error: raceErr } = await sb
                 .from("meals")
                 .select("*")
                 .eq("user_id", userId)
@@ -229,11 +290,178 @@ export async function insertMeal(
                 throw new Error(
                     `Failed to resolve idempotent meal: ${raceErr.message}`,
                 );
-            if (existing) return { meal: existing as Meal, deduplicated: true };
+            if (raced) {
+                const found = raced as Meal;
+                found.items = await listMealItems(userId, [found.id]);
+                return { meal: found, deduplicated: true };
+            }
         }
         throw new Error(`Failed to insert meal: ${error.message}`);
     }
-    return { meal: data as Meal, deduplicated: false };
+    const saved = data as Meal;
+    if (input.items && input.items.length > 0) {
+        await replaceMealItems(userId, saved.id, input.items);
+        saved.items = await listMealItems(userId, [saved.id]);
+    }
+    return { meal: saved, deduplicated: false };
+}
+
+const MEAL_ITEM_COLS =
+    "id, meal_id, user_id, household_id, food_id, recipe_id, label, amount, unit, grams, portions, calories, protein_g, carbs_g, fat_g, fiber_g, sugar_g, alcohol_g, caffeine_mg, sort_order, created_at";
+
+export async function listMealItems(
+    userId: string,
+    mealIds: string[],
+): Promise<MealItem[]> {
+    if (mealIds.length === 0) return [];
+    const { data, error } = await getSupabase()
+        .from("meal_items")
+        .select(MEAL_ITEM_COLS)
+        .eq("user_id", userId)
+        .in("meal_id", mealIds)
+        .order("sort_order", { ascending: true });
+    if (error) throw new Error(`Failed to list meal items: ${error.message}`);
+    return (data as MealItem[]) ?? [];
+}
+
+export async function attachMealItems(
+    userId: string,
+    meals: Meal[],
+): Promise<Meal[]> {
+    const items = await listMealItems(
+        userId,
+        meals.map((meal) => meal.id),
+    );
+    const byMeal = new Map<string, MealItem[]>();
+    for (const item of items) {
+        const group = byMeal.get(item.meal_id) ?? [];
+        group.push(item);
+        byMeal.set(item.meal_id, group);
+    }
+    for (const meal of meals) {
+        meal.items = byMeal.get(meal.id) ?? [];
+    }
+    return meals;
+}
+
+export async function replaceMealItems(
+    userId: string,
+    mealId: string,
+    items: MealItemWrite[],
+): Promise<MealItem[]> {
+    const sb = getSupabase();
+    const { error: delErr } = await sb
+        .from("meal_items")
+        .delete()
+        .eq("user_id", userId)
+        .eq("meal_id", mealId);
+    if (delErr)
+        throw new Error(`Failed to replace meal items: ${delErr.message}`);
+    if (items.length === 0) return [];
+    const { data, error } = await sb
+        .from("meal_items")
+        .insert(
+            items.map((item, index) => ({
+                meal_id: mealId,
+                user_id: userId,
+                household_id: item.household_id,
+                food_id: item.food_id,
+                recipe_id: item.recipe_id,
+                label: item.label,
+                amount: item.amount,
+                unit: item.unit,
+                grams: item.grams,
+                portions: item.portions,
+                calories: item.calories,
+                protein_g: item.protein_g,
+                carbs_g: item.carbs_g,
+                fat_g: item.fat_g,
+                fiber_g: item.fiber_g,
+                sugar_g: item.sugar_g,
+                alcohol_g: item.alcohol_g,
+                caffeine_mg: item.caffeine_mg,
+                sort_order: item.sort_order ?? index,
+            })),
+        )
+        .select(MEAL_ITEM_COLS)
+        .order("sort_order", { ascending: true });
+    if (error) throw new Error(`Failed to insert meal items: ${error.message}`);
+    return (data as MealItem[]) ?? [];
+}
+
+export async function countMealItems(userId: string): Promise<number> {
+    const { count, error } = await getSupabase()
+        .from("meal_items")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId);
+    if (error) throw new Error(`Failed to count meal items: ${error.message}`);
+    return count ?? 0;
+}
+
+export async function getAllMealItems(userId: string): Promise<MealItem[]> {
+    const expected = await countMealItems(userId);
+    if (expected === 0) return [];
+    const items = await fetchAllPages<MealItem>(async (from, to) => {
+        const { data, error } = await getSupabase()
+            .from("meal_items")
+            .select(MEAL_ITEM_COLS)
+            .eq("user_id", userId)
+            .order("meal_id", { ascending: true })
+            .order("sort_order", { ascending: true })
+            .order("id", { ascending: true })
+            .range(from, to);
+        if (error)
+            throw new Error(`Failed to get meal items: ${error.message}`);
+        return (data as MealItem[]) ?? [];
+    });
+    if (items.length < expected) {
+        throw new Error(
+            `getAllMealItems: fetched ${items.length} items but countMealItems reported ${expected} — export would be truncated`,
+        );
+    }
+    return items;
+}
+
+export function snapshotToMealItemWrite(
+    item: {
+        foodId: string | null;
+        recipeId: string | null;
+        label: string;
+        amount: number | null;
+        unit: string | null;
+        grams: number | null;
+        portions: number | null;
+        calories: number | null;
+        protein_g: number | null;
+        carbs_g: number | null;
+        fat_g: number | null;
+        fiber_g: number | null;
+        sugar_g: number | null;
+        alcohol_g: number | null;
+        caffeine_mg: number | null;
+        sortOrder: number;
+    },
+    householdId: string | null,
+): MealItemWrite {
+    return {
+        household_id: householdId,
+        food_id: item.foodId,
+        recipe_id: item.recipeId,
+        label: item.label,
+        amount: item.amount,
+        unit: item.unit,
+        grams: item.grams,
+        portions: item.portions,
+        calories: item.calories,
+        protein_g: item.protein_g,
+        carbs_g: item.carbs_g,
+        fat_g: item.fat_g,
+        fiber_g: item.fiber_g,
+        sugar_g: item.sugar_g,
+        alcohol_g: item.alcohol_g,
+        caffeine_mg: item.caffeine_mg,
+        sort_order: item.sortOrder,
+    };
 }
 
 export async function getMealsByDate(
@@ -253,7 +481,7 @@ export async function getMealsByDate(
         .order("logged_at", { ascending: true });
 
     if (error) throw new Error(`Failed to get meals: ${error.message}`);
-    return (data as Meal[]) ?? [];
+    return attachMealItems(userId, (data as Meal[]) ?? []);
 }
 
 export async function getMealsInRange(
@@ -274,7 +502,7 @@ export async function getMealsInRange(
         .order("logged_at", { ascending: true });
 
     if (error) throw new Error(`Failed to get meals: ${error.message}`);
-    return (data as Meal[]) ?? [];
+    return attachMealItems(userId, (data as Meal[]) ?? []);
 }
 
 /**
@@ -456,7 +684,7 @@ export async function searchMeals(
         }
     }
     merged.sort((a, b) => b.logged_at.localeCompare(a.logged_at));
-    return merged.slice(0, limit);
+    return attachMealItems(userId, merged.slice(0, limit));
 }
 
 /** True when a row matched and was deleted; false when the id is unknown or
@@ -523,7 +751,13 @@ export async function updateMeal(
         .single();
 
     if (error) throw new Error(`Failed to update meal: ${error.message}`);
-    return data as Meal;
+    const saved = data as Meal;
+    if (fields.items) {
+        saved.items = await replaceMealItems(userId, saved.id, fields.items);
+    } else {
+        saved.items = await listMealItems(userId, [saved.id]);
+    }
+    return saved;
 }
 
 // ---------- Nutrition goals ----------

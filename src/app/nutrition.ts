@@ -7,6 +7,15 @@ import type {
     WeightInput,
     WeightInsertResult,
 } from "../db/nutrition.js";
+import { snapshotToMealItemWrite } from "../db/nutrition.js";
+import type { FoodsStore } from "../domain/foods.js";
+import type { RecipesStore } from "../domain/recipes.js";
+import {
+    descriptionFromItems,
+    itemListDigest,
+    MealItemsError,
+    resolveAndBuildMeal,
+} from "../domain/meals.js";
 import { isWeightUnit, toGrams, type WeightUnit } from "../domain/units.js";
 import { getWidgetHtml, withWidgetData } from "../widgets.js";
 import {
@@ -18,6 +27,7 @@ import {
     type ViewerChrome,
 } from "./shell.js";
 import { renderErrorBanner } from "../web/components/page-markup.js";
+import type { MealFormItem } from "../web/form.js";
 
 export type NutritionView = {
     access: Extract<DashboardAccess, { ok: true }>;
@@ -65,12 +75,53 @@ export function withNutritionError(html: string, error: string): string {
     );
 }
 
+function mealTypeSelect(): string {
+    return `<label for="log-meal-type">Meal type</label>
+            <select id="log-meal-type" name="meal_type">
+                <option value="breakfast">Breakfast</option>
+                <option value="lunch">Lunch</option>
+                <option value="dinner">Dinner</option>
+                <option value="snack" selected>Snack</option>
+            </select>`;
+}
+
 function logForms(): string {
-    return `<form class="fridge-add-supply" method="post" action="/log-meal">
-            <label for="log-meal-description">Meal</label>
+    return `<form class="fridge-add-supply meal-log" method="post" action="/log-meal">
+            ${mealTypeSelect()}
+            <div class="meal-items" data-meal-items>
+                <p>Foods</p>
+                <div data-meal-item>
+                    <label>Food</label>
+                    <input name="item_name" type="text" autocomplete="off" data-meal-item-name />
+                    <input name="item_food_id" type="hidden" data-meal-item-food-id />
+                    <label>Amount</label>
+                    <input name="item_amount" type="number" min="0" step="any" />
+                    <label>Unit</label>
+                    <select name="item_unit">
+                        <option value="g">g</option>
+                        <option value="each" selected>each</option>
+                        <option value="oz">oz</option>
+                        <option value="ml">ml</option>
+                        <option value="cup">cup</option>
+                    </select>
+                    <ul class="food-picker-results" data-meal-item-results></ul>
+                </div>
+            </div>
+            <button type="button" data-add-meal-item>Add another food</button>
+            <p>Or describe it</p>
+            <label for="log-meal-description">Description</label>
             <input id="log-meal-description" name="description" type="text" autocomplete="off" />
+            <label for="log-meal-calories">Calories</label>
+            <input id="log-meal-calories" name="calories" type="number" min="0" step="any" />
+            <label for="log-meal-protein">Protein (g)</label>
+            <input id="log-meal-protein" name="protein_g" type="number" min="0" step="any" />
+            <label for="log-meal-carbs">Carbs (g)</label>
+            <input id="log-meal-carbs" name="carbs_g" type="number" min="0" step="any" />
+            <label for="log-meal-fat">Fat (g)</label>
+            <input id="log-meal-fat" name="fat_g" type="number" min="0" step="any" />
             <button type="submit">Log meal</button>
         </form>
+        ${mealItemScript()}
         <form class="fridge-add-supply" method="post" action="/log-water">
             <label for="log-water-amount">Water (ml)</label>
             <input id="log-water-amount" name="amount_ml" type="number" step="any" />
@@ -84,16 +135,159 @@ function logForms(): string {
         </form>`;
 }
 
+function mealItemScript(): string {
+    return `<script>
+(function () {
+    var root = document.querySelector("[data-meal-items]");
+    if (!root) return;
+    function bind(row) {
+        var input = row.querySelector("[data-meal-item-name]");
+        var hidden = row.querySelector("[data-meal-item-food-id]");
+        var results = row.querySelector("[data-meal-item-results]");
+        var timer = null;
+        if (!input || !results) return;
+        input.addEventListener("input", function () {
+            var q = String(input.value || "").trim();
+            if (hidden) hidden.value = "";
+            if (timer) clearTimeout(timer);
+            if (!q) { results.innerHTML = ""; return; }
+            timer = setTimeout(function () {
+                fetch("/api/foods/search?q=" + encodeURIComponent(q), { credentials: "same-origin" })
+                    .then(function (res) { return res.ok ? res.json() : { foods: [] }; })
+                    .then(function (data) {
+                        results.innerHTML = ((data && data.foods) || []).map(function (food) {
+                            var label = food.brand ? food.brand + " · " + food.name : food.name;
+                            var id = food.food_id || "";
+                            return '<li><button type="button" data-food-id="' + id.replace(/"/g, "&quot;") + '" data-name="' + String(food.name || "").replace(/"/g, "&quot;") + '">' + label.replace(/</g, "&lt;") + "</button></li>";
+                        }).join("");
+                    })
+                    .catch(function () { results.innerHTML = ""; });
+            }, 200);
+        });
+        results.addEventListener("click", function (event) {
+            var btn = event.target && event.target.closest ? event.target.closest("button[data-food-id]") : null;
+            if (!btn) return;
+            if (hidden) hidden.value = btn.getAttribute("data-food-id") || "";
+            input.value = btn.getAttribute("data-name") || input.value;
+            results.innerHTML = "";
+        });
+    }
+    root.querySelectorAll("[data-meal-item]").forEach(bind);
+    var add = document.querySelector("[data-add-meal-item]");
+    if (add) {
+        add.addEventListener("click", function () {
+            var first = root.querySelector("[data-meal-item]");
+            if (!first) return;
+            var clone = first.cloneNode(true);
+            clone.querySelectorAll("input").forEach(function (el) { el.value = ""; });
+            var list = clone.querySelector("[data-meal-item-results]");
+            if (list) list.innerHTML = "";
+            root.appendChild(clone);
+            bind(clone);
+        });
+    }
+})();
+</script>`;
+}
+
+const MEAL_TYPES = new Set(["breakfast", "lunch", "dinner", "snack"]);
+
+function parseMealType(value: string | undefined): MealInput["meal_type"] {
+    const trimmed = value?.trim().toLowerCase() ?? "";
+    return MEAL_TYPES.has(trimmed)
+        ? (trimmed as MealInput["meal_type"])
+        : "snack";
+}
+
+function parseOptionalNumber(value: string | undefined): number | undefined {
+    if (value == null || value.trim() === "") return undefined;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : undefined;
+}
+
 export async function logMealFromForm(
     userId: string,
-    fields: { description?: string },
+    fields: {
+        description?: string;
+        meal_type?: string;
+        calories?: string;
+        protein_g?: string;
+        carbs_g?: string;
+        fat_g?: string;
+        fiber_g?: string;
+        sugar_g?: string;
+        alcohol_g?: string;
+        caffeine_mg?: string;
+        items?: MealFormItem[];
+    },
     insert: (userId: string, input: MealInput) => Promise<MealInsertResult>,
+    catalog?: {
+        householdId: string;
+        foods: FoodsStore;
+        recipes: RecipesStore;
+    },
 ): Promise<LogFormResult> {
     const description = fields.description?.trim() ?? "";
-    if (!description) {
-        return { ok: false, error: "Enter a meal description." };
+    const items = (fields.items ?? []).filter(
+        (item) => item.food_id?.trim() || item.name?.trim(),
+    );
+    if (!description && items.length === 0) {
+        return { ok: false, error: "Enter a meal description or add a food." };
     }
-    await insert(userId, { description, meal_type: "snack" });
+    const meal_type = parseMealType(fields.meal_type);
+    if (items.length > 0) {
+        if (!catalog) {
+            return { ok: false, error: "Food-backed meals need a household." };
+        }
+        try {
+            const { built, specs } = await resolveAndBuildMeal({
+                householdId: catalog.householdId,
+                foods: catalog.foods,
+                recipes: catalog.recipes,
+                items: items.map((item) => ({
+                    foodId: item.food_id,
+                    name: item.name,
+                    amount: parseOptionalNumber(item.amount),
+                    unit: item.unit,
+                })),
+            });
+            const totals = built.totals;
+            await insert(userId, {
+                description: description || descriptionFromItems(built.items),
+                meal_type,
+                calories: totals.calories ?? undefined,
+                protein_g: totals.protein_g ?? undefined,
+                carbs_g: totals.carbs_g ?? undefined,
+                fat_g: totals.fat_g ?? undefined,
+                fiber_g: totals.fiber_g ?? undefined,
+                sugar_g: totals.sugar_g ?? undefined,
+                alcohol_g: totals.alcohol_g ?? undefined,
+                caffeine_mg: totals.caffeine_mg ?? undefined,
+                items: built.items.map((item) =>
+                    snapshotToMealItemWrite(item, catalog.householdId),
+                ),
+                item_digest: itemListDigest(specs),
+            });
+            return { ok: true };
+        } catch (err) {
+            if (err instanceof MealItemsError) {
+                return { ok: false, error: err.message };
+            }
+            throw err;
+        }
+    }
+    await insert(userId, {
+        description,
+        meal_type,
+        calories: parseOptionalNumber(fields.calories),
+        protein_g: parseOptionalNumber(fields.protein_g),
+        carbs_g: parseOptionalNumber(fields.carbs_g),
+        fat_g: parseOptionalNumber(fields.fat_g),
+        fiber_g: parseOptionalNumber(fields.fiber_g),
+        sugar_g: parseOptionalNumber(fields.sugar_g),
+        alcohol_g: parseOptionalNumber(fields.alcohol_g),
+        caffeine_mg: parseOptionalNumber(fields.caffeine_mg),
+    });
     return { ok: true };
 }
 
