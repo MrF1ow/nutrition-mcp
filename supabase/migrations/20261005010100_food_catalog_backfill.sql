@@ -13,6 +13,9 @@ do $$
 begin
     -- 1. Barcode identities. Most recent display_name wins. Nutrition from
     -- food_cache (OFF) else recipe_ingredients.nutrition at 100 g.
+    -- food_cache payloads are per serving whenever OFF lists a serving size,
+    -- so only a "100 g" payload may fill foods' per-100 g columns. This
+    -- mirrors catalogNutritionFromOff; anything else stays null (unknown).
     insert into public.foods (
         household_id,
         kind,
@@ -32,7 +35,7 @@ begin
     select distinct on (src.household_id, src.kind, src.barcode)
         src.household_id,
         src.kind,
-        src.display_name,
+        regexp_replace(trim(src.display_name), '\s+', ' ', 'g'),
         public.foodable_normalize_food_name(src.display_name),
         'g',
         coalesce(
@@ -130,6 +133,7 @@ begin
     left join public.food_cache fc
         on fc.source = 'openfoodfacts'
         and fc.source_id = src.barcode
+        and replace(lower(fc.payload->>'serving'), ' ', '') = '100g'
     order by src.household_id, src.kind, src.barcode, src.recency desc
     on conflict (household_id, kind, normalized_name, (coalesce(brand, '')))
         where archived_at is null
@@ -187,7 +191,7 @@ begin
     select distinct on (src.household_id, src.kind, src.source, src.source_id)
         src.household_id,
         src.kind,
-        src.display_name,
+        regexp_replace(trim(src.display_name), '\s+', ' ', 'g'),
         public.foodable_normalize_food_name(src.display_name),
         'g',
         coalesce(
@@ -288,6 +292,7 @@ begin
     left join public.food_cache fc
         on fc.source = src.source
         and fc.source_id = src.source_id
+        and replace(lower(fc.payload->>'serving'), ' ', '') = '100g'
     where src.source is distinct from 'foodable'
     order by src.household_id, src.kind, src.source, src.source_id, src.recency desc
     on conflict (household_id, kind, normalized_name, (coalesce(brand, '')))
@@ -306,7 +311,7 @@ begin
     select distinct on (src.household_id, src.kind, src.normalized_name)
         src.household_id,
         src.kind,
-        src.display_name,
+        regexp_replace(trim(src.display_name), '\s+', ' ', 'g'),
         src.normalized_name,
         'g',
         null
