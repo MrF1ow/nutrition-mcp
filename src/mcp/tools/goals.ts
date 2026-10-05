@@ -11,24 +11,11 @@ import {
     timezoneFromProfile,
     getProfile,
 } from "../../supabase.js";
-import {
-    withAnalytics,
-} from "../../analytics.js";
-import {
-    todayInTz,
-    dateInTz,
-} from "../../tz.js";
-import {
-    WIDGET_LOCALE,
-} from "../../routes.js";
-import {
-    toGrams,
-    formatWeight,
-    fromGrams,
-} from "../../units.js";
-import {
-    MAX_CALORIES,
-} from "../../import.js";
+import { withAnalytics } from "../../analytics.js";
+import { todayInTz, dateInTz } from "../../tz.js";
+import { WIDGET_LOCALE } from "../../routes.js";
+import { toGrams, formatWeight, fromGrams } from "../../units.js";
+import { MAX_CALORIES } from "../../import.js";
 import {
     GOAL_PROGRESS_WIDGET_URI,
     MAX_GOAL_G,
@@ -51,10 +38,7 @@ import {
 } from "../shared.js";
 import type { ToolContext } from "../shared.js";
 
-export function registerGoalsTools(
-    server: McpServer,
-    ctx: ToolContext,
-) {
+export function registerGoalsTools(server: McpServer, ctx: ToolContext) {
     const {
         alcohol,
         personSchema,
@@ -446,5 +430,4 @@ export function registerGoalsTools(
             );
         },
     );
-
 }

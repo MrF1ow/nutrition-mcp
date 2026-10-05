@@ -5,18 +5,10 @@ import {
     liveGroceryStore,
     liveSettingsStore,
 } from "../../supabase.js";
-import {
-    withAnalytics,
-} from "../../analytics.js";
-import {
-    lookupBarcode,
-} from "../../foods.js";
-import {
-    alreadyHaveTag,
-} from "../../linking.js";
-import {
-    listFridge,
-} from "../../fridge.js";
+import { withAnalytics } from "../../analytics.js";
+import { lookupBarcode } from "../../foods.js";
+import { alreadyHaveTag } from "../../linking.js";
+import { listFridge } from "../../fridge.js";
 import {
     addGroceryFoodByBarcode,
     addGroceryManualFood,
@@ -25,19 +17,11 @@ import {
     clearCheckedLines,
     listGrocery,
 } from "../../grocery.js";
-import {
-    groceryLineExtras,
-} from "../shared.js";
+import { groceryLineExtras } from "../shared.js";
 import type { ToolContext } from "../shared.js";
 
-export function registerGroceryTools(
-    server: McpServer,
-    ctx: ToolContext,
-) {
-    const {
-        callerHouseholdId,
-        analytics,
-    } = ctx;
+export function registerGroceryTools(server: McpServer, ctx: ToolContext) {
+    const { callerHouseholdId, analytics } = ctx;
     server.registerTool(
         "list_grocery_lines",
         {
@@ -338,5 +322,4 @@ export function registerGroceryTools(
                 analytics,
             ),
     );
-
 }

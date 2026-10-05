@@ -15,7 +15,11 @@ import {
     preferredDrinkUnitFromProfile,
     getProfile,
 } from "../supabase.js";
-import { createToolContext, NUTRIENT_COVERAGE, type AlcoholDisplay } from "./shared.js";
+import {
+    createToolContext,
+    NUTRIENT_COVERAGE,
+    type AlcoholDisplay,
+} from "./shared.js";
 import {
     registerNutritionWriteTools,
     registerNutritionEditTools,

@@ -9,33 +9,18 @@ import {
     alcoholTrackingEnabledFromProfile,
     preferredDrinkUnitFromProfile,
 } from "../../supabase.js";
-import {
-    withAnalytics,
-} from "../../analytics.js";
-import {
-    todayInTz,
-    validateTz,
-} from "../../tz.js";
-import {
-    isWeightUnit,
-} from "../../units.js";
+import { withAnalytics } from "../../analytics.js";
+import { todayInTz, validateTz } from "../../tz.js";
+import { isWeightUnit } from "../../units.js";
 import { isDrinkUnit, type DrinkUnit } from "../../alcohol.js";
-import {
-    formatClockLine,
-    drinkUnitLabel,
-} from "../shared.js";
+import { formatClockLine, drinkUnitLabel } from "../shared.js";
 import type { ToolContext } from "../shared.js";
 
 export function registerProfilePreferenceTools(
     server: McpServer,
     ctx: ToolContext,
 ) {
-    const {
-        alcohol,
-        personSchema,
-        actorUserId,
-        analytics,
-    } = ctx;
+    const { alcohol, personSchema, actorUserId, analytics } = ctx;
     server.registerTool(
         "set_weight_unit",
         {
@@ -198,20 +183,11 @@ export function registerProfilePreferenceTools(
             );
         },
     );
-
 }
 
-export function registerProfileTools(
-    server: McpServer,
-    ctx: ToolContext,
-) {
-    const {
-        widgetsEnabled,
-        alcohol,
-        personSchema,
-        actorUserId,
-        analytics,
-    } = ctx;
+export function registerProfileTools(server: McpServer, ctx: ToolContext) {
+    const { widgetsEnabled, alcohol, personSchema, actorUserId, analytics } =
+        ctx;
     server.registerTool(
         "get_profile",
         {

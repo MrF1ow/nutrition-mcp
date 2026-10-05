@@ -781,7 +781,10 @@ export function formatGoals(
     return parts.join("\n");
 }
 
-export function formatWeightEntry(entry: WeightEntry, unit: WeightUnit): string {
+export function formatWeightEntry(
+    entry: WeightEntry,
+    unit: WeightUnit,
+): string {
     return `- ${formatWeight(entry.weight_g, unit)} at ${entry.logged_at}${entry.notes ? ` (${entry.notes})` : ""} [id: ${entry.id}]`;
 }
 
@@ -1018,7 +1021,9 @@ export const QUANTITY_ITEM = z.object({
     amount: z.number(),
     unit: z.string(),
 });
-export async function householdFoodNames(householdId: string): Promise<string[]> {
+export async function householdFoodNames(
+    householdId: string,
+): Promise<string[]> {
     const [fridge, recipes] = await Promise.all([
         listFridge(liveFridgeStore(), householdId),
         listRecipes(liveRecipesStore(), householdId),
@@ -1059,16 +1064,10 @@ export async function groceryLineExtras(
     const allergenMembers = await Promise.all(
         members.map(async (member) => ({
             displayName: member.displayName,
-            allergens: await rules.listAllergens(
-                householdId,
-                member.userId,
-            ),
+            allergens: await rules.listAllergens(householdId, member.userId),
         })),
     );
-    const warning = groceryAllergenWarning(
-        line.displayName,
-        allergenMembers,
-    );
+    const warning = groceryAllergenWarning(line.displayName, allergenMembers);
     return {
         alreadyHave:
             tag == null
@@ -1123,7 +1122,6 @@ export function createToolContext(
     alcohol: AlcoholDisplay,
     protocolEra?: "legacy" | "modern",
 ): ToolContext {
-
     const requireUser = () => requireActorUserId(auth);
     const userIdArg =
         auth.kind === "household"
@@ -1140,8 +1138,11 @@ export function createToolContext(
                   .describe(
                       "Household member to read. Writes still require this to match the signed-in user.",
                   );
-    const personSchema = ((<T extends z.ZodRawShape>(shape: T) =>
-        z.object({ ...shape, user_id: userIdArg })) as ToolContext["personSchema"]);
+    const personSchema = (<T extends z.ZodRawShape>(shape: T) =>
+        z.object({
+            ...shape,
+            user_id: userIdArg,
+        })) as ToolContext["personSchema"];
     const targetMemberArg = z
         .string()
         .min(1)
@@ -1149,11 +1150,11 @@ export function createToolContext(
         .describe(
             "Household member to write this nutrition entry for. MCP only; the site has no log-as-them control.",
         );
-    const nutritionWriteSchema = ((<T extends z.ZodRawShape>(shape: T) =>
+    const nutritionWriteSchema = (<T extends z.ZodRawShape>(shape: T) =>
         personSchema({
             ...shape,
             target_member: targetMemberArg,
-        })) as ToolContext["nutritionWriteSchema"]);
+        })) as ToolContext["nutritionWriteSchema"];
     async function actorUserId(
         requested: string | undefined,
         intent: ActorIntent = "write",

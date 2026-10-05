@@ -6,15 +6,9 @@ import {
     liveRecipesStore,
     liveSettingsStore,
 } from "../../supabase.js";
-import {
-    withAnalytics,
-} from "../../analytics.js";
-import {
-    lookupBarcode,
-} from "../../foods.js";
-import {
-    listFridge,
-} from "../../fridge.js";
+import { withAnalytics } from "../../analytics.js";
+import { lookupBarcode } from "../../foods.js";
+import { listFridge } from "../../fridge.js";
 import {
     addRecipeIngredientByBarcode,
     addRecipeManualIngredient,
@@ -25,15 +19,10 @@ import {
     listRecipes,
     setPersonPortion,
 } from "../../recipes.js";
-import {
-    QUANTITY_ITEM,
-} from "../shared.js";
+import { QUANTITY_ITEM } from "../shared.js";
 import type { ToolContext } from "../shared.js";
 
-export function registerRecipesTools(
-    server: McpServer,
-    ctx: ToolContext,
-) {
+export function registerRecipesTools(server: McpServer, ctx: ToolContext) {
     const {
         callerHouseholdId,
         requireHouseholdMemberId,
@@ -459,5 +448,4 @@ export function registerRecipesTools(
                 analytics,
             ),
     );
-
 }

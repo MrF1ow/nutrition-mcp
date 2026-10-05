@@ -711,19 +711,13 @@ export function registerNutritionWriteTools(
             );
         },
     );
-
 }
 export function registerNutritionEditTools(
     server: McpServer,
     ctx: ToolContext,
 ) {
-    const {
-        alcohol,
-        nutritionWriteSchema,
-        writeUserId,
-        analytics,
-        uiMeta,
-    } = ctx;
+    const { alcohol, nutritionWriteSchema, writeUserId, analytics, uiMeta } =
+        ctx;
     server.registerTool(
         "delete_meal",
         {
@@ -872,10 +866,7 @@ export function registerNutritionEditTools(
     );
 }
 
-export function registerNutritionTools(
-    server: McpServer,
-    ctx: ToolContext,
-) {
+export function registerNutritionTools(server: McpServer, ctx: ToolContext) {
     registerNutritionWriteTools(server, ctx);
     registerNutritionReadTools(server, ctx);
     registerNutritionEditTools(server, ctx);

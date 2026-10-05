@@ -57,13 +57,7 @@ export function registerNutritionReadTools(
     server: McpServer,
     ctx: ToolContext,
 ) {
-    const {
-        alcohol,
-        personSchema,
-        actorUserId,
-        analytics,
-        uiMeta,
-    } = ctx;
+    const { alcohol, personSchema, actorUserId, analytics, uiMeta } = ctx;
     server.registerTool(
         "get_meals_today",
         {
@@ -691,7 +685,6 @@ export function registerNutritionReadTools(
             );
         },
     );
-
 }
 
 export function registerNutritionInsightTools(
@@ -982,5 +975,4 @@ export function registerNutritionInsightTools(
             };
         },
     );
-
 }

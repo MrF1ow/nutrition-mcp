@@ -6,12 +6,8 @@ import {
     deleteWater,
     getUserTimezone,
 } from "../../supabase.js";
-import {
-    withAnalytics,
-} from "../../analytics.js";
-import {
-    todayInTz,
-} from "../../tz.js";
+import { withAnalytics } from "../../analytics.js";
+import { todayInTz } from "../../tz.js";
 import {
     sumWater,
     LOGGED_AT_FORMS,
@@ -20,10 +16,7 @@ import {
 } from "../shared.js";
 import type { ToolContext } from "../shared.js";
 
-export function registerWaterTools(
-    server: McpServer,
-    ctx: ToolContext,
-) {
+export function registerWaterTools(server: McpServer, ctx: ToolContext) {
     const {
         personSchema,
         nutritionWriteSchema,
@@ -244,5 +237,4 @@ export function registerWaterTools(
             );
         },
     );
-
 }

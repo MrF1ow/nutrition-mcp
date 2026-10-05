@@ -1,14 +1,8 @@
 import { type McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import {
-    liveFridgeStore,
-} from "../../supabase.js";
-import {
-    withAnalytics,
-} from "../../analytics.js";
-import {
-    lookupBarcode,
-} from "../../foods.js";
+import { liveFridgeStore } from "../../supabase.js";
+import { withAnalytics } from "../../analytics.js";
+import { lookupBarcode } from "../../foods.js";
 import {
     addFoodByBarcode,
     addLocation,
@@ -22,14 +16,8 @@ import {
 } from "../../fridge.js";
 import type { ToolContext } from "../shared.js";
 
-export function registerFridgeTools(
-    server: McpServer,
-    ctx: ToolContext,
-) {
-    const {
-        callerHouseholdId,
-        analytics,
-    } = ctx;
+export function registerFridgeTools(server: McpServer, ctx: ToolContext) {
+    const { callerHouseholdId, analytics } = ctx;
     server.registerTool(
         "list_fridge_locations",
         {
@@ -427,5 +415,4 @@ export function registerFridgeTools(
                 analytics,
             ),
     );
-
 }

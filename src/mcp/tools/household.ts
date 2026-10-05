@@ -1,8 +1,6 @@
 import { type McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import {
-    HOUSEHOLD_CANNOT_DELETE_ACCOUNT,
-} from "../../auth-context.js";
+import { HOUSEHOLD_CANNOT_DELETE_ACCOUNT } from "../../auth-context.js";
 import {
     householdConfigToWire,
     mergeHouseholdConfig,
@@ -29,10 +27,7 @@ import {
 } from "../../analytics.js";
 import type { ToolContext } from "../shared.js";
 
-export function registerHouseholdTools(
-    server: McpServer,
-    ctx: ToolContext,
-) {
+export function registerHouseholdTools(server: McpServer, ctx: ToolContext) {
     const {
         auth,
         requireUser,

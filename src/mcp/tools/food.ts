@@ -1,32 +1,17 @@
 import { type McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import {
-    withAnalytics,
-    categorizeError,
-} from "../../analytics.js";
+import { withAnalytics, categorizeError } from "../../analytics.js";
 import {
     normalizeBarcode,
     lookupBarcode,
     formatFoodResult,
 } from "../../foods.js";
-import {
-    searchFoodsByName,
-} from "../../food-search.js";
-import {
-    householdFoodNames,
-} from "../shared.js";
+import { searchFoodsByName } from "../../food-search.js";
+import { householdFoodNames } from "../shared.js";
 import type { ToolContext } from "../shared.js";
 
-export function registerLookupBarcodeTool(
-    server: McpServer,
-    ctx: ToolContext,
-) {
-    const {
-        alcohol,
-        personSchema,
-        actorUserId,
-        analytics,
-    } = ctx;
+export function registerLookupBarcodeTool(server: McpServer, ctx: ToolContext) {
+    const { alcohol, personSchema, actorUserId, analytics } = ctx;
     server.registerTool(
         "lookup_barcode",
         {
@@ -131,18 +116,10 @@ export function registerLookupBarcodeTool(
             );
         },
     );
-
 }
 
-export function registerSearchFoodTool(
-    server: McpServer,
-    ctx: ToolContext,
-) {
-    const {
-        alcohol,
-        callerHouseholdId,
-        analytics,
-    } = ctx;
+export function registerSearchFoodTool(server: McpServer, ctx: ToolContext) {
+    const { alcohol, callerHouseholdId, analytics } = ctx;
     server.registerTool(
         "search_food",
         {
@@ -223,10 +200,7 @@ export function registerSearchFoodTool(
     );
 }
 
-export function registerFoodTools(
-    server: McpServer,
-    ctx: ToolContext,
-) {
+export function registerFoodTools(server: McpServer, ctx: ToolContext) {
     registerLookupBarcodeTool(server, ctx);
     registerSearchFoodTool(server, ctx);
 }

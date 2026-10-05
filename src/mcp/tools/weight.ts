@@ -13,31 +13,13 @@ import {
     timezoneFromProfile,
     getProfile,
 } from "../../supabase.js";
-import type {
-    WeightEntry,
-} from "../../supabase.js";
-import {
-    withAnalytics,
-} from "../../analytics.js";
-import {
-    todayInTz,
-    shiftLocalDate,
-    dateInTz,
-} from "../../tz.js";
-import {
-    WIDGET_LOCALE,
-} from "../../routes.js";
-import {
-    computeWeightTrend,
-} from "../../insights.js";
-import {
-    toGrams,
-    formatWeight,
-    fromGrams,
-} from "../../units.js";
-import type {
-    WeightUnit,
-} from "../../units.js";
+import type { WeightEntry } from "../../supabase.js";
+import { withAnalytics } from "../../analytics.js";
+import { todayInTz, shiftLocalDate, dateInTz } from "../../tz.js";
+import { WIDGET_LOCALE } from "../../routes.js";
+import { computeWeightTrend } from "../../insights.js";
+import { toGrams, formatWeight, fromGrams } from "../../units.js";
+import type { WeightUnit } from "../../units.js";
 import {
     WEIGHT_TRENDS_WIDGET_URI,
     formatWeightEntry,
@@ -49,10 +31,7 @@ import {
 } from "../shared.js";
 import type { ToolContext } from "../shared.js";
 
-export function registerWeightTools(
-    server: McpServer,
-    ctx: ToolContext,
-) {
+export function registerWeightTools(server: McpServer, ctx: ToolContext) {
     const {
         personSchema,
         nutritionWriteSchema,
@@ -611,5 +590,4 @@ export function registerWeightTools(
             );
         },
     );
-
 }
