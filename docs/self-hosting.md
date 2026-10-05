@@ -99,6 +99,25 @@ server {
 
 With `PUBLIC_ORIGIN=https://foodable.example.com` the advertised OAuth `/authorize` base URL stays that origin even if a request forges `X-Forwarded-Host`. Docker is `Dockerfile` in the repo root (`bun --smol src/index.ts` on port 8080).
 
+## Railway
+
+`railway.toml` at the repo root builds from the `Dockerfile` (`builder = "DOCKERFILE"`, `dockerfilePath = "Dockerfile"`) and health-checks `GET /health` (`healthcheckTimeout` 60, `restartPolicyType` `ON_FAILURE`). That file prepares a future Railway service. It does not create a Railway project, service, or domain.
+
+Set the same variables as `.env.example` on the service:
+
+| Variable              | Required                | Purpose                                                        |
+| --------------------- | ----------------------- | -------------------------------------------------------------- |
+| `SUPABASE_URL`        | yes                     | Supabase API origin (cloud or self-hosted)                     |
+| `SUPABASE_SECRET_KEY` | yes                     | Service role secret                                            |
+| `OAUTH_CLIENT_ID`     | yes                     | MCP OAuth client id (`bun run generate-oauth-creds`)           |
+| `OAUTH_CLIENT_SECRET` | yes                     | MCP OAuth client secret, also the site-session HMAC            |
+| `OFF_USER_AGENT`      | for barcodes            | Open Food Facts User-Agent, `Foodable (you@example.com)`       |
+| `PUBLIC_ORIGIN`       | after the domain exists | Generated Railway domain, `https://….up.railway.app`, no slash |
+
+Do **not** set `PORT`. Railway injects it, and the app reads it.
+
+`PUBLIC_ORIGIN` is the generated Railway domain with no trailing slash. Set it after that domain exists, then redeploy. This PR does not create that domain.
+
 ## First-user flow
 
 This is the closed-household lifecycle already in the tree (`docs/handoff/closed-household-plan.md`). One deploy, one Supabase project, one household.
