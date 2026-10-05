@@ -4606,6 +4606,15 @@ describe("household config tools", () => {
         });
     });
 
+    test("tools/list names and order match the snapshot", async () => {
+        const snapshot = (await Bun.file(
+            new URL("./mcp/tools-list.snapshot.json", import.meta.url),
+        ).json()) as string[];
+        await withHousehold(async (_call, list) => {
+            expect(await list()).toEqual(snapshot);
+        });
+    });
+
     test("person-scoped catalog tools include optional user_id", () => {
         const skip = new Set<string>([
             ...HOUSEHOLD_SCOPED_TOOL_NAMES,
