@@ -64,7 +64,7 @@ import {
     type HouseholdConfig,
 } from "./household.js";
 import { createMemoryFridgeStore } from "./domain/fridge.js";
-import { createMemoryStockStore } from "./domain/stock.js";
+import { createMemoryStockStore, ledgerMatchesStock } from "./domain/stock.js";
 import { createMemoryFoodsStore } from "./domain/foods.js";
 import { findOrCreateManualFood, updateFood } from "./domain/foods.js";
 import { createMemoryGroceryStore } from "./domain/grocery.js";
@@ -3584,6 +3584,62 @@ describe("phone-app domain MCP tools", () => {
         });
     });
 
+    test("add, update, and delete fridge item write adjust movements", async () => {
+        db.barcodeFoods[cottage.barcode] = cottage;
+        await withPat(async (call) => {
+            const loc = await call("add_fridge_location", { name: "Fridge" });
+            const locationId = loc.structuredContent?.id as string;
+            const added = await call("add_fridge_item", {
+                location_id: locationId,
+                kind: "food",
+                barcode: cottage.barcode,
+                amount: 200,
+            });
+            expect(added.isError).toBeFalsy();
+            const itemId = added.structuredContent?.id as string;
+            const food = (await db.foodsStore.listFoods("hh-1"))[0]!;
+            expect(
+                ledgerMatchesStock(
+                    await db.fridgeStore.listItems("hh-1"),
+                    await db.stockStore.listMovements("hh-1", food.id),
+                    food,
+                ),
+            ).toBe(true);
+
+            const updated = await call("update_fridge_item", {
+                id: itemId,
+                amount: 150,
+                unit: "g",
+            });
+            expect(updated.isError).toBeFalsy();
+            expect(
+                ledgerMatchesStock(
+                    await db.fridgeStore.listItems("hh-1"),
+                    await db.stockStore.listMovements("hh-1", food.id),
+                    food,
+                ),
+            ).toBe(true);
+
+            const deleted = await call("delete_fridge_item", { id: itemId });
+            expect(deleted.isError).toBeFalsy();
+            const movements = await db.stockStore.listMovements(
+                "hh-1",
+                food.id,
+            );
+            expect(movements.every((row) => row.reason === "adjust")).toBe(
+                true,
+            );
+            expect(movements.reduce((sum, row) => sum + row.delta, 0)).toBe(0);
+            expect(
+                ledgerMatchesStock(
+                    await db.fridgeStore.listItems("hh-1"),
+                    movements,
+                    food,
+                ),
+            ).toBe(true);
+        });
+    });
+
     test("add_grocery_line with fridge identity shows already-have", async () => {
         db.barcodeFoods[cottage.barcode] = cottage;
         const store = await createGroceryStore(
@@ -4985,6 +5041,19 @@ describe("authenticated dashboard HTTP", () => {
         const html = await page.text();
         expect(html).toContain("Foil");
         expect(html).toContain("2 roll");
+        const foil = (await db.foodsStore.listFoods("hh-1"))[0]!;
+        expect(
+            ledgerMatchesStock(
+                await db.fridgeStore.listItems("hh-1"),
+                await db.stockStore.listMovements("hh-1", foil.id),
+                foil,
+            ),
+        ).toBe(true);
+        expect(
+            (await db.stockStore.listMovements("hh-1", foil.id)).every(
+                (row) => row.reason === "adjust",
+            ),
+        ).toBe(true);
     });
 
     test("POST /fridge/items adds barcode food in grams", async () => {
@@ -5072,6 +5141,14 @@ describe("authenticated dashboard HTTP", () => {
         const moved = (await db.fridgeStore.listItems("hh-1"))[0]!;
         expect(moved.quantity.amount).toBe(1);
         expect(moved.locationId).toBe(pantry.id);
+        const foil = (await db.foodsStore.listFoods("hh-1"))[0]!;
+        expect(
+            ledgerMatchesStock(
+                await db.fridgeStore.listItems("hh-1"),
+                await db.stockStore.listMovements("hh-1", foil.id),
+                foil,
+            ),
+        ).toBe(true);
         const del = await siteApp.request(
             `http://x/fridge/items/${item.id}/delete`,
             {
@@ -5081,6 +5158,16 @@ describe("authenticated dashboard HTTP", () => {
         );
         expect(del.status).toBe(302);
         expect(await db.fridgeStore.listItems("hh-1")).toEqual([]);
+        const movements = await db.stockStore.listMovements("hh-1", foil.id);
+        expect(movements.every((row) => row.reason === "adjust")).toBe(true);
+        expect(movements.reduce((sum, row) => sum + row.delta, 0)).toBe(0);
+        expect(
+            ledgerMatchesStock(
+                await db.fridgeStore.listItems("hh-1"),
+                movements,
+                foil,
+            ),
+        ).toBe(true);
     });
 
     test("GET /fridge is 403 for a non-member", async () => {
