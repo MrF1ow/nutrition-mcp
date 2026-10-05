@@ -1280,7 +1280,7 @@ export async function deleteWeight(
  * module; the other direction would be a cycle.
  */
 export function exportArchivePath(userId: string): string {
-    return `${userId}/nutrition-mcp-export.zip`;
+    return `${userId}/foodable-export.zip`;
 }
 
 /**
@@ -1301,6 +1301,10 @@ export function exportStoragePaths(userId: string): string[] {
         // creates it any more; it stays here to clean up files left behind by
         // exports taken before that change.
         `${userId}/meals.csv`,
+        // Written before the archive object was renamed to foodable-export.zip.
+        // Nothing creates it any more; it stays here so account deletion still
+        // removes a leftover from the old key. Add, do not replace.
+        `${userId}/nutrition-mcp-export.zip`,
     ];
 }
 

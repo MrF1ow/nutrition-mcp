@@ -138,7 +138,7 @@ test("round-trips every entry's name and content", () => {
             data: 'field,value\ndescription,"Café ☕, ""large"""\n',
         },
         { name: "profile.csv", data: "timezone,Europe/Kyiv\n" },
-        { name: "README.txt", data: "Your nutrition-mcp export.\n" },
+        { name: "README.txt", data: "Your foodable export.\n" },
     ];
 
     const zip = buildZip(entries, FIXED_DATE);
