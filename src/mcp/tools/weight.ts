@@ -30,6 +30,7 @@ import {
     resolveWriteTimestamp,
     resolveWriteWeightUnit,
     assertPlausibleWeight,
+    resolveDateWindow,
 } from "../shared.js";
 import type { ToolContext } from "../shared.js";
 
@@ -131,22 +132,41 @@ export function registerWeightTools(server: McpServer, ctx: ToolContext) {
     );
 
     server.registerTool(
-        "get_weight_today",
+        "get_weight",
         {
-            title: "Get Today's Weight",
+            title: "Get Weight",
             description:
-                "Get today's weight entries, shown in the user's preferred unit.",
+                "Get weight entries in the user's preferred unit. Omit date/from/to for today; pass date for one local day; pass from and to (inclusive, YYYY-MM-DD) for a range (grouped by day with each day's average). Do not mix date with from/to.",
             annotations: {
                 readOnlyHint: true,
                 destructiveHint: false,
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            inputSchema: personSchema({}),
+            inputSchema: personSchema({
+                date: z
+                    .string()
+                    .optional()
+                    .describe(
+                        "Single local day (YYYY-MM-DD). Defaults to today.",
+                    ),
+                from: z
+                    .string()
+                    .optional()
+                    .describe(
+                        "Range start (YYYY-MM-DD), inclusive. Requires to.",
+                    ),
+                to: z
+                    .string()
+                    .optional()
+                    .describe(
+                        "Range end (YYYY-MM-DD), inclusive. Requires from.",
+                    ),
+            }),
         },
         async (args) => {
             return withAnalytics(
-                "get_weight_today",
+                "get_weight",
                 async () => {
                     const userId = await actorUserId(args.user_id, "read");
                     const [tz, weightPref] = await Promise.all([
@@ -154,132 +174,38 @@ export function registerWeightTools(server: McpServer, ctx: ToolContext) {
                         getPreferredWeightUnit(userId),
                     ]);
                     const unit = weightPref ?? "kg";
-                    const entries = await getWeightByDate(
-                        userId,
-                        todayInTz(tz),
-                        tz,
-                    );
+                    const window = resolveDateWindow(args, todayInTz(tz));
+                    const entries = window.single
+                        ? await getWeightByDate(userId, window.start, tz)
+                        : await getWeightInRange(
+                              userId,
+                              window.start,
+                              window.end,
+                              tz,
+                          );
                     if (entries.length === 0) {
+                        const empty = window.single
+                            ? window.start === todayInTz(tz)
+                                ? "No weight logged today."
+                                : `No weight logged on ${window.start}.`
+                            : `No weight found between ${window.start} and ${window.end}.`;
                         return {
-                            content: [
-                                {
-                                    type: "text",
-                                    text: "No weight logged today.",
-                                },
-                            ],
+                            content: [{ type: "text", text: empty }],
                         };
                     }
-                    const lines = entries.map((e) =>
-                        formatWeightEntry(e, unit),
-                    );
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: `Today (${entries.length} entr${entries.length === 1 ? "y" : "ies"}):\n\n${lines.join("\n")}`,
-                            },
-                        ],
-                    };
-                },
-                analytics,
-            );
-        },
-    );
-
-    server.registerTool(
-        "get_weight_by_date",
-        {
-            title: "Get Weight by Date",
-            description:
-                "Get weight entries for a specific date, in the user's preferred unit.",
-            annotations: {
-                readOnlyHint: true,
-                destructiveHint: false,
-                idempotentHint: true,
-                openWorldHint: false,
-            },
-            inputSchema: personSchema({
-                date: z.string().describe("Date in YYYY-MM-DD format"),
-            }),
-        },
-        async ({ date, user_id }) => {
-            return withAnalytics(
-                "get_weight_by_date",
-                async () => {
-                    const userId = await actorUserId(user_id, "read");
-                    const [tz, weightPref] = await Promise.all([
-                        getUserTimezone(userId),
-                        getPreferredWeightUnit(userId),
-                    ]);
-                    const unit = weightPref ?? "kg";
-                    const entries = await getWeightByDate(userId, date, tz);
-                    if (entries.length === 0) {
+                    if (window.single) {
+                        const lines = entries.map((e) =>
+                            formatWeightEntry(e, unit),
+                        );
+                        const label =
+                            window.start === todayInTz(tz)
+                                ? "Today"
+                                : window.start;
                         return {
                             content: [
                                 {
                                     type: "text",
-                                    text: `No weight logged on ${date}.`,
-                                },
-                            ],
-                        };
-                    }
-                    const lines = entries.map((e) =>
-                        formatWeightEntry(e, unit),
-                    );
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: `${date} (${entries.length} entr${entries.length === 1 ? "y" : "ies"}):\n\n${lines.join("\n")}`,
-                            },
-                        ],
-                    };
-                },
-                analytics,
-                { date },
-            );
-        },
-    );
-
-    server.registerTool(
-        "get_weight_by_date_range",
-        {
-            title: "Get Weight by Date Range",
-            description:
-                "Get all weight entries between two dates (inclusive), grouped by day with each day's average. Use this instead of multiple get_weight_by_date calls.",
-            annotations: {
-                readOnlyHint: true,
-                destructiveHint: false,
-                idempotentHint: true,
-                openWorldHint: false,
-            },
-            inputSchema: personSchema({
-                start_date: z.string().describe("Start date (YYYY-MM-DD)"),
-                end_date: z.string().describe("End date (YYYY-MM-DD)"),
-            }),
-        },
-        async ({ start_date, end_date, user_id }) => {
-            return withAnalytics(
-                "get_weight_by_date_range",
-                async () => {
-                    const userId = await actorUserId(user_id, "read");
-                    const [tz, weightPref] = await Promise.all([
-                        getUserTimezone(userId),
-                        getPreferredWeightUnit(userId),
-                    ]);
-                    const unit = weightPref ?? "kg";
-                    const entries = await getWeightInRange(
-                        userId,
-                        start_date,
-                        end_date,
-                        tz,
-                    );
-                    if (entries.length === 0) {
-                        return {
-                            content: [
-                                {
-                                    type: "text",
-                                    text: `No weight found between ${start_date} and ${end_date}.`,
+                                    text: `${label} (${entries.length} entr${entries.length === 1 ? "y" : "ies"}):\n\n${lines.join("\n")}`,
                                 },
                             ],
                         };
@@ -320,7 +246,7 @@ export function registerWeightTools(server: McpServer, ctx: ToolContext) {
                     };
                 },
                 analytics,
-                { start_date, end_date },
+                { date: args.date, from: args.from, to: args.to },
             );
         },
     );

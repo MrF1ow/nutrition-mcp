@@ -3,18 +3,21 @@ import { z } from "zod";
 import {
     insertWater,
     getWaterByDate,
+    getWaterInRange,
     deleteWater,
 } from "../../db/nutrition.js";
 import { getUserTimezone } from "../../db/profiles.js";
 import { withAnalytics } from "../../analytics.js";
-import { todayInTz } from "../../domain/tz.js";
+import { todayInTz, dateInTz } from "../../domain/tz.js";
 import {
     sumWater,
     LOGGED_AT_FORMS,
     LOGGED_AT_OMIT_IF_NOW,
     resolveWriteTimestamp,
+    resolveDateWindow,
 } from "../shared.js";
 import type { ToolContext } from "../shared.js";
+import type { WaterEntry } from "../../db/nutrition.js";
 
 export function registerWaterTools(server: McpServer, ctx: ToolContext) {
     const {
@@ -95,65 +98,11 @@ export function registerWaterTools(server: McpServer, ctx: ToolContext) {
     );
 
     server.registerTool(
-        "get_water_today",
+        "get_water",
         {
-            title: "Get Today's Water",
+            title: "Get Water",
             description:
-                "Get today's total water intake (ml) and the list of entries.",
-            annotations: {
-                readOnlyHint: true,
-                destructiveHint: false,
-                idempotentHint: true,
-                openWorldHint: false,
-            },
-            inputSchema: personSchema({}),
-        },
-        async (args) => {
-            return withAnalytics(
-                "get_water_today",
-                async () => {
-                    const userId = await actorUserId(args.user_id, "read");
-                    const tz = await getUserTimezone(userId);
-                    const entries = await getWaterByDate(
-                        userId,
-                        todayInTz(tz),
-                        tz,
-                    );
-                    if (entries.length === 0) {
-                        return {
-                            content: [
-                                {
-                                    type: "text",
-                                    text: "No water logged today.",
-                                },
-                            ],
-                        };
-                    }
-                    const total = sumWater(entries);
-                    const lines = entries.map(
-                        (e) =>
-                            `- ${e.amount_ml} ml at ${e.logged_at}${e.notes ? ` (${e.notes})` : ""} [id: ${e.id}]`,
-                    );
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: `Total: ${total} ml (${entries.length} entr${entries.length === 1 ? "y" : "ies"})\n\n${lines.join("\n")}`,
-                            },
-                        ],
-                    };
-                },
-                analytics,
-            );
-        },
-    );
-
-    server.registerTool(
-        "get_water_by_date",
-        {
-            title: "Get Water by Date",
-            description:
-                "Get water intake total and entries for a specific date.",
+                "Get water intake total and entries. Omit date/from/to for today; pass date for one local day; pass from and to (inclusive, YYYY-MM-DD) for a range. Do not mix date with from/to.",
             annotations: {
                 readOnlyHint: true,
                 destructiveHint: false,
@@ -161,42 +110,97 @@ export function registerWaterTools(server: McpServer, ctx: ToolContext) {
                 openWorldHint: false,
             },
             inputSchema: personSchema({
-                date: z.string().describe("Date in YYYY-MM-DD format"),
+                date: z
+                    .string()
+                    .optional()
+                    .describe(
+                        "Single local day (YYYY-MM-DD). Defaults to today.",
+                    ),
+                from: z
+                    .string()
+                    .optional()
+                    .describe(
+                        "Range start (YYYY-MM-DD), inclusive. Requires to.",
+                    ),
+                to: z
+                    .string()
+                    .optional()
+                    .describe(
+                        "Range end (YYYY-MM-DD), inclusive. Requires from.",
+                    ),
             }),
         },
-        async ({ date, user_id }) => {
+        async (args) => {
             return withAnalytics(
-                "get_water_by_date",
+                "get_water",
                 async () => {
-                    const userId = await actorUserId(user_id, "read");
+                    const userId = await actorUserId(args.user_id, "read");
                     const tz = await getUserTimezone(userId);
-                    const entries = await getWaterByDate(userId, date, tz);
+                    const window = resolveDateWindow(args, todayInTz(tz));
+                    const entries = window.single
+                        ? await getWaterByDate(userId, window.start, tz)
+                        : await getWaterInRange(
+                              userId,
+                              window.start,
+                              window.end,
+                              tz,
+                          );
                     if (entries.length === 0) {
+                        const empty = window.single
+                            ? window.start === todayInTz(tz)
+                                ? "No water logged today."
+                                : `No water logged on ${window.start}.`
+                            : `No water found between ${window.start} and ${window.end}.`;
+                        return {
+                            content: [{ type: "text", text: empty }],
+                        };
+                    }
+                    const lineOf = (e: WaterEntry) =>
+                        `- ${e.amount_ml} ml at ${e.logged_at}${e.notes ? ` (${e.notes})` : ""} [id: ${e.id}]`;
+                    if (window.single) {
+                        const total = sumWater(entries);
+                        const lines = entries.map(lineOf);
+                        const label =
+                            window.start === todayInTz(tz)
+                                ? "Total"
+                                : `Total on ${window.start}`;
                         return {
                             content: [
                                 {
                                     type: "text",
-                                    text: `No water logged on ${date}.`,
+                                    text: `${label}: ${total} ml (${entries.length} entr${entries.length === 1 ? "y" : "ies"})\n\n${lines.join("\n")}`,
                                 },
                             ],
                         };
                     }
-                    const total = sumWater(entries);
-                    const lines = entries.map(
-                        (e) =>
-                            `- ${e.amount_ml} ml at ${e.logged_at}${e.notes ? ` (${e.notes})` : ""} [id: ${e.id}]`,
-                    );
+                    const byDate = new Map<string, WaterEntry[]>();
+                    for (const e of entries) {
+                        const date = dateInTz(e.logged_at, tz);
+                        const existing = byDate.get(date) ?? [];
+                        existing.push(e);
+                        byDate.set(date, existing);
+                    }
+                    const sections: string[] = [];
+                    for (const [date, dayEntries] of [
+                        ...byDate.entries(),
+                    ].sort()) {
+                        const total = sumWater(dayEntries);
+                        const header = `## ${date} (${total} ml, ${dayEntries.length} entr${dayEntries.length === 1 ? "y" : "ies"})`;
+                        sections.push(
+                            `${header}\n${dayEntries.map(lineOf).join("\n")}`,
+                        );
+                    }
                     return {
                         content: [
                             {
                                 type: "text",
-                                text: `Total on ${date}: ${total} ml (${entries.length} entr${entries.length === 1 ? "y" : "ies"})\n\n${lines.join("\n")}`,
+                                text: sections.join("\n\n"),
                             },
                         ],
                     };
                 },
                 analytics,
-                { date },
+                { date: args.date, from: args.from, to: args.to },
             );
         },
     );

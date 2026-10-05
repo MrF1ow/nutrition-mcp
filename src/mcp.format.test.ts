@@ -24,6 +24,7 @@ import {
     MEAL_BREAKDOWN_ITEM,
     MAX_CAFFEINE_MG,
     gateAlcohol,
+    resolveDateWindow,
 } from "./mcp.js";
 import { formatFoodResult, type FoodResult } from "./foods.js";
 import {
@@ -1375,5 +1376,53 @@ describe("missingNutrientNote", () => {
             caffeine_mg: null,
         });
         expect(note).toBe("");
+    });
+});
+
+describe("resolveDateWindow", () => {
+    test("defaults to today as a single day", () => {
+        expect(resolveDateWindow({}, "2026-07-15")).toEqual({
+            start: "2026-07-15",
+            end: "2026-07-15",
+            single: true,
+        });
+    });
+
+    test("accepts a single date", () => {
+        expect(resolveDateWindow({ date: "2026-07-01" }, "2026-07-15")).toEqual(
+            {
+                start: "2026-07-01",
+                end: "2026-07-01",
+                single: true,
+            },
+        );
+    });
+
+    test("accepts from/to as an inclusive range", () => {
+        expect(
+            resolveDateWindow(
+                { from: "2026-07-01", to: "2026-07-07" },
+                "2026-07-15",
+            ),
+        ).toEqual({
+            start: "2026-07-01",
+            end: "2026-07-07",
+            single: false,
+        });
+    });
+
+    test("rejects mixing date with from/to", () => {
+        expect(() =>
+            resolveDateWindow(
+                { date: "2026-07-01", from: "2026-07-01" },
+                "2026-07-15",
+            ),
+        ).toThrow(/not both/);
+    });
+
+    test("rejects a half range", () => {
+        expect(() =>
+            resolveDateWindow({ from: "2026-07-01" }, "2026-07-15"),
+        ).toThrow(/both from and to/);
     });
 });

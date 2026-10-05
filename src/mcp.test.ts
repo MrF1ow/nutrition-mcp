@@ -291,6 +291,7 @@ mock.module("./db/nutrition.js", () => ({
     getNutritionGoals: async () => db.goals,
     getMealsByDate: async () => db.meals,
     getWaterByDate: async () => [],
+    getWeightByDate: async () => [],
     // The range readers behind get_nutrition_summary. They ignore the dates and
     // hand back whatever the test staged: the fixtures below already sit inside
     // the window they ask for, and filtering here would only re-implement the
@@ -1184,9 +1185,7 @@ describe("set_nutrition_goals accepts a caffeine limit", () => {
             expect(r.isError).toBeFalsy();
             expect(db.goals!.daily_caffeine_mg).toBe(400);
             expect(textOf(r)).toContain("- Caffeine (max): 400 mg");
-            expect(textOf(await call("get_nutrition_goals"))).toContain(
-                "- Caffeine (max): 400 mg",
-            );
+            expect(textOf(await call("get_goal_progress"))).toContain("400 mg");
         });
     });
 
@@ -3549,7 +3548,7 @@ describe("phone-app domain MCP tools", () => {
         }
     }
 
-    test("list_fridge_items returns seeded locations and items", async () => {
+    test("get_fridge returns seeded locations and items", async () => {
         db.barcodeFoods[cottage.barcode] = cottage;
         await withPat(async (call) => {
             const loc = await call("add_fridge_location", { name: "Fridge" });
@@ -3562,20 +3561,26 @@ describe("phone-app domain MCP tools", () => {
                 amount: 200,
             });
             expect(added.isError).toBeFalsy();
-            const listed = await call("list_fridge_items");
+            const listed = await call("get_fridge");
             expect(listed.isError).toBeFalsy();
             expect(textOf(listed)).toContain("Cottage Cheese");
-            expect(listed.structuredContent?.items).toEqual(
+            const locations = listed.structuredContent?.locations as Array<{
+                name: string;
+                items: Array<{ display_name: string; amount: number }>;
+            }>;
+            expect(locations).toEqual(
                 expect.arrayContaining([
                     expect.objectContaining({
-                        display_name: "Cottage Cheese",
-                        amount: 200,
-                        unit: "g",
+                        name: "Fridge",
+                        items: expect.arrayContaining([
+                            expect.objectContaining({
+                                display_name: "Cottage Cheese",
+                                amount: 200,
+                            }),
+                        ]),
                     }),
                 ]),
             );
-            const locations = await call("list_fridge_locations");
-            expect(textOf(locations)).toContain("Fridge");
         });
     });
 
@@ -3632,7 +3637,7 @@ describe("phone-app domain MCP tools", () => {
             });
             expect(put.isError).toBeFalsy();
             expect(textOf(put)).toContain("Put away");
-            const listed = await call("list_fridge_items");
+            const listed = await call("get_fridge");
             expect(textOf(listed)).toContain("Cottage Cheese");
             const groceries = await call("list_grocery_lines");
             expect(textOf(groceries)).not.toContain("Cottage Cheese");
@@ -3671,7 +3676,7 @@ describe("phone-app domain MCP tools", () => {
             expect(textOf(cooked)).toContain("Shortfall");
             expect(textOf(cooked)).toContain("Logged 2 meals");
             expect(db.inserted).toHaveLength(2);
-            const leftover = await call("list_fridge_items");
+            const leftover = await call("get_fridge");
             expect(textOf(leftover)).toContain("Fridge is empty.");
         });
     });
@@ -3740,22 +3745,21 @@ describe("phone-app domain MCP tools", () => {
         });
     });
 
-    test("set_store_rules stores free text", async () => {
+    test("set_household_rules stores free text", async () => {
         const store = await createGroceryStore(
             db.settingsStore,
             "hh-1",
             "Safeway",
         );
         await withPat(async (call) => {
-            const r = await call("set_store_rules", {
-                store_id: store.id,
-                body: "dairy is on the back wall",
+            const r = await call("set_household_rules", {
+                store_rules: [
+                    { store_id: store.id, body: "dairy is on the back wall" },
+                ],
             });
             expect(r.isError).toBeFalsy();
-            expect(textOf(r)).toContain("dairy is on the back wall");
-            const listed = await call("list_store_rules", {
-                store_id: store.id,
-            });
+            expect(textOf(r)).toContain("store rule");
+            const listed = await call("get_household_rules");
             expect(textOf(listed)).toContain("dairy is on the back wall");
         });
     });
@@ -3787,7 +3791,7 @@ describe("phone-app domain MCP tools", () => {
             });
             expect(r.isError).toBeFalsy();
             expect(db.inserted[0]!.user_id).toBe(bob);
-            const today = await call("get_meals_today", { user_id: bob });
+            const today = await call("get_meals", { user_id: bob });
             expect(textOf(today)).toContain("toast");
         });
     });
@@ -3883,16 +3887,15 @@ describe("phone-app domain MCP tools", () => {
         });
     });
 
-    test("set_person_allergens then grocery add warns", async () => {
+    test("set_household_rules allergens then grocery add warns", async () => {
         const store = await createGroceryStore(
             db.settingsStore,
             "hh-1",
             "Safeway",
         );
         await withPat(async (call) => {
-            const allergen = await call("set_person_allergens", {
-                member_id: bob,
-                allergen: "peanut",
+            const allergen = await call("set_household_rules", {
+                person: [{ user_id: bob, allergens: [{ allergen: "peanut" }] }],
             });
             expect(allergen.isError).toBeFalsy();
             const food = await call("upsert_food", {

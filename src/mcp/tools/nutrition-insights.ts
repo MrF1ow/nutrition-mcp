@@ -34,6 +34,7 @@ import {
     MEAL_LOGGED_WIDGET_URI,
     TRENDS_WIDGET_URI,
     WEIGHT_TRENDS_WIDGET_URI,
+    resolveDateWindow,
     emptyTotals,
     sumMeals,
     nutrientPresence,
@@ -61,133 +62,69 @@ export function registerNutritionReadTools(
 ) {
     const { alcohol, personSchema, actorUserId, analytics, uiMeta } = ctx;
     server.registerTool(
-        "get_meals_today",
+        "get_meals",
         {
-            title: "Get Today's Meals",
-            description: "Get all meals logged today",
+            title: "Get Meals",
+            description:
+                "Get logged meals. Omit date/from/to for today; pass date for one local day; pass from and to (inclusive, YYYY-MM-DD) for a range. Do not mix date with from/to.",
             annotations: {
                 readOnlyHint: true,
                 destructiveHint: false,
                 idempotentHint: true,
                 openWorldHint: false,
             },
-            inputSchema: personSchema({}),
+            inputSchema: personSchema({
+                date: z
+                    .string()
+                    .optional()
+                    .describe(
+                        "Single local day (YYYY-MM-DD). Defaults to today.",
+                    ),
+                from: z
+                    .string()
+                    .optional()
+                    .describe(
+                        "Range start (YYYY-MM-DD), inclusive. Requires to.",
+                    ),
+                to: z
+                    .string()
+                    .optional()
+                    .describe(
+                        "Range end (YYYY-MM-DD), inclusive. Requires from.",
+                    ),
+            }),
         },
         async (args) => {
             return withAnalytics(
-                "get_meals_today",
+                "get_meals",
                 async () => {
                     const userId = await actorUserId(args.user_id, "read");
                     const tz = await getUserTimezone(userId);
-                    const meals = await getMealsByDate(
-                        userId,
-                        todayInTz(tz),
-                        tz,
-                    );
+                    const window = resolveDateWindow(args, todayInTz(tz));
+                    const meals = window.single
+                        ? await getMealsByDate(userId, window.start, tz)
+                        : await getMealsInRange(
+                              userId,
+                              window.start,
+                              window.end,
+                              tz,
+                          );
                     if (meals.length === 0) {
+                        const empty = window.single
+                            ? window.start === todayInTz(tz)
+                                ? "No meals logged today."
+                                : `No meals logged on ${window.start}.`
+                            : `No meals found between ${window.start} and ${window.end}.`;
                         return {
-                            content: [
-                                {
-                                    type: "text",
-                                    text: "No meals logged today.",
-                                },
-                            ],
+                            content: [{ type: "text", text: empty }],
                         };
                     }
-                    const text = meals
-                        .map((m) => formatMeal(m, alcohol))
-                        .join("\n\n---\n\n");
-                    return { content: [{ type: "text", text }] };
-                },
-                analytics,
-            );
-        },
-    );
-
-    server.registerTool(
-        "get_meals_by_date",
-        {
-            title: "Get Meals by Date",
-            description: "Get all meals for a specific date",
-            annotations: {
-                readOnlyHint: true,
-                destructiveHint: false,
-                idempotentHint: true,
-                openWorldHint: false,
-            },
-            inputSchema: personSchema({
-                date: z.string().describe("Date in YYYY-MM-DD format"),
-            }),
-        },
-        async ({ date, user_id }) => {
-            return withAnalytics(
-                "get_meals_by_date",
-                async () => {
-                    const userId = await actorUserId(user_id, "read");
-                    const tz = await getUserTimezone(userId);
-                    const meals = await getMealsByDate(userId, date, tz);
-                    if (meals.length === 0) {
-                        return {
-                            content: [
-                                {
-                                    type: "text",
-                                    text: `No meals logged on ${date}.`,
-                                },
-                            ],
-                        };
+                    if (window.single) {
+                        const text = meals
+                            .map((m) => formatMeal(m, alcohol))
+                            .join("\n\n---\n\n");
+                        return { content: [{ type: "text", text }] };
                     }
-                    const text = meals
-                        .map((m) => formatMeal(m, alcohol))
-                        .join("\n\n---\n\n");
-                    return { content: [{ type: "text", text }] };
-                },
-                analytics,
-                { date },
-            );
-        },
-    );
-
-    server.registerTool(
-        "get_meals_by_date_range",
-        {
-            title: "Get Meals by Date Range",
-            description:
-                "Get all meals between two dates (inclusive). Use this instead of multiple get_meals_by_date calls when you need meals for more than one day.",
-            annotations: {
-                readOnlyHint: true,
-                destructiveHint: false,
-                idempotentHint: true,
-                openWorldHint: false,
-            },
-            inputSchema: personSchema({
-                start_date: z.string().describe("Start date (YYYY-MM-DD)"),
-                end_date: z.string().describe("End date (YYYY-MM-DD)"),
-            }),
-        },
-        async ({ start_date, end_date, user_id }) => {
-            return withAnalytics(
-                "get_meals_by_date_range",
-                async () => {
-                    const userId = await actorUserId(user_id, "read");
-                    const tz = await getUserTimezone(userId);
-                    const meals = await getMealsInRange(
-                        userId,
-                        start_date,
-                        end_date,
-                        tz,
-                    );
-                    if (meals.length === 0) {
-                        return {
-                            content: [
-                                {
-                                    type: "text",
-                                    text: `No meals found between ${start_date} and ${end_date}.`,
-                                },
-                            ],
-                        };
-                    }
-
-                    // Group by date for readability (local to user timezone)
                     const byDate = new Map<string, Meal[]>();
                     for (const meal of meals) {
                         const date = dateInTz(meal.logged_at, tz);
@@ -195,7 +132,6 @@ export function registerNutritionReadTools(
                         existing.push(meal);
                         byDate.set(date, existing);
                     }
-
                     const sections: string[] = [];
                     for (const [date, dateMeals] of [
                         ...byDate.entries(),
@@ -206,7 +142,6 @@ export function registerNutritionReadTools(
                             .join("\n\n---\n\n");
                         sections.push(`${header}\n\n${formatted}`);
                     }
-
                     return {
                         content: [
                             {
@@ -217,7 +152,11 @@ export function registerNutritionReadTools(
                     };
                 },
                 analytics,
-                { start_date, end_date },
+                {
+                    date: args.date,
+                    from: args.from,
+                    to: args.to,
+                },
             );
         },
     );

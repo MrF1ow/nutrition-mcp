@@ -81,6 +81,31 @@ export const MEAL_LOGGED_WIDGET_URI = "ui://widget/meal-logged.html";
 export const TRENDS_WIDGET_URI = "ui://widget/trends.html";
 export const WEIGHT_TRENDS_WIDGET_URI = "ui://widget/weight-trends.html";
 export const IMPORT_MEALS_WIDGET_URI = "ui://widget/import-meals.html";
+export const GROCERY_LIST_WIDGET_URI = "ui://widget/grocery-list.html";
+export const FRIDGE_WIDGET_URI = "ui://widget/fridge.html";
+
+/** Shared date window for get_meals / get_water / get_weight.
+ * `date` is a single local day (defaults to today). `from`+`to` is an
+ * inclusive range. The two forms cannot be mixed. */
+export function resolveDateWindow(
+    args: { date?: string; from?: string; to?: string },
+    today: string,
+): { start: string; end: string; single: boolean } {
+    const hasDate = Boolean(args.date);
+    const hasFrom = Boolean(args.from);
+    const hasTo = Boolean(args.to);
+    if (hasDate && (hasFrom || hasTo)) {
+        throw new Error("Pass date or from/to, not both.");
+    }
+    if (hasFrom !== hasTo) {
+        throw new Error("Pass both from and to for a date range.");
+    }
+    if (hasFrom && hasTo) {
+        return { start: args.from!, end: args.to!, single: false };
+    }
+    const day = args.date ?? today;
+    return { start: day, end: day, single: true };
+}
 
 // The completeness rule for the three nutrients the model routinely forgets,
 // declared once and spliced into SERVER_INSTRUCTIONS, log_meal and update_meal
@@ -558,7 +583,7 @@ type GoalDirection = "floor" | "ceiling";
 // Whether a stored target is a target at all. Zero splits by direction: a
 // CEILING of 0 is a real limit — "none at all" is the single most likely
 // alcohol goal anyone sets, and the old `target <= 0` guard let such a goal be
-// stored, echoed back by get_nutrition_goals, and then silently ignored on
+// stored, echoed back by get_goal_progress, and then silently ignored on
 // every progress line, which is worse than refusing it. A FLOOR of 0 stays
 // "unset": a 0 g protein target is meaningless. Negatives are rejected in both
 // directions, and so is NaN (z.coerce turns "" into NaN).

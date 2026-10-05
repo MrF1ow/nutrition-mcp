@@ -20,11 +20,27 @@ import {
     listGrocery,
 } from "../../domain/grocery.js";
 import { putAwayGroceryLines, StockInputError } from "../../domain/stock.js";
-import { groceryLineExtras } from "../shared.js";
+import { getWidgetHtml } from "../../widgets.js";
+import { WIDGET_LOCALE } from "../../routes.js";
+import {
+    groceryLineExtras,
+    APP_UI_MIME_TYPE,
+    GROCERY_LIST_WIDGET_URI,
+} from "../shared.js";
 import type { ToolContext } from "../shared.js";
 
 export function registerGroceryTools(server: McpServer, ctx: ToolContext) {
-    const { callerHouseholdId, analytics } = ctx;
+    const { callerHouseholdId, analytics, uiMeta } = ctx;
+    const groceryLineSchema = z.object({
+        id: z.string(),
+        store_id: z.string(),
+        section_id: z.string(),
+        display_name: z.string(),
+        amount: z.number(),
+        unit: z.string(),
+        checked: z.boolean(),
+        already_have: z.string().nullable(),
+    });
     server.registerTool(
         "list_grocery_lines",
         {
@@ -38,19 +54,22 @@ export function registerGroceryTools(server: McpServer, ctx: ToolContext) {
                 openWorldHint: false,
             },
             outputSchema: z.object({
-                lines: z.array(
+                locale: z.string(),
+                stores: z.array(
                     z.object({
                         id: z.string(),
-                        store_id: z.string(),
-                        section_id: z.string(),
-                        display_name: z.string(),
-                        amount: z.number(),
-                        unit: z.string(),
-                        checked: z.boolean(),
-                        already_have: z.string().nullable(),
+                        name: z.string(),
+                        sections: z.array(
+                            z.object({
+                                id: z.string(),
+                                name: z.string(),
+                                lines: z.array(groceryLineSchema),
+                            }),
+                        ),
                     }),
                 ),
             }),
+            ...uiMeta(GROCERY_LIST_WIDGET_URI),
         },
         async () =>
             withAnalytics(
@@ -79,42 +98,67 @@ export function registerGroceryTools(server: McpServer, ctx: ToolContext) {
                         quantity: item.quantity,
                         foodId: item.foodId,
                     }));
-                    const payload = {
-                        lines: snapshot.lines.map((line) => {
-                            const tag = alreadyHaveTag(
-                                {
-                                    identity: line.identity,
-                                    quantity: line.quantity,
-                                    foodId: line.foodId,
-                                },
-                                stock,
-                                foods,
-                            );
-                            return {
-                                id: line.id,
-                                store_id: line.storeId,
-                                section_id: line.sectionId,
-                                display_name: line.displayName,
-                                amount: line.quantity.amount,
-                                unit: line.quantity.unit,
-                                checked: line.checked,
-                                already_have:
-                                    tag == null
-                                        ? null
-                                        : tag.cover === "full"
-                                          ? "already have"
-                                          : `already have: have ${tag.have.amount} ${tag.have.unit}, need ${tag.need.amount} ${tag.need.unit}`,
-                            };
-                        }),
+                    const linePayload = (
+                        line: (typeof snapshot.lines)[number],
+                    ) => {
+                        const tag = alreadyHaveTag(
+                            {
+                                identity: line.identity,
+                                quantity: line.quantity,
+                                foodId: line.foodId,
+                            },
+                            stock,
+                            foods,
+                        );
+                        return {
+                            id: line.id,
+                            store_id: line.storeId,
+                            section_id: line.sectionId,
+                            display_name: line.displayName,
+                            amount: line.quantity.amount,
+                            unit: line.quantity.unit,
+                            checked: line.checked,
+                            already_have:
+                                tag == null
+                                    ? null
+                                    : tag.cover === "full"
+                                      ? "already have"
+                                      : `already have: have ${tag.have.amount} ${tag.have.unit}, need ${tag.need.amount} ${tag.need.unit}`,
+                        };
                     };
+                    const payload = {
+                        locale: WIDGET_LOCALE,
+                        stores: snapshot.stores.map((store) => ({
+                            id: store.id,
+                            name: store.name,
+                            sections: snapshot.sections
+                                .filter(
+                                    (section) => section.storeId === store.id,
+                                )
+                                .map((section) => ({
+                                    id: section.id,
+                                    name: section.name,
+                                    lines: snapshot.lines
+                                        .filter(
+                                            (line) =>
+                                                line.sectionId === section.id,
+                                        )
+                                        .map(linePayload),
+                                }))
+                                .filter((section) => section.lines.length > 0),
+                        })),
+                    };
+                    const lines = payload.stores.flatMap((store) =>
+                        store.sections.flatMap((section) => section.lines),
+                    );
                     return {
                         content: [
                             {
                                 type: "text",
                                 text:
-                                    payload.lines.length === 0
+                                    lines.length === 0
                                         ? "Grocery list is empty."
-                                        : payload.lines
+                                        : lines
                                               .map((line) => {
                                                   const tag = line.already_have
                                                       ? ` [${line.already_have}]`
@@ -129,6 +173,29 @@ export function registerGroceryTools(server: McpServer, ctx: ToolContext) {
                 },
                 analytics,
             ),
+    );
+
+    server.registerResource(
+        "grocery-list-widget",
+        GROCERY_LIST_WIDGET_URI,
+        {
+            title: "Grocery List",
+            description:
+                "Interactive UI for list_grocery_lines: stores, sections, and lines with already-have tags and check-off.",
+            mimeType: APP_UI_MIME_TYPE,
+        },
+        async (uri) => {
+            return {
+                contents: [
+                    {
+                        uri: uri.href,
+                        mimeType: APP_UI_MIME_TYPE,
+                        text: await getWidgetHtml("grocery-list"),
+                        _meta: { ui: { prefersBorder: true } },
+                    },
+                ],
+            };
+        },
     );
 
     server.registerTool(

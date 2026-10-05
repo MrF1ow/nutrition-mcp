@@ -369,6 +369,23 @@ export interface WidgetStrings {
         /** Template. Placeholder: {email}. */
         emailNotice: string;
     };
+
+    groceryList: {
+        title: string;
+        loading: string;
+        empty: string;
+        alreadyHave: string;
+        checkAria: string;
+        uncheckAria: string;
+    };
+
+    fridge: {
+        title: string;
+        loading: string;
+        empty: string;
+        emptyLocation: string;
+        expires: string;
+    };
 }
 
 export const WIDGET_STRINGS_EN: WidgetStrings = {
@@ -608,6 +625,21 @@ export const WIDGET_STRINGS_EN: WidgetStrings = {
         noDataRows: "No data rows found in that file.",
         emailNotice:
             "Not working as expected? Email {email} and include the lines below — that is everything needed to diagnose it.",
+    },
+    groceryList: {
+        title: "Grocery",
+        loading: "Loading the grocery list…",
+        empty: "Grocery list is empty.",
+        alreadyHave: "already have",
+        checkAria: "Mark {name} checked",
+        uncheckAria: "Mark {name} unchecked",
+    },
+    fridge: {
+        title: "Fridge",
+        loading: "Loading the fridge…",
+        empty: "Fridge is empty.",
+        emptyLocation: "empty",
+        expires: "exp {date}",
     },
 };
 

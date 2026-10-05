@@ -303,6 +303,81 @@ function hostPage(widget: string, params: URLSearchParams): string {
                 weight: 82.4 - i * 0.1,
             })),
         },
+        "grocery-list": {
+            locale: "en",
+            stores: [
+                {
+                    id: "st-1",
+                    name: "Safeway",
+                    sections: [
+                        {
+                            id: "sec-dairy",
+                            name: "Dairy",
+                            lines: [
+                                {
+                                    id: "ln-1",
+                                    store_id: "st-1",
+                                    section_id: "sec-dairy",
+                                    display_name: "Milk",
+                                    amount: 1,
+                                    unit: "l",
+                                    checked: false,
+                                    already_have:
+                                        "already have: have 0.5 l, need 0.5 l",
+                                },
+                                {
+                                    id: "ln-2",
+                                    store_id: "st-1",
+                                    section_id: "sec-dairy",
+                                    display_name: "Cottage Cheese",
+                                    amount: 400,
+                                    unit: "g",
+                                    checked: true,
+                                    already_have: "already have",
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        },
+        fridge: {
+            locale: "en",
+            locations: [
+                {
+                    id: "loc-1",
+                    name: "Fridge",
+                    sort_order: 0,
+                    items: [
+                        {
+                            id: "it-1",
+                            location_id: "loc-1",
+                            kind: "food",
+                            display_name: "Milk",
+                            amount: 0.5,
+                            unit: "l",
+                            expires_on: "2026-07-18",
+                        },
+                    ],
+                },
+                {
+                    id: "loc-2",
+                    name: "Pantry",
+                    sort_order: 1,
+                    items: [
+                        {
+                            id: "it-3",
+                            location_id: "loc-2",
+                            kind: "food",
+                            display_name: "Oats",
+                            amount: 500,
+                            unit: "g",
+                            expires_on: null,
+                        },
+                    ],
+                },
+            ],
+        },
     };
     // Probe and gallery paint their own UI; anything non-null will do.
     const toolResult = RESULTS[widget] ?? { probe: true };

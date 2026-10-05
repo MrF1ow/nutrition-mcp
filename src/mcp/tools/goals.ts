@@ -246,43 +246,6 @@ export function registerGoalsTools(server: McpServer, ctx: ToolContext) {
     );
 
     server.registerTool(
-        "get_nutrition_goals",
-        {
-            title: "Get Nutrition Goals",
-            description:
-                "Get the user's current daily calorie and macro targets.",
-            annotations: {
-                readOnlyHint: true,
-                destructiveHint: false,
-                idempotentHint: true,
-                openWorldHint: false,
-            },
-            inputSchema: personSchema({}),
-        },
-        async (args) => {
-            return withAnalytics(
-                "get_nutrition_goals",
-                async () => {
-                    const userId = await actorUserId(args.user_id, "read");
-                    const [goals, unit] = await Promise.all([
-                        getNutritionGoals(userId),
-                        getPreferredWeightUnit(userId),
-                    ]);
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: formatGoals(goals, unit ?? "kg", alcohol),
-                            },
-                        ],
-                    };
-                },
-                analytics,
-            );
-        },
-    );
-
-    server.registerTool(
         "get_goal_progress",
         {
             title: "Get Goal Progress",
