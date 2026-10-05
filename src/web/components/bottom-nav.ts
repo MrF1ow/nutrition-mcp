@@ -1,4 +1,4 @@
-import type { AppTabId } from "../shell.js";
+import type { AppTabId } from "../../app/shell.js";
 
 const SVG_OPEN =
     '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">';
@@ -29,4 +29,4 @@ export function tabIcon(id: AppTabId): string {
     return TAB_ICONS[id];
 }
 
-export { APP_TABS, bottomNav, type AppTabId } from "../shell.js";
+export { APP_TABS, bottomNav, type AppTabId } from "../../app/shell.js";

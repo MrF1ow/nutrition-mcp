@@ -4,7 +4,11 @@ import type {
     FridgeLocation,
     FridgeSnapshot,
 } from "../../fridge.js";
-import { escapeHtml, renderAppShell, type ViewerChrome } from "../shell.js";
+import {
+    escapeHtml,
+    renderAppShell,
+    type ViewerChrome,
+} from "../../app/shell.js";
 import { renderFoodPicker } from "../components/food-picker.js";
 import { renderQuantityField } from "../components/quantity-field.js";
 import {

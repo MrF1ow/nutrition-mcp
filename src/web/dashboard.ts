@@ -1,11 +1,11 @@
-import { dashboardAccess, type HouseholdMember } from "./household.js";
+import { dashboardAccess, type HouseholdMember } from "../household.js";
 import {
     getGoalProgressPayload,
     getNutritionSummaryPayload,
     getTrendsPayload,
     getWeightTrendsPayload,
     type AlcoholDisplay,
-} from "./dashboard-data.js";
+} from "../dashboard-data.js";
 import {
     alcoholTrackingEnabledFromProfile,
     getHouseholdConfig,
@@ -21,31 +21,28 @@ import {
     preferredDrinkUnitFromProfile,
     preferredWeightUnitFromProfile,
     widgetsEnabledFromProfile,
-} from "./supabase.js";
-import { renderFridgePage } from "./app/fridge/page.js";
-import { renderGroceryPage } from "./app/grocery/page.js";
-import {
-    renderRecipeDetailPage,
-    renderRecipesPage,
-} from "./app/recipes/page.js";
-import { renderSettingsPage } from "./app/settings/page.js";
-import { renderHouseholdSettingsPage } from "./app/settings/household.js";
-import { listFridge } from "./fridge.js";
-import { groceryAllergenWarning, listGrocery } from "./grocery.js";
-import { alreadyHaveTag } from "./linking.js";
+} from "../supabase.js";
+import { renderFridgePage } from "./pages/fridge.js";
+import { renderGroceryPage } from "./pages/grocery.js";
+import { renderRecipeDetailPage, renderRecipesPage } from "./pages/recipes.js";
+import { renderSettingsPage } from "./pages/settings.js";
+import { renderHouseholdSettingsPage } from "../app/settings/household.js";
+import { listFridge } from "../fridge.js";
+import { groceryAllergenWarning, listGrocery } from "../grocery.js";
+import { alreadyHaveTag } from "../linking.js";
 import {
     getRecipeView,
     listRecipes,
     macrosForPerson,
     RecipeInputError,
     recipeDislikeNote,
-} from "./recipes.js";
+} from "../recipes.js";
 import {
     renderNutritionPage,
     viewerChromeFromProfile,
     type NutritionView,
-} from "./app/nutrition.js";
-import { isAccentSwatch, escapeHtml } from "./app/shell.js";
+} from "../app/nutrition.js";
+import { isAccentSwatch, escapeHtml } from "../app/shell.js";
 
 function alcoholOf(
     profile: Parameters<typeof alcoholTrackingEnabledFromProfile>[0],
