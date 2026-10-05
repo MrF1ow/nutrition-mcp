@@ -21,7 +21,10 @@ test("1 cup of milk at 1.03 g/ml is about 247 g (240 ml cup)", () => {
 
 test("each without a factor is null", () => {
     expect(
-        toGrams({ amount: 2, unit: "each" }, { gramsPerEach: null, gramsPerMl: null }),
+        toGrams(
+            { amount: 2, unit: "each" },
+            { gramsPerEach: null, gramsPerMl: null },
+        ),
     ).toBeNull();
     expect(toGrams({ amount: 2, unit: "each" }, null)).toBeNull();
 });
@@ -48,10 +51,14 @@ test("fromGrams inverts toGrams in the need unit", () => {
 
 test("missingGramsReason names the factor that is absent", () => {
     expect(
-        missingGramsReason("Eggs", { unit: "each" }, {
-            gramsPerEach: null,
-            gramsPerMl: null,
-        }),
+        missingGramsReason(
+            "Eggs",
+            { unit: "each" },
+            {
+                gramsPerEach: null,
+                gramsPerMl: null,
+            },
+        ),
     ).toBe("Eggs: set grams per each");
     expect(missingGramsReason("Milk", { unit: "cup" }, egg)).toBe(
         "Milk: set grams per millilitre",

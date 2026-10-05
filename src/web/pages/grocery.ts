@@ -1,4 +1,8 @@
-import { formatQuantity, isQuantityUnit, type Quantity } from "../../domain/quantity.js";
+import {
+    formatQuantity,
+    isQuantityUnit,
+    type Quantity,
+} from "../../domain/quantity.js";
 import type { GroceryLine } from "../../domain/grocery.js";
 import type { GrocerySection, GroceryStore } from "../../domain/settings.js";
 import type { StoreRule } from "../../domain/rules.js";

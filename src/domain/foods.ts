@@ -211,14 +211,18 @@ const OFF_COUNT_UNITS = new Set([
 const COUNT_SERVING_WORD =
     /\b(egg|eggs|cookie|cookies|slice|slices|piece|pieces|each|unit|capsule|tablet|bar|bars)\b/i;
 
-function countFromServingLabel(serving: string | null | undefined): number | null {
+function countFromServingLabel(
+    serving: string | null | undefined,
+): number | null {
     if (!serving) return null;
     if (!COUNT_SERVING_WORD.test(serving)) return null;
     const match = serving.trim().match(/^(\d+(?:\.\d+)?)/);
     return match ? Number(match[1]) : 1;
 }
 
-function gramsFromServingLabel(serving: string | null | undefined): number | null {
+function gramsFromServingLabel(
+    serving: string | null | undefined,
+): number | null {
     if (!serving) return null;
     const match = serving.match(/(\d+(?:\.\d+)?)\s*g\b/i);
     if (!match) return null;
@@ -711,9 +715,7 @@ function parseOptionalNutrient(
     return value;
 }
 
-function parsePositiveFactor(
-    value: number | null | undefined,
-): number | null {
+function parsePositiveFactor(value: number | null | undefined): number | null {
     if (value == null) return null;
     if (!Number.isFinite(value) || value <= 0) {
         throw new FoodsInputError(

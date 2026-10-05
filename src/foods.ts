@@ -39,7 +39,7 @@ function offUserAgent(): string {
 export interface FoodResult {
     name: string;
     brand: string | null;
-    serving?: string | null; // human label for the basis of the macros below
+    serving: string | null; // human label for the basis of the macros below
     serving_quantity?: number | null;
     serving_quantity_unit?: string | null;
     calories: number | null;

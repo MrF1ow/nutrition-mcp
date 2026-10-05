@@ -304,7 +304,17 @@ test("quantity field food kind lists food units and preselects an explicit unit"
     expect(foodHtml).toContain('class="quantity-field"');
     expect(foodHtml).toContain('data-kind="food"');
     expect(foodHtml).toMatch(/<option value="g"[^>]*selected/);
-    for (const unit of ["g", "oz", "lb", "ml", "fl oz", "cup", "tbsp", "tsp", "each"]) {
+    for (const unit of [
+        "g",
+        "oz",
+        "lb",
+        "ml",
+        "fl oz",
+        "cup",
+        "tbsp",
+        "tsp",
+        "each",
+    ]) {
         expect(foodHtml).toContain(`value="${unit}"`);
     }
 

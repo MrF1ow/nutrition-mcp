@@ -337,16 +337,12 @@ recipesRoutes.post("/recipes/:id/add-to-grocery", requireMember, async (c) => {
             }),
         );
         const fridge = await listFridge(liveFridgeStore(), member.householdId);
-        const foods = await foodsByIds(
-            liveFoodsStore(),
-            member.householdId,
-            [
-                ...(
-                    await recipes.listIngredients(member.householdId, recipeId)
-                ).map((row) => row.foodId),
-                ...fridge.items.map((item) => item.foodId),
-            ],
-        );
+        const foods = await foodsByIds(liveFoodsStore(), member.householdId, [
+            ...(
+                await recipes.listIngredients(member.householdId, recipeId)
+            ).map((row) => row.foodId),
+            ...fridge.items.map((item) => item.foodId),
+        ]);
         await addRecipeToGrocery({
             recipes,
             grocery: liveGroceryStore(),

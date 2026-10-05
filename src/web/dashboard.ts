@@ -237,7 +237,11 @@ export async function renderGroceryListPage(
                     .filter((line) => line.sectionId === section.id)
                     .map((line) => ({
                         ...line,
-                        alreadyHave: alreadyHaveTag(line, fridge.items, catalog),
+                        alreadyHave: alreadyHaveTag(
+                            line,
+                            fridge.items,
+                            catalog,
+                        ),
                     })),
             }));
         return {
