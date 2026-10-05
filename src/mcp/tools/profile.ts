@@ -1,17 +1,9 @@
 import { type McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import {
-    preferredWeightUnitFromProfile,
-    timezoneFromProfile,
-    upsertProfile,
-    getProfile,
-    widgetsEnabledFromProfile,
-    alcoholTrackingEnabledFromProfile,
-    preferredDrinkUnitFromProfile,
-} from "../../supabase.js";
+import { preferredWeightUnitFromProfile, timezoneFromProfile, upsertProfile, getProfile, widgetsEnabledFromProfile, alcoholTrackingEnabledFromProfile, preferredDrinkUnitFromProfile } from "../../db/profiles.js";
 import { withAnalytics } from "../../analytics.js";
-import { todayInTz, validateTz } from "../../tz.js";
-import { isWeightUnit } from "../../units.js";
+import { todayInTz, validateTz } from "../../domain/tz.js";
+import { isWeightUnit } from "../../domain/units.js";
 import { isDrinkUnit, type DrinkUnit } from "../../alcohol.js";
 import { formatClockLine, drinkUnitLabel } from "../shared.js";
 import type { ToolContext } from "../shared.js";

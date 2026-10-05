@@ -8,7 +8,7 @@ import {
     banRepeatAuthFailures,
 } from "./middleware.js";
 import { handleMcp, closeMcpHandler } from "./mcp.js";
-import { startExportCleanup } from "./export.js";
+import { startExportCleanup } from "./domain/export.js";
 import { registerDiscoveryRoutes } from "./discovery.js";
 import { maskIp } from "./net.js";
 import { warmWidgets } from "./widgets.js";

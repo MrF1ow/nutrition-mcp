@@ -1,8 +1,8 @@
-import { formatQuantity, type Quantity } from "../../quantity.js";
-import type { GroceryLine } from "../../grocery.js";
-import type { GrocerySection, GroceryStore } from "../../settings.js";
-import type { StoreRule } from "../../rules.js";
-import type { AlreadyHaveTag } from "../../linking.js";
+import { formatQuantity, type Quantity } from "../../domain/quantity.js";
+import type { GroceryLine } from "../../domain/grocery.js";
+import type { GrocerySection, GroceryStore } from "../../domain/settings.js";
+import type { StoreRule } from "../../domain/rules.js";
+import type { AlreadyHaveTag } from "../../domain/linking.js";
 import {
     escapeHtml,
     renderAppShell,

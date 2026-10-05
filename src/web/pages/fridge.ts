@@ -1,9 +1,9 @@
-import { formatQuantity } from "../../quantity.js";
+import { formatQuantity } from "../../domain/quantity.js";
 import type {
     FridgeItem,
     FridgeLocation,
     FridgeSnapshot,
-} from "../../fridge.js";
+} from "../../domain/fridge.js";
 import {
     escapeHtml,
     renderAppShell,

@@ -6,7 +6,7 @@ import {
     recipePortionToRow,
     recipeToRow,
     type RecipesStore,
-} from "../recipes.js";
+} from "../domain/recipes.js";
 import { getSupabase } from "./client.js";
 
 const RECIPE_COLS = "id, household_id, creator_id, name, yield_portions";

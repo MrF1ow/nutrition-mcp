@@ -1,8 +1,8 @@
 import { test, expect } from "bun:test";
-import type { MealInput } from "./supabase.js";
+import type { MealInput } from "../db/nutrition.js";
 import { runImport, resolveLoggedAt } from "./import.js";
 import { buildMealsCsv } from "./export.js";
-import type { Meal } from "./supabase.js";
+import type { Meal } from "../db/nutrition.js";
 import {
     parseCsv,
     decodeBytes,

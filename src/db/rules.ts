@@ -8,7 +8,7 @@ import {
     storeRuleFromRow,
     storeRuleToRow,
     type RulesStore,
-} from "../rules.js";
+} from "../domain/rules.js";
 import { getSupabase } from "./client.js";
 
 const STORE_RULE_COLS = "id, household_id, store_id, body, sort_order";

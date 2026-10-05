@@ -8,14 +8,9 @@ import {
     buildWeightCsv,
     EXPORT_ARCHIVE_FILES,
 } from "./export.js";
-import type {
-    Meal,
-    NutritionGoals,
-    Profile,
-    WaterEntry,
-    WeightEntry,
-} from "./supabase.js";
-import { buildZip } from "./zip.js";
+import type { Meal, NutritionGoals, WaterEntry, WeightEntry } from "../db/nutrition.js";
+import type { Profile } from "../db/profiles.js";
+import { buildZip } from "../zip.js";
 
 function meal(overrides: Partial<Meal> = {}): Meal {
     return {

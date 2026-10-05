@@ -1,14 +1,12 @@
 import { type McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import {
-    liveFridgeStore,
-    liveGroceryStore,
-    liveSettingsStore,
-} from "../../supabase.js";
+import { liveFridgeStore } from "../../db/fridge.js";
+import { liveGroceryStore } from "../../db/grocery.js";
+import { liveSettingsStore } from "../../db/settings.js";
 import { withAnalytics } from "../../analytics.js";
 import { lookupBarcode } from "../../foods.js";
-import { alreadyHaveTag } from "../../linking.js";
-import { listFridge } from "../../fridge.js";
+import { alreadyHaveTag } from "../../domain/linking.js";
+import { listFridge } from "../../domain/fridge.js";
 import {
     addGroceryFoodByBarcode,
     addGroceryManualFood,
@@ -16,7 +14,7 @@ import {
     checkGroceryLine,
     clearCheckedLines,
     listGrocery,
-} from "../../grocery.js";
+} from "../../domain/grocery.js";
 import { groceryLineExtras } from "../shared.js";
 import type { ToolContext } from "../shared.js";
 

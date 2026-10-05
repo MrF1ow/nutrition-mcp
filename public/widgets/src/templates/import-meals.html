@@ -16,8 +16,8 @@
   alcohol column, however loudly the file advertises one. See gatedField below
   for why nothing is written either.
 
-  The CSV parser is NOT written here. `@inlinets src/csv.ts` splices in the real
-  tested module (src/csv.test.ts), because a parser facing arbitrary user files
+  The CSV parser is NOT written here. `@inlinets src/domain/csv.ts` splices in the real
+  tested module (src/domain/csv.test.ts), because a parser facing arbitrary user files
   must not live as untested inline template JS. Same for the row chunker:
   `@inlinets src/chunk.ts` (src/chunk.test.ts) — the boundary logic deciding
   which rows go in which server call was untested inline JS once and had a real
@@ -113,8 +113,8 @@
 
             /*@include shared/bridge.js@*/
 
-            // The real, unit-tested CSV parser (src/csv.ts + src/csv.test.ts).
-            /*@inlinets src/csv.ts@*/
+            // The real, unit-tested CSV parser (src/domain/csv.ts + src/domain/csv.test.ts).
+            /*@inlinets src/domain/csv.ts@*/
 
             // ---- config from start_meal_import -------------------------------
             //

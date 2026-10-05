@@ -1,12 +1,5 @@
 import { test, expect } from "bun:test";
-import type {
-    MealInput,
-    MealInsertResult,
-    WaterInput,
-    WaterInsertResult,
-    WeightInput,
-    WeightInsertResult,
-} from "../supabase.js";
+import type { MealInput, MealInsertResult, WaterInput, WaterInsertResult, WeightInput, WeightInsertResult } from "../db/nutrition.js";
 import {
     logMealFromForm,
     logWaterFromForm,

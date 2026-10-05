@@ -1,4 +1,4 @@
-import { getSupabase } from "./supabase.js";
+import { getSupabase } from "./db/client.js";
 
 interface AnalyticsRecord {
     user_id: string;

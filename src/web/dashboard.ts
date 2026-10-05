@@ -6,37 +6,28 @@ import {
     getWeightTrendsPayload,
     type AlcoholDisplay,
 } from "../dashboard-data.js";
-import {
-    alcoholTrackingEnabledFromProfile,
-    getHouseholdConfig,
-    getHouseholdMembership,
-    getProfile,
-    householdExists,
-    listHouseholdMembers,
-    liveFridgeStore,
-    liveGroceryStore,
-    liveRecipesStore,
-    liveRulesStore,
-    liveSettingsStore,
-    preferredDrinkUnitFromProfile,
-    preferredWeightUnitFromProfile,
-    widgetsEnabledFromProfile,
-} from "../supabase.js";
+import { alcoholTrackingEnabledFromProfile, getProfile, preferredDrinkUnitFromProfile, preferredWeightUnitFromProfile, widgetsEnabledFromProfile } from "../db/profiles.js";
+import { getHouseholdConfig, getHouseholdMembership, householdExists, listHouseholdMembers } from "../db/household.js";
+import { liveFridgeStore } from "../db/fridge.js";
+import { liveGroceryStore } from "../db/grocery.js";
+import { liveRecipesStore } from "../db/recipes.js";
+import { liveRulesStore } from "../db/rules.js";
+import { liveSettingsStore } from "../db/settings.js";
 import { renderFridgePage } from "./pages/fridge.js";
 import { renderGroceryPage } from "./pages/grocery.js";
 import { renderRecipeDetailPage, renderRecipesPage } from "./pages/recipes.js";
 import { renderSettingsPage } from "./pages/settings.js";
 import { renderHouseholdSettingsPage } from "../app/settings/household.js";
-import { listFridge } from "../fridge.js";
-import { groceryAllergenWarning, listGrocery } from "../grocery.js";
-import { alreadyHaveTag } from "../linking.js";
+import { listFridge } from "../domain/fridge.js";
+import { groceryAllergenWarning, listGrocery } from "../domain/grocery.js";
+import { alreadyHaveTag } from "../domain/linking.js";
 import {
     getRecipeView,
     listRecipes,
     macrosForPerson,
     RecipeInputError,
     recipeDislikeNote,
-} from "../recipes.js";
+} from "../domain/recipes.js";
 import {
     renderNutritionPage,
     viewerChromeFromProfile,

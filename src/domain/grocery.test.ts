@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import type { FoodResult } from "./foods.js";
+import type { FoodResult } from "../foods.js";
 import {
     addFoodByBarcode,
     addLocation,
@@ -18,8 +18,8 @@ import {
 } from "./grocery.js";
 import { alreadyHaveTag } from "./linking.js";
 import { createGroceryStore, createMemorySettingsStore } from "./settings.js";
-import { renderGroceryPage } from "./web/pages/grocery.js";
-import { ACCENT_SWATCHES } from "./app/shell.js";
+import { renderGroceryPage } from "../web/pages/grocery.js";
+import { ACCENT_SWATCHES } from "../app/shell.js";
 import { addAllergen, createMemoryRulesStore } from "./rules.js";
 
 const HH = "hh-1";

@@ -12,21 +12,12 @@ import {
     resolveActorUserId,
     type ActorIntent,
 } from "../household.js";
-import {
-    getPreferredWeightUnit,
-    getProfile,
-    getUserTimezone,
-    getHouseholdMembership,
-    listHouseholdMembers,
-    liveFridgeStore,
-    liveRecipesStore,
-    liveRulesStore,
-    timezoneFromProfile,
-    type Meal,
-    type NutritionGoals,
-    type WaterEntry,
-    type WeightEntry,
-} from "../supabase.js";
+import { getPreferredWeightUnit, getProfile, getUserTimezone, timezoneFromProfile } from "../db/profiles.js";
+import { getHouseholdMembership, listHouseholdMembers } from "../db/household.js";
+import { liveFridgeStore } from "../db/fridge.js";
+import { liveRecipesStore } from "../db/recipes.js";
+import { liveRulesStore } from "../db/rules.js";
+import type { Meal, NutritionGoals, WaterEntry, WeightEntry } from "../db/nutrition.js";
 import {
     todayInTz,
     dateInTz,
@@ -34,12 +25,12 @@ import {
     weekdayInTz,
     LoggedAtError,
     resolveWriteLoggedAt,
-} from "../tz.js";
+} from "../domain/tz.js";
 import {
     dayCarries,
     coveredDailyAverage,
     type DailyBucket,
-} from "../insights.js";
+} from "../domain/insights.js";
 import {
     formatWeight,
     fromGrams,
@@ -47,18 +38,18 @@ import {
     isPlausibleWeightGrams,
     toGrams,
     type WeightUnit,
-} from "../units.js";
+} from "../domain/units.js";
 import { formatAlcohol, type DrinkUnit } from "../alcohol.js";
 export {
     MAX_CALORIES,
     MAX_MACRO_G,
     MAX_ALCOHOL_G,
     MAX_CAFFEINE_MG,
-} from "../import.js";
-import { alreadyHaveTag } from "../linking.js";
-import { listFridge } from "../fridge.js";
-import { groceryAllergenWarning } from "../grocery.js";
-import { listRecipes } from "../recipes.js";
+} from "../domain/import.js";
+import { alreadyHaveTag } from "../domain/linking.js";
+import { listFridge } from "../domain/fridge.js";
+import { groceryAllergenWarning } from "../domain/grocery.js";
+import { listRecipes } from "../domain/recipes.js";
 
 // MCP Apps UI (https://blog.modelcontextprotocol.io/posts/2026-01-26-mcp-apps/):
 // the get_nutrition_summary tool links to an HTML dashboard served as a ui://

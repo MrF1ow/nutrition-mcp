@@ -1,5 +1,5 @@
-import type { Meal } from "./supabase.js";
-import { dateInTz } from "./tz.js";
+import type { Meal } from "./db/nutrition.js";
+import { dateInTz } from "./domain/tz.js";
 
 /**
  * Escape LIKE/ILIKE metacharacters so user input matches literally.

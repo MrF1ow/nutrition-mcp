@@ -21,14 +21,14 @@
 //      resolveLoggedAt asserts the round trip rather than trusting the math.
 
 import { z } from "zod";
-import type { MealInput, MealInsertResult } from "./supabase.js";
+import type { MealInput, MealInsertResult } from "../db/nutrition.js";
 import {
     LOGGED_AT_FIX,
     loggedAtFailureReason,
     parseLoggedAt,
     validateTz,
 } from "./tz.js";
-import { decodeEscapeSequences } from "./normalize.js";
+import { decodeEscapeSequences } from "../normalize.js";
 import { toStoredInteger } from "./units.js";
 
 export type MealType = MealInput["meal_type"];

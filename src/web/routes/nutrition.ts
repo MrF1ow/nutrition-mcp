@@ -8,7 +8,7 @@ import {
 import { renderDashboardPage } from "../dashboard.js";
 import { formText } from "../form.js";
 import { requireMember, requireSiteUser } from "../middleware.js";
-import { insertMeal, insertWater, insertWeight } from "../../supabase.js";
+import { insertMeal, insertWater, insertWeight } from "../../db/nutrition.js";
 
 export const nutritionRoutes = new Hono();
 

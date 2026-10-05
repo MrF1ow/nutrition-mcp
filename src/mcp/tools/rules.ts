@@ -1,13 +1,13 @@
 import { type McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { liveRulesStore } from "../../supabase.js";
+import { liveRulesStore } from "../../db/rules.js";
 import { withAnalytics } from "../../analytics.js";
 import {
     addAllergen,
     addDislike,
     addPersonRule,
     addStoreRule,
-} from "../../rules.js";
+} from "../../domain/rules.js";
 import { ALLERGEN_SCHEMA } from "../shared.js";
 import type { ToolContext } from "../shared.js";
 

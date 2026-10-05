@@ -1,14 +1,12 @@
 import { type McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import {
-    liveFridgeStore,
-    liveGroceryStore,
-    liveRecipesStore,
-    liveSettingsStore,
-} from "../../supabase.js";
+import { liveFridgeStore } from "../../db/fridge.js";
+import { liveGroceryStore } from "../../db/grocery.js";
+import { liveRecipesStore } from "../../db/recipes.js";
+import { liveSettingsStore } from "../../db/settings.js";
 import { withAnalytics } from "../../analytics.js";
 import { lookupBarcode } from "../../foods.js";
-import { listFridge } from "../../fridge.js";
+import { listFridge } from "../../domain/fridge.js";
 import {
     addRecipeIngredientByBarcode,
     addRecipeManualIngredient,
@@ -18,7 +16,7 @@ import {
     getRecipeView,
     listRecipes,
     setPersonPortion,
-} from "../../recipes.js";
+} from "../../domain/recipes.js";
 import { QUANTITY_ITEM } from "../shared.js";
 import type { ToolContext } from "../shared.js";
 

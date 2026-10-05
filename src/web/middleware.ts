@@ -5,7 +5,7 @@ import {
     requireOwner as ownerCheck,
     type HouseholdMember,
 } from "../household.js";
-import { getHouseholdMembership } from "../supabase.js";
+import { getHouseholdMembership } from "../db/household.js";
 import { readSiteSession, SITE_COOKIE } from "../site-session.js";
 import { forbiddenDashboardHtml } from "./dashboard.js";
 

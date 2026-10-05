@@ -1,13 +1,9 @@
 import { type McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import {
-    insertWater,
-    getWaterByDate,
-    deleteWater,
-    getUserTimezone,
-} from "../../supabase.js";
+import { insertWater, getWaterByDate, deleteWater } from "../../db/nutrition.js";
+import { getUserTimezone } from "../../db/profiles.js";
 import { withAnalytics } from "../../analytics.js";
-import { todayInTz } from "../../tz.js";
+import { todayInTz } from "../../domain/tz.js";
 import {
     sumWater,
     LOGGED_AT_FORMS,

@@ -39,14 +39,30 @@ import {
 } from "@modelcontextprotocol/client";
 import { Hono } from "hono";
 import { McpServer, InMemoryTransport } from "@modelcontextprotocol/server";
-import * as actualSupabase from "./supabase.js";
+import * as actualClient from "./db/client.js";
+import * as actualNutrition from "./db/nutrition.js";
+import * as actualProfiles from "./db/profiles.js";
+import * as actualHousehold from "./db/household.js";
+import * as actualDbFridge from "./db/fridge.js";
+import * as actualDbGrocery from "./db/grocery.js";
+import * as actualDbRecipes from "./db/recipes.js";
+import * as actualDbSettings from "./db/settings.js";
+import * as actualDbRules from "./db/rules.js";
 import * as actualFoods from "./foods.js";
 import * as actualFoodSearch from "./food-search.js";
 
 // Snapshot BEFORE mock.module runs: Bun patches a mocked module's namespace
-// in place, so restoring from the live `actualSupabase` afterwards would hand
-// the next file the mock again. Restore from this copy.
-const realSupabase = { ...actualSupabase };
+// in place, so restoring from the live import afterwards would hand the next
+// file the mock again. Restore from these copies.
+const realClient = { ...actualClient };
+const realNutrition = { ...actualNutrition };
+const realProfiles = { ...actualProfiles };
+const realHousehold = { ...actualHousehold };
+const realDbFridge = { ...actualDbFridge };
+const realDbGrocery = { ...actualDbGrocery };
+const realDbRecipes = { ...actualDbRecipes };
+const realDbSettings = { ...actualDbSettings };
+const realDbRules = { ...actualDbRules };
 const realFoods = { ...actualFoods };
 const realFoodSearch = { ...actualFoodSearch };
 import { DELETED_ACCOUNT_ANALYTICS_ID } from "./analytics.js";
@@ -60,11 +76,11 @@ import {
     HouseholdAlreadyExistsError,
     type HouseholdConfig,
 } from "./household.js";
-import { createMemoryFridgeStore } from "./fridge.js";
-import { createMemoryGroceryStore } from "./grocery.js";
-import { createMemoryRecipesStore } from "./recipes.js";
-import { createGroceryStore, createMemorySettingsStore } from "./settings.js";
-import { addAllergen, createMemoryRulesStore } from "./rules.js";
+import { createMemoryFridgeStore } from "./domain/fridge.js";
+import { createMemoryGroceryStore } from "./domain/grocery.js";
+import { createMemoryRecipesStore } from "./domain/recipes.js";
+import { createGroceryStore, createMemorySettingsStore } from "./domain/settings.js";
+import { addAllergen, createMemoryRulesStore } from "./domain/rules.js";
 import {
     TOOLS,
     HOUSEHOLD_SCOPED_TOOL_NAMES,
@@ -77,15 +93,9 @@ import {
     computeTrends,
     computeWeeklyDigest,
     type DailyBucket,
-} from "./insights.js";
-import type {
-    Meal,
-    MealInput,
-    NutritionGoals,
-    WaterEntry,
-    WeightEntry,
-} from "./supabase.js";
-import { dateInTz, formatLocalDateTime, weekdayInTz } from "./tz.js";
+} from "./domain/insights.js";
+import type { Meal, MealInput, NutritionGoals, WaterEntry, WeightEntry } from "./db/nutrition.js";
+import { dateInTz, formatLocalDateTime, weekdayInTz } from "./domain/tz.js";
 import { getWidgetHtml } from "./widgets.js";
 
 function meal(over: Partial<Meal> = {}): Meal {
@@ -1403,16 +1413,17 @@ describe("trendsDayPayloadOf", () => {
 // their handler — read or write one profile column, then pick a sentence — and
 // a mutation audit found that inverting either tool's enabled state failed
 // nothing. So the tools below are registered on a real McpServer and driven
-// through a real client over an in-memory transport, with only ./supabase.js
+// through a real client over an in-memory transport, with the db modules
 // stubbed. That also puts the input schemas under test end-to-end, which is the
 // only way to prove a bad argument is rejected BEFORE the handler runs.
 //
 // mock.module swaps the module for the whole test *process*, not just this
 // file, so the real exports are spread back in (replacing it wholesale would
 // break every other suite) and restored in afterAll. Same pattern as
-// middleware.test.ts.
+// middleware.test.ts. One mock window per module, restore from the snapshot
+// taken before mock.module.
 
-const PROFILE_BASE: actualSupabase.Profile = {
+const PROFILE_BASE: actualProfiles.Profile = {
     user_id: "u1",
     timezone: "UTC",
     preferred_weight_unit: null,
@@ -1447,7 +1458,7 @@ function storedMeal(input: Record<string, unknown>): Meal {
 }
 
 const db = {
-    profile: null as actualSupabase.Profile | null,
+    profile: null as actualProfiles.Profile | null,
     goals: null as NutritionGoals | null,
     meals: [] as Meal[],
     water: [] as WaterEntry[],
@@ -1466,7 +1477,7 @@ const db = {
     accountWipes: 0,
     profileReads: [] as string[],
     membershipReads: [] as string[],
-    members: [] as actualSupabase.HouseholdMembership[],
+    members: [] as actualHousehold.HouseholdMembership[],
     addedLogins: [] as string[],
     tokenRotations: [] as {
         householdId: string;
@@ -1483,8 +1494,8 @@ const db = {
     foodSearchHits: [] as FoodResult[],
 };
 
-mock.module("./supabase.js", () => ({
-    ...actualSupabase,
+mock.module("./db/client.js", () => ({
+    ...actualClient,
     // analytics.ts persists every tool call through getSupabase(); intercept it
     // so a test never depends on Supabase env vars being present, and so the
     // rows it would have written can be asserted on.
@@ -1496,14 +1507,13 @@ mock.module("./supabase.js", () => ({
             },
         }),
     }),
+}));
+
+mock.module("./db/nutrition.js", () => ({
+    ...actualNutrition,
     deleteAllUserData: async () => {
         db.accountWipes += 1;
     },
-    getProfile: async (userId: string) => {
-        db.profileReads.push(userId);
-        return db.profile;
-    },
-    getUserTimezone: async () => db.profile?.timezone ?? "UTC",
     getNutritionGoals: async () => db.goals,
     getMealsByDate: async () => db.meals,
     getWaterByDate: async () => [],
@@ -1592,6 +1602,38 @@ mock.module("./supabase.js", () => ({
     existingIdempotencyKeys: async () => new Set<string>(),
     existingMealIds: async (_userId: string, ids: string[]) =>
         new Set(ids.filter((id) => db.meals.some((m) => m.id === id))),
+    upsertNutritionGoals: async (
+        userId: string,
+        patch: Record<string, unknown>,
+    ) => {
+        db.goals = { ...goals(), user_id: userId, ...patch } as NutritionGoals;
+        return db.goals;
+    },
+    getLatestWeight: async () => null,
+    getWeightInRange: async () => [],
+}));
+
+mock.module("./db/profiles.js", () => ({
+    ...actualProfiles,
+    getProfile: async (userId: string) => {
+        db.profileReads.push(userId);
+        return db.profile;
+    },
+    getUserTimezone: async () => db.profile?.timezone ?? "UTC",
+    getPreferredWeightUnit: async () =>
+        db.profile?.preferred_weight_unit ?? null,
+    upsertProfile: async (userId: string, patch: Record<string, unknown>) => {
+        db.profilePatches.push(patch);
+        db.profile = {
+            ...(db.profile ?? { ...PROFILE_BASE, user_id: userId }),
+            ...patch,
+        } as actualProfiles.Profile;
+        return db.profile;
+    },
+}));
+
+mock.module("./db/household.js", () => ({
+    ...actualHousehold,
     getHouseholdMembership: async (userId: string, householdId?: string) => {
         db.membershipReads.push(userId);
         return (
@@ -1677,30 +1719,6 @@ mock.module("./supabase.js", () => ({
         db.tokenRotations.push(args);
         return "2026-09-19T12:00:00.000Z";
     },
-    getPreferredWeightUnit: async () =>
-        db.profile?.preferred_weight_unit ?? null,
-    upsertNutritionGoals: async (
-        userId: string,
-        patch: Record<string, unknown>,
-    ) => {
-        db.goals = { ...goals(), user_id: userId, ...patch } as NutritionGoals;
-        return db.goals;
-    },
-    upsertProfile: async (userId: string, patch: Record<string, unknown>) => {
-        db.profilePatches.push(patch);
-        db.profile = {
-            ...(db.profile ?? { ...PROFILE_BASE, user_id: userId }),
-            ...patch,
-        } as actualSupabase.Profile;
-        return db.profile;
-    },
-    getLatestWeight: async () => null,
-    getWeightInRange: async () => [],
-    liveFridgeStore: () => db.fridgeStore,
-    liveGroceryStore: () => db.groceryStore,
-    liveRecipesStore: () => db.recipesStore,
-    liveSettingsStore: () => db.settingsStore,
-    liveRulesStore: () => db.rulesStore,
     updateMemberDisplayName: async (
         householdId: string,
         userId: string,
@@ -1711,6 +1729,31 @@ mock.module("./supabase.js", () => ({
         );
         if (member) member.displayName = displayName;
     },
+}));
+
+mock.module("./db/fridge.js", () => ({
+    ...actualDbFridge,
+    liveFridgeStore: () => db.fridgeStore,
+}));
+
+mock.module("./db/grocery.js", () => ({
+    ...actualDbGrocery,
+    liveGroceryStore: () => db.groceryStore,
+}));
+
+mock.module("./db/recipes.js", () => ({
+    ...actualDbRecipes,
+    liveRecipesStore: () => db.recipesStore,
+}));
+
+mock.module("./db/settings.js", () => ({
+    ...actualDbSettings,
+    liveSettingsStore: () => db.settingsStore,
+}));
+
+mock.module("./db/rules.js", () => ({
+    ...actualDbRules,
+    liveRulesStore: () => db.rulesStore,
 }));
 
 mock.module("./foods.js", () => ({
@@ -1724,7 +1767,15 @@ mock.module("./food-search.js", () => ({
 }));
 
 afterAll(() => {
-    mock.module("./supabase.js", () => realSupabase);
+    mock.module("./db/client.js", () => realClient);
+    mock.module("./db/nutrition.js", () => realNutrition);
+    mock.module("./db/profiles.js", () => realProfiles);
+    mock.module("./db/household.js", () => realHousehold);
+    mock.module("./db/fridge.js", () => realDbFridge);
+    mock.module("./db/grocery.js", () => realDbGrocery);
+    mock.module("./db/recipes.js", () => realDbRecipes);
+    mock.module("./db/settings.js", () => realDbSettings);
+    mock.module("./db/rules.js", () => realDbRules);
     mock.module("./foods.js", () => realFoods);
     mock.module("./food-search.js", () => realFoodSearch);
 });
@@ -2362,7 +2413,7 @@ describe("log_meal and update_meal round-trip caffeine_mg", () => {
             });
         });
         const keys = db.inserted.map((input) =>
-            actualSupabase.mealIdempotencyKey(
+            actualNutrition.mealIdempotencyKey(
                 "u1",
                 input as unknown as MealInput,
                 at,
@@ -5069,7 +5120,7 @@ describe("add_household_member from member OAuth", () => {
 // ---------- /mcp over HTTP: both protocol eras ----------
 //
 // Kept in this file rather than its own: mock.module is process-wide, and a
-// separate file with its own mock/restore of ./supabase.js broke
+// separate file with its own mock/restore of the same db module broke
 // middleware.test.ts's mock on Linux CI even with a snapshot-based restore.
 // Sharing this file's single mock window is what proved green; see the
 // restore note on the afterAll above for the mechanism.

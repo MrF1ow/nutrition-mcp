@@ -8,24 +8,24 @@ import {
     spyOn,
 } from "bun:test";
 import { Hono } from "hono";
-import * as actualSupabase from "./supabase.js";
+import * as actualTokens from "./db/tokens.js";
 
 // Snapshot before mocking — restoring from the live namespace is a no-op
 // because Bun patches it in place (see mcp.test.ts).
-const realSupabase = { ...actualSupabase };
+const realTokens = { ...actualTokens };
 
-// middleware.ts only reaches Supabase to resolve a bearer token, so stubbing
+// middleware.ts only reaches the db to resolve a bearer token, so stubbing
 // that one export is enough to exercise the whole auth path offline. Counting
 // the calls also lets us prove a banned IP is shed *before* any token lookup.
 //
 // mock.module swaps the module for the whole test *process*, not just this
 // file, so the real exports must be spread back in — replacing the module
-// wholesale breaks every other suite that imports getSupabase/signInUser — and
-// restored afterwards so no later file sees the stub.
+// wholesale breaks every other suite that imports lookupBearer — and restored
+// afterwards so no later file sees the stub.
 let tokenLookups = 0;
 let supabaseAvailable = true;
-mock.module("./supabase.js", () => ({
-    ...actualSupabase,
+mock.module("./db/tokens.js", () => ({
+    ...actualTokens,
     lookupBearer: async (token: string) => {
         tokenLookups++;
         if (!supabaseAvailable) return { status: "unavailable" };
@@ -37,7 +37,7 @@ mock.module("./supabase.js", () => ({
     },
 }));
 afterAll(() => {
-    mock.module("./supabase.js", () => realSupabase);
+    mock.module("./db/tokens.js", () => realTokens);
 });
 
 const { authenticateBearer, banRepeatAuthFailures, rateLimit } =

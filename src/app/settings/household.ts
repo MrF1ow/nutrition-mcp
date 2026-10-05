@@ -1,7 +1,7 @@
 import { escapeHtml, renderAppShell } from "../shell.js";
 import type { ViewerChrome } from "../shell.js";
 import type { HouseholdMember } from "../../household.js";
-import type { GrocerySection, GroceryStore } from "../../settings.js";
+import type { GrocerySection, GroceryStore } from "../../domain/settings.js";
 import {
     ALLERGEN_LABELS,
     NAMED_ALLERGENS,
@@ -9,7 +9,7 @@ import {
     type MemberDislike,
     type PersonRule,
     type StoreRule,
-} from "../../rules.js";
+} from "../../domain/rules.js";
 
 export type HouseholdStoreView = GroceryStore & {
     sections: GrocerySection[];
