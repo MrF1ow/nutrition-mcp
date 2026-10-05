@@ -37,6 +37,8 @@ export type FoodPatch = {
     name?: string;
     brand?: string | null;
     defaultUnit?: string;
+    gramsPerEach?: number | null;
+    gramsPerMl?: number | null;
     calories?: number | null;
     proteinG?: number | null;
     carbsG?: number | null;
@@ -184,6 +186,70 @@ export function catalogNutritionFromOff(food: FoodResult): {
         sugarG: null,
         alcoholG: null,
     };
+}
+
+const OFF_COUNT_UNITS = new Set([
+    "",
+    "each",
+    "unit",
+    "units",
+    "pcs",
+    "pc",
+    "piece",
+    "pieces",
+    "serving",
+    "servings",
+    "x",
+    "count",
+    "counts",
+    "item",
+    "items",
+    "egg",
+    "eggs",
+]);
+
+const COUNT_SERVING_WORD =
+    /\b(egg|eggs|cookie|cookies|slice|slices|piece|pieces|each|unit|capsule|tablet|bar|bars)\b/i;
+
+function countFromServingLabel(serving: string | null | undefined): number | null {
+    if (!serving) return null;
+    if (!COUNT_SERVING_WORD.test(serving)) return null;
+    const match = serving.trim().match(/^(\d+(?:\.\d+)?)/);
+    return match ? Number(match[1]) : 1;
+}
+
+function gramsFromServingLabel(serving: string | null | undefined): number | null {
+    if (!serving) return null;
+    const match = serving.match(/(\d+(?:\.\d+)?)\s*g\b/i);
+    if (!match) return null;
+    const grams = Number(match[1]);
+    return grams > 0 ? grams : null;
+}
+
+/** Prefill grams_per_each from OFF when the serving is a count. */
+export function gramsPerEachFromOff(food: {
+    serving?: string | null;
+    serving_quantity?: number | null;
+    serving_quantity_unit?: string | null;
+}): number | null {
+    const unit = (food.serving_quantity_unit ?? "").trim().toLowerCase();
+    const qty =
+        food.serving_quantity != null && Number.isFinite(food.serving_quantity)
+            ? food.serving_quantity
+            : null;
+    const count = countFromServingLabel(food.serving);
+    if (count == null || !(count > 0)) return null;
+    if (unit === "g" || unit === "gr" || unit === "gram" || unit === "grams") {
+        if (qty != null && qty > 0) return Math.round((qty / count) * 10) / 10;
+    }
+    if (OFF_COUNT_UNITS.has(unit) && qty != null && qty > 0 && qty >= 5) {
+        // Some OFF records store the serving mass in serving_quantity with a
+        // count unit. Only treat large values as grams, never "1 each" as 1 g.
+        return Math.round((qty / count) * 10) / 10;
+    }
+    const labeled = gramsFromServingLabel(food.serving);
+    if (labeled == null) return null;
+    return Math.round((labeled / count) * 10) / 10;
 }
 
 function copyFood(row: Food): Food {
@@ -419,6 +485,8 @@ export function newFood(input: {
     name: string;
     brand?: string | null;
     defaultUnit?: string;
+    gramsPerEach?: number | null;
+    gramsPerMl?: number | null;
     calories?: number | null;
     proteinG?: number | null;
     carbsG?: number | null;
@@ -442,8 +510,8 @@ export function newFood(input: {
         normalizedName: normalizeFoodName(name),
         brand: input.brand?.trim() ? input.brand.trim() : null,
         defaultUnit: input.defaultUnit ?? "g",
-        gramsPerEach: null,
-        gramsPerMl: null,
+        gramsPerEach: input.gramsPerEach ?? null,
+        gramsPerMl: input.gramsPerMl ?? null,
         calories: input.calories ?? null,
         proteinG: input.proteinG ?? null,
         carbsG: input.carbsG ?? null,
@@ -519,6 +587,7 @@ export async function findOrCreateFoodByBarcode(
             name: hit.name,
             brand: hit.brand,
             ...nutrition,
+            gramsPerEach: gramsPerEachFromOff(hit),
             nutritionSource: "openfoodfacts",
             allergens: hit.allergens ?? mapOffAllergenTags(hit.allergens_tags),
             offSourceId: normalized,
@@ -642,6 +711,18 @@ function parseOptionalNutrient(
     return value;
 }
 
+function parsePositiveFactor(
+    value: number | null | undefined,
+): number | null {
+    if (value == null) return null;
+    if (!Number.isFinite(value) || value <= 0) {
+        throw new FoodsInputError(
+            "Grams per each and grams per millilitre must be greater than zero.",
+        );
+    }
+    return value;
+}
+
 export async function updateFood(
     store: FoodsStore,
     householdId: string,
@@ -678,6 +759,14 @@ export async function updateFood(
         normalizedName: normalizeFoodName(name),
         brand,
         defaultUnit,
+        gramsPerEach:
+            patch.gramsPerEach !== undefined
+                ? parsePositiveFactor(patch.gramsPerEach)
+                : current.gramsPerEach,
+        gramsPerMl:
+            patch.gramsPerMl !== undefined
+                ? parsePositiveFactor(patch.gramsPerMl)
+                : current.gramsPerMl,
         calories:
             patch.calories !== undefined
                 ? parseOptionalNutrient(patch.calories)
@@ -791,6 +880,7 @@ export type FoodSearchHit = {
     fiber_g: number | null;
     sugar_g: number | null;
     serving: string | null;
+    default_unit: string | null;
 };
 
 export async function searchFoodCatalog(
@@ -818,6 +908,7 @@ export async function searchFoodCatalog(
             fiber_g: food.fiberG,
             sugar_g: food.sugarG,
             serving: "100 g",
+            default_unit: food.defaultUnit,
         });
     }
     for (const food of offHits) {
@@ -839,6 +930,7 @@ export async function searchFoodCatalog(
             fiber_g: food.fiber_g,
             sugar_g: food.sugar_g,
             serving: food.serving,
+            default_unit: null,
         });
     }
     return hits;

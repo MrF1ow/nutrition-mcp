@@ -43,9 +43,9 @@ function pickerScript(id: string, method: "get" | "post"): string {
     const hitHtml =
         method === "post"
             ? `if (food.food_id) {
-                return '<li><button type="submit" name="food_id" value="' + esc(food.food_id) + '">' + esc(label) + "</button></li>";
+                return '<li><button type="submit" name="food_id" value="' + esc(food.food_id) + '" data-default-unit="' + esc(food.default_unit || "") + '">' + esc(label) + "</button></li>";
             }
-            return '<li><button type="submit" name="barcode" value="' + esc(food.barcode || "") + '">' + esc(label) + "</button></li>";`
+            return '<li><button type="submit" name="barcode" value="' + esc(food.barcode || "") + '" data-default-unit="' + esc(food.default_unit || "") + '">' + esc(label) + "</button></li>";`
             : `return "<li>" + esc(label) + "</li>";`;
     return `<script>
 (function () {
@@ -83,6 +83,22 @@ function pickerScript(id: string, method: "get" | "post"): string {
             var label = food.brand ? food.brand + " · " + food.name : food.name;
             ${hitHtml}
         }).join("");
+        target.querySelectorAll("button[data-default-unit]").forEach(function (btn) {
+            btn.addEventListener("click", function () {
+                var unit = btn.getAttribute("data-default-unit");
+                if (!unit) return;
+                var form = btn.closest("form");
+                if (!form) return;
+                var sel = form.querySelector('select[name="qty_unit"]');
+                if (!sel) return;
+                for (var i = 0; i < sel.options.length; i++) {
+                    if (sel.options[i].value === unit) {
+                        sel.value = unit;
+                        break;
+                    }
+                }
+            });
+        });
     }
     if (searchInput && searchResults) {
         searchInput.addEventListener("input", function () {

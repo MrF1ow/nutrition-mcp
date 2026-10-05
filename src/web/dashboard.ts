@@ -214,11 +214,10 @@ export async function renderGroceryListPage(
     const rulesByStore = new Map(
         storeRules.map((row) => [row.storeId, row.rules]),
     );
-    const catalog = await foodsByIds(
-        liveFoodsStore(),
-        householdId,
-        snapshot.lines.map((line) => line.foodId),
-    );
+    const catalog = await foodsByIds(liveFoodsStore(), householdId, [
+        ...snapshot.lines.map((line) => line.foodId),
+        ...fridge.items.map((item) => item.foodId),
+    ]);
     const stores = snapshot.stores.map((store) => {
         const storeLines = snapshot.lines.filter(
             (line) => line.storeId === store.id,
@@ -238,7 +237,7 @@ export async function renderGroceryListPage(
                     .filter((line) => line.sectionId === section.id)
                     .map((line) => ({
                         ...line,
-                        alreadyHave: alreadyHaveTag(line, fridge.items),
+                        alreadyHave: alreadyHaveTag(line, fridge.items, catalog),
                     })),
             }));
         return {

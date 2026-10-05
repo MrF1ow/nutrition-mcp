@@ -139,6 +139,7 @@ const SEARCH_FOOD_ITEM = z.object({
     fiber_g: z.number().nullable(),
     sugar_g: z.number().nullable(),
     serving: z.string().nullable(),
+    default_unit: z.string().nullable(),
 });
 
 const FOOD_OUTPUT = z.object({
@@ -147,6 +148,8 @@ const FOOD_OUTPUT = z.object({
     name: z.string(),
     brand: z.string().nullable(),
     default_unit: z.string(),
+    grams_per_each: z.number().nullable(),
+    grams_per_ml: z.number().nullable(),
     calories: z.number().nullable(),
     protein_g: z.number().nullable(),
     carbs_g: z.number().nullable(),
@@ -169,6 +172,8 @@ function foodPayload(
         name: string;
         brand: string | null;
         defaultUnit: string;
+        gramsPerEach: number | null;
+        gramsPerMl: number | null;
         calories: number | null;
         proteinG: number | null;
         carbsG: number | null;
@@ -190,6 +195,8 @@ function foodPayload(
         name: food.name,
         brand: food.brand,
         default_unit: food.defaultUnit,
+        grams_per_each: food.gramsPerEach,
+        grams_per_ml: food.gramsPerMl,
         calories: food.calories,
         protein_g: food.proteinG,
         carbs_g: food.carbsG,
@@ -283,7 +290,7 @@ export function registerCatalogFoodTools(server: McpServer, ctx: ToolContext) {
         {
             title: "Get Food",
             description:
-                "Read one household catalog food, including aliases, barcodes, nutrition per 100 g, and allergens.",
+                "Read one household catalog food, including aliases, barcodes, nutrition per 100 g, default unit, grams per each, grams per millilitre, and allergens.",
             annotations: {
                 readOnlyHint: true,
                 destructiveHint: false,
@@ -330,7 +337,7 @@ export function registerCatalogFoodTools(server: McpServer, ctx: ToolContext) {
         {
             title: "Upsert Food",
             description:
-                "Create or update a household catalog food. Pass food_id to edit. Nutrition is per 100 g. Manual foods and supplies use name when creating.",
+                "Create or update a household catalog food. Pass food_id to edit. Nutrition is per 100 g. Edit default_unit, grams_per_each, and grams_per_ml so counts and volumes convert. Manual foods and supplies use name when creating.",
             annotations: {
                 readOnlyHint: false,
                 destructiveHint: false,
@@ -343,6 +350,8 @@ export function registerCatalogFoodTools(server: McpServer, ctx: ToolContext) {
                 name: z.string().optional(),
                 brand: z.string().nullable().optional(),
                 default_unit: z.string().optional(),
+                grams_per_each: z.coerce.number().nullable().optional(),
+                grams_per_ml: z.coerce.number().nullable().optional(),
                 calories: z.coerce.number().nullable().optional(),
                 protein_g: z.coerce.number().nullable().optional(),
                 carbs_g: z.coerce.number().nullable().optional(),
@@ -384,6 +393,8 @@ export function registerCatalogFoodTools(server: McpServer, ctx: ToolContext) {
                             name: args.name,
                             brand: args.brand,
                             defaultUnit: args.default_unit,
+                            gramsPerEach: args.grams_per_each,
+                            gramsPerMl: args.grams_per_ml,
                             calories: args.calories,
                             proteinG: args.protein_g,
                             carbsG: args.carbs_g,

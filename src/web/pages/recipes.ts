@@ -151,13 +151,19 @@ function macrosBlock(
     scope: "portion" | "person",
 ): string {
     const label = scope === "portion" ? "Per portion" : "This portion";
+    const reasons =
+        macros.incompleteReasons.length > 0
+            ? `<ul class="recipe-macros-reasons">${macros.incompleteReasons
+                  .map((reason) => `<li>${escapeHtml(reason)}</li>`)
+                  .join("")}</ul>`
+            : "";
     if (macros.incomplete && macros.calories == null) {
-        return `<p class="recipe-macros" data-scope="${scope}" data-incomplete="true">${escapeHtml(label)}: Macros incomplete</p>`;
+        return `<p class="recipe-macros" data-scope="${scope}" data-incomplete="true">${escapeHtml(label)}: Macros incomplete</p>${reasons}`;
     }
     const incomplete = macros.incomplete
         ? `<p class="recipe-macros-incomplete">${escapeHtml(label)}: Macros incomplete</p>`
         : "";
-    return `<p class="recipe-macros" data-scope="${scope}" data-incomplete="${macros.incomplete ? "true" : "false"}" data-calories="${escapeHtml(String(macros.calories ?? ""))}" data-protein="${escapeHtml(String(macros.protein_g ?? ""))}">${escapeHtml(label)}: Calories ${escapeHtml(String(macros.calories ?? "—"))} · Protein ${escapeHtml(String(macros.protein_g ?? "—"))} g · Carbs ${escapeHtml(String(macros.carbs_g ?? "—"))} g · Fat ${escapeHtml(String(macros.fat_g ?? "—"))} g</p>${incomplete}`;
+    return `<p class="recipe-macros" data-scope="${scope}" data-incomplete="${macros.incomplete ? "true" : "false"}" data-calories="${escapeHtml(String(macros.calories ?? ""))}" data-protein="${escapeHtml(String(macros.protein_g ?? ""))}">${escapeHtml(label)}: Calories ${escapeHtml(String(macros.calories ?? "—"))} · Protein ${escapeHtml(String(macros.protein_g ?? "—"))} g · Carbs ${escapeHtml(String(macros.carbs_g ?? "—"))} g · Fat ${escapeHtml(String(macros.fat_g ?? "—"))} g</p>${incomplete}${reasons}`;
 }
 
 export function renderRecipeDetailPage(view: RecipeDetailView): string {

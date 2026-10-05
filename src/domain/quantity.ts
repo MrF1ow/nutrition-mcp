@@ -3,14 +3,28 @@ import {
     GRAMS_PER_OZ,
     ML_PER_CUP,
     ML_PER_FL_OZ,
+    ML_PER_TBSP,
+    ML_PER_TSP,
 } from "./units.js";
 
 export type CanonicalDimension = "mass" | "volume" | "count";
 
 export type MassUnit = "g" | "oz" | "lb";
-export type VolumeUnit = "ml" | "fl oz" | "cup";
+export type VolumeUnit = "ml" | "fl oz" | "cup" | "tbsp" | "tsp";
 export type CountUnit = "each";
 export type QuantityUnit = MassUnit | VolumeUnit | CountUnit;
+
+export const FOOD_QUANTITY_UNITS: readonly QuantityUnit[] = [
+    "g",
+    "oz",
+    "lb",
+    "ml",
+    "fl oz",
+    "cup",
+    "tbsp",
+    "tsp",
+    "each",
+];
 
 export type MassQuantity = { amount: number; unit: MassUnit };
 export type VolumeQuantity = { amount: number; unit: VolumeUnit };
@@ -22,7 +36,7 @@ export type CountQuantity = {
 export type Quantity = MassQuantity | VolumeQuantity | CountQuantity;
 
 const MASS_UNITS = new Set<string>(["g", "oz", "lb"]);
-const VOLUME_UNITS = new Set<string>(["ml", "fl oz", "cup"]);
+const VOLUME_UNITS = new Set<string>(["ml", "fl oz", "cup", "tbsp", "tsp"]);
 const COUNT_UNITS = new Set<string>(["each"]);
 
 const TO_CANONICAL: Record<QuantityUnit, number> = {
@@ -32,6 +46,8 @@ const TO_CANONICAL: Record<QuantityUnit, number> = {
     ml: 1,
     "fl oz": ML_PER_FL_OZ,
     cup: ML_PER_CUP,
+    tbsp: ML_PER_TBSP,
+    tsp: ML_PER_TSP,
     each: 1,
 };
 

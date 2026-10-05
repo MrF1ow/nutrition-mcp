@@ -145,6 +145,7 @@ test("fridge page and grocery page import the same quantity-field and food-picke
             sugar_g: null,
             alcohol_g: null,
             incomplete: true,
+            incompleteReasons: [],
         },
         isOwner: true,
     });
@@ -298,14 +299,17 @@ test("household pages call shared markup helpers for banners, empty states, and 
     expect(recipes).toContain('<p class="empty-recipes">Add a recipe.</p>');
 });
 
-test("quantity field food kind defaults to grams and supply lists units", () => {
+test("quantity field food kind lists food units and preselects an explicit unit", () => {
     const foodHtml = renderQuantityField({ kind: "food" });
     expect(foodHtml).toContain('class="quantity-field"');
     expect(foodHtml).toContain('data-kind="food"');
     expect(foodHtml).toMatch(/<option value="g"[^>]*selected/);
-    expect(foodHtml).not.toContain('value="oz"');
-    expect(foodHtml).not.toContain('value="lb"');
-    expect(foodHtml).not.toContain('value="cup"');
+    for (const unit of ["g", "oz", "lb", "ml", "fl oz", "cup", "tbsp", "tsp", "each"]) {
+        expect(foodHtml).toContain(`value="${unit}"`);
+    }
+
+    const eachHtml = renderQuantityField({ kind: "food", unit: "each" });
+    expect(eachHtml).toMatch(/<option value="each"[^>]*selected/);
 
     const supplyHtml = renderQuantityField({ kind: "supply" });
     expect(supplyHtml).toContain('data-kind="supply"');
@@ -341,6 +345,7 @@ function hitHtml(
         name: string;
         brand: string | null;
         barcode: string | null;
+        default_unit?: string | null;
     },
 ): string {
     const esc = (s: string) =>
@@ -355,6 +360,8 @@ function hitHtml(
         return (
             '<li><button type="submit" name="food_id" value="' +
             esc(food.food_id) +
+            '" data-default-unit="' +
+            esc(food.default_unit || "") +
             '">' +
             esc(label) +
             "</button></li>"
@@ -363,6 +370,8 @@ function hitHtml(
     return (
         '<li><button type="submit" name="barcode" value="' +
         esc(food.barcode || "") +
+        '" data-default-unit="' +
+        esc(food.default_unit || "") +
         '">' +
         esc(label) +
         "</button></li>"
@@ -401,6 +410,7 @@ test("post picker search hits submit food_id or barcode with hidden fields and q
     expect(script).toContain("/api/foods/search");
     expect(script).toContain('type="submit"');
     expect(script).toContain('name="food_id"');
+    expect(script).toContain("data-default-unit");
     expect(script).toContain('name="barcode"');
     expect(script).not.toContain('name="food_name"');
     expect(script).toContain('searchResults.innerHTML = ""');

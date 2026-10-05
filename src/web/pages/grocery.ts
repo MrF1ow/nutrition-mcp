@@ -1,4 +1,4 @@
-import { formatQuantity, type Quantity } from "../../domain/quantity.js";
+import { formatQuantity, isQuantityUnit, type Quantity } from "../../domain/quantity.js";
 import type { GroceryLine } from "../../domain/grocery.js";
 import type { GrocerySection, GroceryStore } from "../../domain/settings.js";
 import type { StoreRule } from "../../domain/rules.js";
@@ -39,8 +39,11 @@ export type GroceryPageView = {
 };
 
 function quantityLabel(line: GroceryLine): string {
-    if (line.kind === "food") {
-        return formatQuantity({ amount: line.quantity.amount, unit: "g" });
+    if (isQuantityUnit(line.quantity.unit)) {
+        return formatQuantity({
+            amount: line.quantity.amount,
+            unit: line.quantity.unit,
+        });
     }
     return `${line.quantity.amount} ${line.quantity.unit}`;
 }

@@ -8,6 +8,7 @@ import {
     FoodsInputError,
     type FoodsStore,
 } from "./foods.js";
+import { storedFoodUnit } from "./food-quantity.js";
 import type {
     GrocerySection,
     GroceryStore,
@@ -200,6 +201,7 @@ export async function addGroceryFoodById(
         sectionId?: string;
         foodId: string;
         amount: number;
+        unit?: string;
     },
 ): Promise<GroceryLine> {
     await requireStore(settings, input.householdId, input.storeId);
@@ -219,7 +221,7 @@ export async function addGroceryFoodById(
             storeId: input.storeId,
             sectionId,
             amount,
-            unit: "g",
+            unit: storedFoodUnit(input.unit, food),
             food,
         });
     } catch (err) {
@@ -237,6 +239,7 @@ export async function addGroceryFoodByBarcode(
         sectionId?: string;
         barcode: string;
         amount: number;
+        unit?: string;
     },
     opts: {
         lookup: (barcode: string) => Promise<FoodResult | null>;
@@ -261,7 +264,7 @@ export async function addGroceryFoodByBarcode(
             storeId: input.storeId,
             sectionId,
             amount,
-            unit: "g",
+            unit: storedFoodUnit(input.unit, food),
             food,
         });
     } catch (err) {
@@ -279,6 +282,7 @@ export async function addGroceryManualFood(
         sectionId?: string;
         name: string;
         amount: number;
+        unit?: string;
     },
 ): Promise<GroceryLine> {
     await requireStore(settings, input.householdId, input.storeId);
@@ -300,7 +304,7 @@ export async function addGroceryManualFood(
             storeId: input.storeId,
             sectionId,
             amount,
-            unit: "g",
+            unit: storedFoodUnit(input.unit, food),
             food,
         });
     } catch (err) {

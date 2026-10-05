@@ -238,7 +238,7 @@ export function registerFridgeTools(server: McpServer, ctx: ToolContext) {
         {
             title: "Add Fridge Item",
             description:
-                "Add a food or supply to a fridge location. Food defaults to grams. Pass a barcode for packaged food, a name for a manual food, and name plus unit for a supply.",
+                "Add a food or supply to a fridge location. Food defaults to the catalog food's default_unit when unit is omitted. Pass a barcode for packaged food, a name for a manual food, and name plus unit for a supply.",
             annotations: {
                 readOnlyHint: false,
                 destructiveHint: false,
@@ -284,6 +284,7 @@ export function registerFridgeTools(server: McpServer, ctx: ToolContext) {
                                     locationId: args.location_id,
                                     foodId: args.food_id,
                                     amount: args.amount,
+                                    unit: args.unit,
                                 })
                               : args.barcode
                                 ? await addFoodByBarcode(
@@ -294,6 +295,7 @@ export function registerFridgeTools(server: McpServer, ctx: ToolContext) {
                                           locationId: args.location_id,
                                           barcode: args.barcode,
                                           amount: args.amount,
+                                          unit: args.unit,
                                       },
                                       { lookup: lookupBarcode },
                                   )
@@ -302,6 +304,7 @@ export function registerFridgeTools(server: McpServer, ctx: ToolContext) {
                                       locationId: args.location_id,
                                       name: args.name ?? "",
                                       amount: args.amount,
+                                      unit: args.unit,
                                   });
                     return {
                         content: [

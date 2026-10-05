@@ -8,6 +8,7 @@ import { withAnalytics } from "../../analytics.js";
 import { lookupBarcode } from "../../foods.js";
 import { alreadyHaveTag } from "../../domain/linking.js";
 import { listFridge } from "../../domain/fridge.js";
+import { foodsByIds } from "../../domain/foods.js";
 import {
     addGroceryFoodByBarcode,
     addGroceryFoodById,
@@ -63,6 +64,14 @@ export function registerGroceryTools(server: McpServer, ctx: ToolContext) {
                         liveFridgeStore(),
                         householdId,
                     );
+                    const foods = await foodsByIds(
+                        liveFoodsStore(),
+                        householdId,
+                        [
+                            ...snapshot.lines.map((line) => line.foodId),
+                            ...fridge.items.map((item) => item.foodId),
+                        ],
+                    );
                     const stock = fridge.items.map((item) => ({
                         identity: item.identity,
                         quantity: item.quantity,
@@ -77,6 +86,7 @@ export function registerGroceryTools(server: McpServer, ctx: ToolContext) {
                                     foodId: line.foodId,
                                 },
                                 stock,
+                                foods,
                             );
                             return {
                                 id: line.id,
@@ -178,6 +188,7 @@ export function registerGroceryTools(server: McpServer, ctx: ToolContext) {
                                         sectionId: args.section_id,
                                         foodId: args.food_id,
                                         amount: args.amount,
+                                        unit: args.unit,
                                     },
                                 )
                               : args.barcode
@@ -191,6 +202,7 @@ export function registerGroceryTools(server: McpServer, ctx: ToolContext) {
                                           sectionId: args.section_id,
                                           barcode: args.barcode,
                                           amount: args.amount,
+                                          unit: args.unit,
                                       },
                                       { lookup: lookupBarcode },
                                   )
@@ -204,6 +216,7 @@ export function registerGroceryTools(server: McpServer, ctx: ToolContext) {
                                           sectionId: args.section_id,
                                           name: args.name ?? "",
                                           amount: args.amount,
+                                          unit: args.unit,
                                       },
                                   );
                     const extras = await groceryLineExtras(householdId, line);

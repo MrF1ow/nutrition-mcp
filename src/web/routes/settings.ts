@@ -414,6 +414,8 @@ settingsRoutes.post("/settings/foods/:id", requireMember, async (c) => {
                     .map((part) => part.trim())
                     .filter(Boolean),
                 defaultUnit: formText(asText, "default_unit"),
+                gramsPerEach: formOptionalNutrient(asText, "grams_per_each"),
+                gramsPerMl: formOptionalNutrient(asText, "grams_per_ml"),
                 calories: formOptionalNutrient(asText, "calories"),
                 proteinG: formOptionalNutrient(asText, "protein_g"),
                 carbsG: formOptionalNutrient(asText, "carbs_g"),

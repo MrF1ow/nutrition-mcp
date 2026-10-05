@@ -125,6 +125,7 @@ groceryRoutes.post("/grocery/lines", requireMember, async (c) => {
                     sectionId,
                     foodId,
                     amount,
+                    unit: formText(body, "qty_unit"),
                 });
             } else if (formText(body, "barcode")) {
                 await addGroceryFoodByBarcode(
@@ -137,6 +138,7 @@ groceryRoutes.post("/grocery/lines", requireMember, async (c) => {
                         sectionId,
                         barcode: formText(body, "barcode"),
                         amount,
+                        unit: formText(body, "qty_unit"),
                     },
                     { lookup: fridgeBarcodeLookup },
                 );
@@ -147,6 +149,7 @@ groceryRoutes.post("/grocery/lines", requireMember, async (c) => {
                     sectionId,
                     name: formText(body, "food_name"),
                     amount,
+                    unit: formText(body, "qty_unit"),
                 });
             }
         }

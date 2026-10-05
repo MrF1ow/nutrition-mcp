@@ -33,6 +33,7 @@ import {
 } from "../../domain/recipes.js";
 import { QUANTITY_ITEM } from "../shared.js";
 import type { ToolContext } from "../shared.js";
+import { foodsByIds } from "../../domain/foods.js";
 
 const RECIPE_FIELDS = {
     id: z.string(),
@@ -342,6 +343,7 @@ export function registerRecipesTools(server: McpServer, ctx: ToolContext) {
                 name: z.string().optional(),
                 barcode: z.string().optional(),
                 food_id: z.string().optional(),
+                unit: z.string().optional(),
             }),
         },
         async (args) =>
@@ -357,6 +359,7 @@ export function registerRecipesTools(server: McpServer, ctx: ToolContext) {
                               recipeId: args.recipe_id,
                               foodId: args.food_id,
                               amount: args.amount,
+                              unit: args.unit,
                           })
                         : args.barcode
                           ? await addRecipeIngredientByBarcode(
@@ -367,6 +370,7 @@ export function registerRecipesTools(server: McpServer, ctx: ToolContext) {
                                     recipeId: args.recipe_id,
                                     barcode: args.barcode,
                                     amount: args.amount,
+                                    unit: args.unit,
                                 },
                                 { lookup: lookupBarcode },
                             )
@@ -375,6 +379,7 @@ export function registerRecipesTools(server: McpServer, ctx: ToolContext) {
                                 recipeId: args.recipe_id,
                                 name: args.name ?? "",
                                 amount: args.amount,
+                                unit: args.unit,
                             });
                     return {
                         content: [
@@ -525,6 +530,19 @@ export function registerRecipesTools(server: McpServer, ctx: ToolContext) {
                         liveFridgeStore(),
                         householdId,
                     );
+                    const foods = await foodsByIds(
+                        liveFoodsStore(),
+                        householdId,
+                        [
+                            ...(
+                                await recipes.listIngredients(
+                                    householdId,
+                                    args.recipe_id,
+                                )
+                            ).map((row) => row.foodId),
+                            ...fridge.items.map((item) => item.foodId),
+                        ],
+                    );
                     const result = await addRecipeToGrocery({
                         recipes,
                         grocery: liveGroceryStore(),
@@ -538,6 +556,7 @@ export function registerRecipesTools(server: McpServer, ctx: ToolContext) {
                         recipeId: args.recipe_id,
                         storeId: args.store_id,
                         portionCounts,
+                        foodsById: foods,
                     });
                     const remainder = result.plan.map((line) => ({
                         display_name: line.displayName,

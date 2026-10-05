@@ -96,6 +96,7 @@ fridgeRoutes.post("/fridge/items", requireMember, async (c) => {
                 locationId,
                 foodId: formText(body, "food_id"),
                 amount,
+                unit: formText(body, "qty_unit"),
             });
         } else if (formText(body, "barcode")) {
             await addFoodByBarcode(
@@ -106,6 +107,7 @@ fridgeRoutes.post("/fridge/items", requireMember, async (c) => {
                     locationId,
                     barcode: formText(body, "barcode"),
                     amount,
+                    unit: formText(body, "qty_unit"),
                 },
                 { lookup: fridgeBarcodeLookup },
             );
@@ -115,6 +117,7 @@ fridgeRoutes.post("/fridge/items", requireMember, async (c) => {
                 locationId,
                 name: formText(body, "food_name"),
                 amount,
+                unit: formText(body, "qty_unit"),
             });
         }
     } catch (err) {

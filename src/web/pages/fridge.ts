@@ -1,4 +1,4 @@
-import { formatQuantity } from "../../domain/quantity.js";
+import { formatQuantity, isQuantityUnit } from "../../domain/quantity.js";
 import type {
     FridgeItem,
     FridgeLocation,
@@ -37,8 +37,11 @@ export type FridgePageView = FridgeSnapshot & {
 };
 
 function quantityLabel(item: FridgeItem): string {
-    if (item.kind === "food") {
-        return formatQuantity({ amount: item.quantity.amount, unit: "g" });
+    if (isQuantityUnit(item.quantity.unit)) {
+        return formatQuantity({
+            amount: item.quantity.amount,
+            unit: item.quantity.unit,
+        });
     }
     return `${item.quantity.amount} ${item.quantity.unit}`;
 }
@@ -65,6 +68,7 @@ function itemRow(item: FridgeItem, locations: FridgeLocation[]): string {
             ? renderQuantityField({
                   kind: "food",
                   amount: item.quantity.amount,
+                  unit: item.quantity.unit,
                   idPrefix: qtyId,
                   namePrefix: "qty",
                   required: true,

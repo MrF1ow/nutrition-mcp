@@ -64,6 +64,7 @@ import { alreadyHaveTag } from "../domain/linking.js";
 import { listFridge } from "../domain/fridge.js";
 import { groceryAllergenWarning } from "../domain/grocery.js";
 import { listRecipes } from "../domain/recipes.js";
+import { foodsByIds } from "../domain/foods.js";
 
 // MCP Apps UI (https://blog.modelcontextprotocol.io/posts/2026-01-26-mcp-apps/):
 // the get_nutrition_summary tool links to an HTML dashboard served as a ui://
@@ -1059,6 +1060,10 @@ export async function groceryLineExtras(
         listFridge(liveFridgeStore(), householdId),
         listHouseholdMembers(householdId),
     ]);
+    const catalog = await foodsByIds(liveFoodsStore(), householdId, [
+        line.foodId,
+        ...fridge.items.map((item) => item.foodId),
+    ]);
     const tag = alreadyHaveTag(
         {
             identity: line.identity,
@@ -1070,6 +1075,7 @@ export async function groceryLineExtras(
             quantity: item.quantity,
             foodId: item.foodId,
         })),
+        catalog,
     );
     const rules = liveRulesStore();
     const allergenMembers = await Promise.all(
@@ -1078,13 +1084,11 @@ export async function groceryLineExtras(
             allergens: await rules.listAllergens(householdId, member.userId),
         })),
     );
-    const catalog = line.foodId
-        ? await liveFoodsStore().getFood(householdId, line.foodId)
-        : null;
+    const food = line.foodId ? catalog.get(line.foodId) : undefined;
     const warning = groceryAllergenWarning(
         line.displayName,
         allergenMembers,
-        catalog ? catalog.allergens : null,
+        food ? food.allergens : null,
     );
     return {
         alreadyHave:

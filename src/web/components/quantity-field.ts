@@ -1,9 +1,12 @@
-import type { QuantityUnit } from "../../domain/quantity.js";
+import {
+    FOOD_QUANTITY_UNITS,
+    type QuantityUnit,
+} from "../../domain/quantity.js";
 import { escapeHtml } from "../../app/shell.js";
 
 export type QuantityFieldKind = "food" | "supply";
 
-const FOOD_UNITS: readonly QuantityUnit[] = ["g"];
+const FOOD_UNITS: readonly QuantityUnit[] = FOOD_QUANTITY_UNITS;
 const SUPPLY_UNITS: readonly QuantityUnit[] = [
     "g",
     "oz",
@@ -11,6 +14,8 @@ const SUPPLY_UNITS: readonly QuantityUnit[] = [
     "ml",
     "fl oz",
     "cup",
+    "tbsp",
+    "tsp",
     "each",
 ];
 
@@ -27,7 +32,8 @@ export type QuantityFieldOptions = {
 export function renderQuantityField(opts: QuantityFieldOptions): string {
     const units =
         opts.units ?? (opts.kind === "food" ? FOOD_UNITS : SUPPLY_UNITS);
-    const selected = opts.kind === "food" ? "g" : (opts.unit ?? units[0]!);
+    const selected =
+        opts.unit && units.includes(opts.unit) ? opts.unit : units[0]!;
     const prefix = opts.namePrefix ?? "qty";
     const idPrefix = opts.idPrefix ?? prefix;
     const amountValue =
