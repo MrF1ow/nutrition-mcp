@@ -1,4 +1,9 @@
-import type { Meal, NutritionGoals, WaterEntry, WeightEntry } from "../db/nutrition.js";
+import type {
+    Meal,
+    NutritionGoals,
+    WaterEntry,
+    WeightEntry,
+} from "../db/nutrition.js";
 import { dateInTz, hourInTz } from "./tz.js";
 import { formatWeight, fromGrams, type WeightUnit } from "./units.js";
 

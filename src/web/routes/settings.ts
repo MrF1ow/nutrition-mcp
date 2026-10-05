@@ -36,7 +36,14 @@ import {
     setHouseholdLocation,
     SettingsInputError,
 } from "../../domain/settings.js";
-import { addHouseholdMemberForHousehold, createHouseholdForCaller, getHouseholdConfig, rotateHouseholdMcpToken, updateHouseholdConfig, updateMemberDisplayName } from "../../db/household.js";
+import {
+    addHouseholdMemberForHousehold,
+    createHouseholdForCaller,
+    getHouseholdConfig,
+    rotateHouseholdMcpToken,
+    updateHouseholdConfig,
+    updateMemberDisplayName,
+} from "../../db/household.js";
 import { upsertProfile } from "../../db/profiles.js";
 import { liveRulesStore } from "../../db/rules.js";
 import { liveSettingsStore } from "../../db/settings.js";

@@ -12,12 +12,25 @@ import {
     resolveActorUserId,
     type ActorIntent,
 } from "../household.js";
-import { getPreferredWeightUnit, getProfile, getUserTimezone, timezoneFromProfile } from "../db/profiles.js";
-import { getHouseholdMembership, listHouseholdMembers } from "../db/household.js";
+import {
+    getPreferredWeightUnit,
+    getProfile,
+    getUserTimezone,
+    timezoneFromProfile,
+} from "../db/profiles.js";
+import {
+    getHouseholdMembership,
+    listHouseholdMembers,
+} from "../db/household.js";
 import { liveFridgeStore } from "../db/fridge.js";
 import { liveRecipesStore } from "../db/recipes.js";
 import { liveRulesStore } from "../db/rules.js";
-import type { Meal, NutritionGoals, WaterEntry, WeightEntry } from "../db/nutrition.js";
+import type {
+    Meal,
+    NutritionGoals,
+    WaterEntry,
+    WeightEntry,
+} from "../db/nutrition.js";
 import {
     todayInTz,
     dateInTz,

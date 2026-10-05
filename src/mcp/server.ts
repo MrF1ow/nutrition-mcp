@@ -9,7 +9,12 @@ import { getBaseUrl } from "../url.js";
 import { formatClientId } from "../client-id.js";
 import type { Context } from "hono";
 import type { AuthContext } from "../auth-context.js";
-import { widgetsEnabledFromProfile, alcoholTrackingEnabledFromProfile, preferredDrinkUnitFromProfile, getProfile } from "../db/profiles.js";
+import {
+    widgetsEnabledFromProfile,
+    alcoholTrackingEnabledFromProfile,
+    preferredDrinkUnitFromProfile,
+    getProfile,
+} from "../db/profiles.js";
 import {
     createToolContext,
     NUTRIENT_COVERAGE,

@@ -6,8 +6,19 @@ import {
     getWeightTrendsPayload,
     type AlcoholDisplay,
 } from "../dashboard-data.js";
-import { alcoholTrackingEnabledFromProfile, getProfile, preferredDrinkUnitFromProfile, preferredWeightUnitFromProfile, widgetsEnabledFromProfile } from "../db/profiles.js";
-import { getHouseholdConfig, getHouseholdMembership, householdExists, listHouseholdMembers } from "../db/household.js";
+import {
+    alcoholTrackingEnabledFromProfile,
+    getProfile,
+    preferredDrinkUnitFromProfile,
+    preferredWeightUnitFromProfile,
+    widgetsEnabledFromProfile,
+} from "../db/profiles.js";
+import {
+    getHouseholdConfig,
+    getHouseholdMembership,
+    householdExists,
+    listHouseholdMembers,
+} from "../db/household.js";
 import { liveFridgeStore } from "../db/fridge.js";
 import { liveGroceryStore } from "../db/grocery.js";
 import { liveRecipesStore } from "../db/recipes.js";

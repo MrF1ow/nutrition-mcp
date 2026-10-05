@@ -1,6 +1,14 @@
 import { type McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { preferredWeightUnitFromProfile, timezoneFromProfile, upsertProfile, getProfile, widgetsEnabledFromProfile, alcoholTrackingEnabledFromProfile, preferredDrinkUnitFromProfile } from "../../db/profiles.js";
+import {
+    preferredWeightUnitFromProfile,
+    timezoneFromProfile,
+    upsertProfile,
+    getProfile,
+    widgetsEnabledFromProfile,
+    alcoholTrackingEnabledFromProfile,
+    preferredDrinkUnitFromProfile,
+} from "../../db/profiles.js";
 import { withAnalytics } from "../../analytics.js";
 import { todayInTz, validateTz } from "../../domain/tz.js";
 import { isWeightUnit } from "../../domain/units.js";

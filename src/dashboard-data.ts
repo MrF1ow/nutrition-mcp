@@ -9,8 +9,21 @@ import {
     totalsPayloadOf,
     trendsDayPayloadOf,
 } from "./mcp.js";
-import { getLatestWeight, getMealsByDate, getMealsInRange, getNutritionGoals, getWaterByDate, getWaterInRange, getWeightInRange, type Meal } from "./db/nutrition.js";
-import { getProfile, preferredWeightUnitFromProfile, timezoneFromProfile } from "./db/profiles.js";
+import {
+    getLatestWeight,
+    getMealsByDate,
+    getMealsInRange,
+    getNutritionGoals,
+    getWaterByDate,
+    getWaterInRange,
+    getWeightInRange,
+    type Meal,
+} from "./db/nutrition.js";
+import {
+    getProfile,
+    preferredWeightUnitFromProfile,
+    timezoneFromProfile,
+} from "./db/profiles.js";
 import { dateInTz, shiftLocalDate, todayInTz } from "./domain/tz.js";
 import { fromGrams } from "./domain/units.js";
 

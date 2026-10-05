@@ -1,5 +1,12 @@
 import type { DashboardAccess, HouseholdMember } from "../household.js";
-import type { MealInput, MealInsertResult, WaterInput, WaterInsertResult, WeightInput, WeightInsertResult } from "../db/nutrition.js";
+import type {
+    MealInput,
+    MealInsertResult,
+    WaterInput,
+    WaterInsertResult,
+    WeightInput,
+    WeightInsertResult,
+} from "../db/nutrition.js";
 import { isWeightUnit, toGrams, type WeightUnit } from "../domain/units.js";
 import { getWidgetHtml, withWidgetData } from "../widgets.js";
 import {

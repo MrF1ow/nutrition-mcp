@@ -1,6 +1,20 @@
 import { test, expect, describe } from "bun:test";
-import { mealIdempotencyKey, updatedMealIdempotencyKey, fetchAllPages, exportArchivePath, exportStoragePaths, type Meal, type MealInput } from "./db/nutrition.js";
-import { widgetsEnabledFromProfile, alcoholTrackingEnabledFromProfile, preferredDrinkUnitFromProfile, timezoneFromProfile, type Profile } from "./db/profiles.js";
+import {
+    mealIdempotencyKey,
+    updatedMealIdempotencyKey,
+    fetchAllPages,
+    exportArchivePath,
+    exportStoragePaths,
+    type Meal,
+    type MealInput,
+} from "./db/nutrition.js";
+import {
+    widgetsEnabledFromProfile,
+    alcoholTrackingEnabledFromProfile,
+    preferredDrinkUnitFromProfile,
+    timezoneFromProfile,
+    type Profile,
+} from "./db/profiles.js";
 import { rowContentDigest } from "./domain/import.js";
 
 // Every export exercised here is pure: no test in this file constructs a

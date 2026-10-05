@@ -1,7 +1,20 @@
 import { type McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { getNutritionGoals, insertWeight, getWeightByDate, getWeightInRange, updateWeight, deleteWeight } from "../../db/nutrition.js";
-import { getUserTimezone, getPreferredWeightUnit, preferredWeightUnitFromProfile, timezoneFromProfile, getProfile } from "../../db/profiles.js";
+import {
+    getNutritionGoals,
+    insertWeight,
+    getWeightByDate,
+    getWeightInRange,
+    updateWeight,
+    deleteWeight,
+} from "../../db/nutrition.js";
+import {
+    getUserTimezone,
+    getPreferredWeightUnit,
+    preferredWeightUnitFromProfile,
+    timezoneFromProfile,
+    getProfile,
+} from "../../db/profiles.js";
 import type { WeightEntry } from "../../db/nutrition.js";
 import { withAnalytics } from "../../analytics.js";
 import { todayInTz, shiftLocalDate, dateInTz } from "../../domain/tz.js";

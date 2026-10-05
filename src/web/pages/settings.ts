@@ -6,7 +6,11 @@ import {
     type ViewerChrome,
 } from "../../app/shell.js";
 import { DRINK_UNITS, isDrinkUnit, type DrinkUnit } from "../../alcohol.js";
-import { WEIGHT_UNITS, isWeightUnit, type WeightUnit } from "../../domain/units.js";
+import {
+    WEIGHT_UNITS,
+    isWeightUnit,
+    type WeightUnit,
+} from "../../domain/units.js";
 
 const SWATCH_ORDER = Object.keys(ACCENT_SWATCHES) as AccentSwatch[];
 

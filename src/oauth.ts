@@ -1,6 +1,13 @@
 import { Hono, type Context } from "hono";
 import crypto from "node:crypto";
-import { storeToken, storeAuthCode, consumeAuthCode, storeRefreshToken, consumeRefreshToken, registerClient } from "./db/tokens.js";
+import {
+    storeToken,
+    storeAuthCode,
+    consumeAuthCode,
+    storeRefreshToken,
+    consumeRefreshToken,
+    registerClient,
+} from "./db/tokens.js";
 import { signUpUser, signInUser, authUserCount } from "./db/client.js";
 import { getBaseUrl } from "./url.js";
 import { rateLimitAuth } from "./middleware.js";

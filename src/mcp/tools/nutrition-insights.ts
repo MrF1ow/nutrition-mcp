@@ -1,7 +1,18 @@
 import { type McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { getMealsByDate, getMealsInRange, searchMeals, getNutritionGoals, getWaterInRange, type Meal } from "../../db/nutrition.js";
-import { getUserTimezone, timezoneFromProfile, getProfile } from "../../db/profiles.js";
+import {
+    getMealsByDate,
+    getMealsInRange,
+    searchMeals,
+    getNutritionGoals,
+    getWaterInRange,
+    type Meal,
+} from "../../db/nutrition.js";
+import {
+    getUserTimezone,
+    timezoneFromProfile,
+    getProfile,
+} from "../../db/profiles.js";
 import { withAnalytics } from "../../analytics.js";
 import { todayInTz, shiftLocalDate, dateInTz } from "../../domain/tz.js";
 import { WIDGET_LOCALE } from "../../routes.js";

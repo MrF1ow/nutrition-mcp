@@ -79,7 +79,10 @@ import {
 import { createMemoryFridgeStore } from "./domain/fridge.js";
 import { createMemoryGroceryStore } from "./domain/grocery.js";
 import { createMemoryRecipesStore } from "./domain/recipes.js";
-import { createGroceryStore, createMemorySettingsStore } from "./domain/settings.js";
+import {
+    createGroceryStore,
+    createMemorySettingsStore,
+} from "./domain/settings.js";
 import { addAllergen, createMemoryRulesStore } from "./domain/rules.js";
 import {
     TOOLS,
@@ -94,7 +97,13 @@ import {
     computeWeeklyDigest,
     type DailyBucket,
 } from "./domain/insights.js";
-import type { Meal, MealInput, NutritionGoals, WaterEntry, WeightEntry } from "./db/nutrition.js";
+import type {
+    Meal,
+    MealInput,
+    NutritionGoals,
+    WaterEntry,
+    WeightEntry,
+} from "./db/nutrition.js";
 import { dateInTz, formatLocalDateTime, weekdayInTz } from "./domain/tz.js";
 import { getWidgetHtml } from "./widgets.js";
 
