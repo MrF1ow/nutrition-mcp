@@ -191,7 +191,7 @@ The decision is to delete all old user data. Confirm with the user once, right b
 ## 7. Repo follow-up (after launch)
 
 - [x] `docs/handoff/foodable-architecture-plan.md`: "Status at handoff" updated on 2026-10-05 with preflight, the new Supabase project ref, local smoke, and what remains before deploy day. Walk result stays unchecked until step 5 runs.
-- [ ] `docs/self-hosting.md`: add a short Railway section, with the `railway.toml` above, the variables, "do not set `PORT`", and `PUBLIC_ORIGIN` from the generated domain. (After Railway exists.)
+- [ ] `docs/self-hosting.md`: add a short Railway section, with the `railway.toml` above, the variables, "do not set `PORT`", and `PUBLIC_ORIGIN` from the generated domain. Belongs in the Railway config pull request (with `railway.toml`); that PR does not create the Railway service.
 - [ ] Update the memory or notes the user keeps on hosting: Railway, chosen 2026-10-05, "for now". (After Railway exists.)
 
 ## 8. After launch, in order
