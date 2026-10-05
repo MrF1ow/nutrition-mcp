@@ -193,7 +193,7 @@ export function nutritionFromCatalogFood(
 
 export function isNutritionComplete(
     nutrition: IngredientNutrition | null,
-): boolean {
+): nutrition is IngredientNutrition {
     if (nutrition == null) return false;
     return (
         nutrition.calories != null &&
