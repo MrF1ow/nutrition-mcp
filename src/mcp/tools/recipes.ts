@@ -33,7 +33,6 @@ import {
 } from "../../domain/recipes.js";
 import { QUANTITY_ITEM } from "../shared.js";
 import type { ToolContext } from "../shared.js";
-import { foodsByIds } from "../../domain/foods.js";
 
 const RECIPE_FIELDS = {
     id: z.string(),
