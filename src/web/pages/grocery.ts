@@ -3,7 +3,11 @@ import type { GroceryLine } from "../../grocery.js";
 import type { GrocerySection, GroceryStore } from "../../settings.js";
 import type { StoreRule } from "../../rules.js";
 import type { AlreadyHaveTag } from "../../linking.js";
-import { escapeHtml, renderAppShell, type ViewerChrome } from "../../app/shell.js";
+import {
+    escapeHtml,
+    renderAppShell,
+    type ViewerChrome,
+} from "../../app/shell.js";
 import { renderAlreadyHaveTag } from "../components/already-have-tag.js";
 import { renderFoodPicker } from "../components/food-picker.js";
 import {

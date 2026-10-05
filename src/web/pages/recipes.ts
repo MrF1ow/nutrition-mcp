@@ -4,7 +4,11 @@ import type {
     RecipeIngredientView,
     RecipeMacros,
 } from "../../recipes.js";
-import { escapeHtml, renderAppShell, type ViewerChrome } from "../../app/shell.js";
+import {
+    escapeHtml,
+    renderAppShell,
+    type ViewerChrome,
+} from "../../app/shell.js";
 import { renderFoodPicker } from "../components/food-picker.js";
 import { renderMemberMultiSelect } from "../components/member-multi-select.js";
 import {

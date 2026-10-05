@@ -24,10 +24,7 @@ import {
 } from "../supabase.js";
 import { renderFridgePage } from "./pages/fridge.js";
 import { renderGroceryPage } from "./pages/grocery.js";
-import {
-    renderRecipeDetailPage,
-    renderRecipesPage,
-} from "./pages/recipes.js";
+import { renderRecipeDetailPage, renderRecipesPage } from "./pages/recipes.js";
 import { renderSettingsPage } from "./pages/settings.js";
 import { renderHouseholdSettingsPage } from "../app/settings/household.js";
 import { listFridge } from "../fridge.js";

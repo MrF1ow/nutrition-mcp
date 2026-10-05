@@ -1,4 +1,5 @@
-import type { Context, Next } from "hono";
+import type { Context } from "hono";
+import { createMiddleware } from "hono/factory";
 import { beginSiteLogin } from "../oauth.js";
 import {
     requireOwner as ownerCheck,
@@ -32,14 +33,14 @@ export function siteMember(c: Context): HouseholdMember {
     return member;
 }
 
-export const requireSiteUser = async (c: Context, next: Next) => {
+export const requireSiteUser = createMiddleware(async (c, next) => {
     const userId = siteUserId(c.req.header("cookie"));
     if (!userId) return beginSiteLogin(c, c.req.query("locale"));
     c.set("userId", userId);
     return next();
-};
+});
 
-export const requireMember = async (c: Context, next: Next) => {
+export const requireMember = createMiddleware(async (c, next) => {
     const userId = siteUserId(c.req.header("cookie"));
     if (!userId) return beginSiteLogin(c, c.req.query("locale"));
     const member = await getHouseholdMembership(userId);
@@ -47,9 +48,9 @@ export const requireMember = async (c: Context, next: Next) => {
     c.set("userId", userId);
     c.set("member", member);
     return next();
-};
+});
 
-export const requireOwner = async (c: Context, next: Next) => {
+export const requireOwner = createMiddleware(async (c, next) => {
     const userId = siteUserId(c.req.header("cookie"));
     if (!userId) return beginSiteLogin(c, c.req.query("locale"));
     const member = await getHouseholdMembership(userId);
@@ -58,4 +59,4 @@ export const requireOwner = async (c: Context, next: Next) => {
     c.set("userId", userId);
     c.set("member", check.member);
     return next();
-};
+});
