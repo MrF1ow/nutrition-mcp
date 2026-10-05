@@ -927,7 +927,6 @@ describe("log_meal / update_meal surface hidden alcohol", () => {
 // really do carry none and its display gate is `!= null`, so chasing it would
 // manufacture the "0 mg / 400 mg limit" row the suppression exists to avoid.
 
-
 describe("log_meal / update_meal chase missing fiber and sugar", () => {
     test("log_meal without them says so and points at update_meal", async () => {
         await withTools(null, async (call) => {

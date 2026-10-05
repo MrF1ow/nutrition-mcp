@@ -1377,4 +1377,3 @@ describe("missingNutrientNote", () => {
         expect(note).toBe("");
     });
 });
-
