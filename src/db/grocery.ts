@@ -2,7 +2,7 @@ import {
     groceryLineFromRow,
     groceryLineToRow,
     type GroceryListStore,
-} from "../grocery.js";
+} from "../domain/grocery.js";
 import { getSupabase } from "./client.js";
 
 const GROCERY_LINE_COLS =

@@ -4,7 +4,7 @@ import {
     groceryStoreFromRow,
     groceryStoreToRow,
     type SettingsStore,
-} from "../settings.js";
+} from "../domain/settings.js";
 import { getSupabase } from "./client.js";
 
 const GROCERY_STORE_COLS = "id, household_id, name, sort_order";

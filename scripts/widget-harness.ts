@@ -21,8 +21,8 @@
 // Nothing here is served by the production app; scripts/ is dev-only.
 
 import { getWidgetHtml, WIDGET_TEMPLATES } from "../src/widgets.js";
-import { runImport } from "../src/import.js";
-import type { MealInput, MealInsertResult } from "../src/supabase.js";
+import { runImport } from "../src/domain/import.js";
+import type { MealInput, MealInsertResult } from "../src/db/nutrition.js";
 
 // In-memory stand-in for insertMeal, mirroring its dedup contract, so the harness
 // can execute the REAL bulk_import_meals logic instead of returning canned data.

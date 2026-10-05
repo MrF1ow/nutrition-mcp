@@ -6,7 +6,7 @@ import type {
     WaterInsertResult,
     WeightInput,
     WeightInsertResult,
-} from "../supabase.js";
+} from "../db/nutrition.js";
 import {
     logMealFromForm,
     logWaterFromForm,

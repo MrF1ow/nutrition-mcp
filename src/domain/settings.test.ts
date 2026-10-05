@@ -6,10 +6,10 @@ import {
     renameSection,
     SettingsInputError,
 } from "./settings.js";
-import { renderSettingsPage } from "./web/pages/settings.js";
-import { renderHouseholdSettingsPage } from "./app/settings/household.js";
-import { ACCENT_SWATCHES } from "./app/shell.js";
-import type { HouseholdMember } from "./household.js";
+import { renderSettingsPage } from "../web/pages/settings.js";
+import { renderHouseholdSettingsPage } from "../app/settings/household.js";
+import { ACCENT_SWATCHES } from "../app/shell.js";
+import type { HouseholdMember } from "../household.js";
 
 const HH = "hh-1";
 

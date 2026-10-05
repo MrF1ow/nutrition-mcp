@@ -1,4 +1,4 @@
-import { formatQuantity, type Quantity } from "../../quantity.js";
+import { formatQuantity, type Quantity } from "../../domain/quantity.js";
 import { escapeHtml } from "../../app/shell.js";
 
 export type AlreadyHaveState =

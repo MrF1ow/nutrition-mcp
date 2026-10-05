@@ -4,7 +4,7 @@
 // accepts zero-padded 24-hour HH:MM[:SS], so an unpadded 24-hour time
 // ("9:15") or a 12-hour time ("9:15 AM" — Cronometer's own Time column shape)
 // matched none of the accepted forms and every such row was rejected. The fix
-// runs the raw cell through normalizeTime (src/csv.ts) before appending it.
+// runs the raw cell through normalizeTime (src/domain/csv.ts) before appending it.
 //
 // This also covers the "bonus symptom" from the issue: the preview's
 // no-time check (/\d\d:\d\d/) missed unpadded times like "9:15" and
@@ -55,7 +55,7 @@ async function freshImportWidget() {
 }
 
 // A Cronometer-shaped table: Day/Time split, 12-hour Time column — the exact
-// shape modeled by the fixture in src/csv.test.ts that motivated the issue.
+// shape modeled by the fixture in src/domain/csv.test.ts that motivated the issue.
 function cronometerTable() {
     return {
         headers: [

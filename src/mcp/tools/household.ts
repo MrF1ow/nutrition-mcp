@@ -13,14 +13,14 @@ import {
     hashHouseholdToken,
     householdTokenHashHex,
 } from "../../household-token.js";
+import { deleteAllUserData } from "../../db/nutrition.js";
 import {
-    deleteAllUserData,
     listHouseholdMembers,
     addHouseholdMemberForHousehold,
     getHouseholdConfig,
     updateHouseholdConfig,
     rotateHouseholdMcpToken,
-} from "../../supabase.js";
+} from "../../db/household.js";
 import {
     DELETED_ACCOUNT_ANALYTICS_ID,
     withAnalytics,

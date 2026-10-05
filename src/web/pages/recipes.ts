@@ -1,9 +1,9 @@
-import { formatQuantity } from "../../quantity.js";
+import { formatQuantity } from "../../domain/quantity.js";
 import type {
     Recipe,
     RecipeIngredientView,
     RecipeMacros,
-} from "../../recipes.js";
+} from "../../domain/recipes.js";
 import {
     escapeHtml,
     renderAppShell,

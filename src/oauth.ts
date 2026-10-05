@@ -4,13 +4,11 @@ import {
     storeToken,
     storeAuthCode,
     consumeAuthCode,
-    signUpUser,
-    signInUser,
-    authUserCount,
     storeRefreshToken,
     consumeRefreshToken,
     registerClient,
-} from "./supabase.js";
+} from "./db/tokens.js";
+import { signUpUser, signInUser, authUserCount } from "./db/client.js";
 import { getBaseUrl } from "./url.js";
 import { rateLimitAuth } from "./middleware.js";
 import { LOGIN_ERRORS } from "./copy/login.js";

@@ -1,4 +1,4 @@
-import { isWeightUnit, type WeightUnit } from "../units.js";
+import { isWeightUnit, type WeightUnit } from "../domain/units.js";
 import { isDrinkUnit, type DrinkUnit } from "../alcohol.js";
 import { getSupabase } from "./client.js";
 

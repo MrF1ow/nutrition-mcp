@@ -7,16 +7,18 @@ import {
     deleteMeal,
     updateMeal,
     getNutritionGoals,
-    getUserTimezone,
-    timezoneFromProfile,
-    getProfile,
     countMeals,
     existingIdempotencyKeys,
     existingMealIds,
     type Meal,
-} from "../../supabase.js";
+} from "../../db/nutrition.js";
+import {
+    getUserTimezone,
+    timezoneFromProfile,
+    getProfile,
+} from "../../db/profiles.js";
 import { withAnalytics } from "../../analytics.js";
-import { todayInTz, dateInTz } from "../../tz.js";
+import { todayInTz, dateInTz } from "../../domain/tz.js";
 import { WIDGET_LOCALE } from "../../routes.js";
 import {
     runImport,
@@ -29,7 +31,7 @@ import {
     MAX_ALCOHOL_G,
     MAX_CAFFEINE_MG,
     type BulkImportArgs,
-} from "../../import.js";
+} from "../../domain/import.js";
 import { getWidgetHtml } from "../../widgets.js";
 import {
     NUTRIENT_COVERAGE,

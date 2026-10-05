@@ -1,21 +1,23 @@
+import { getSupabase } from "../db/client.js";
 import {
-    getSupabase,
     exportArchivePath,
     getAllMeals,
     getAllWater,
     getAllWeight,
     getNutritionGoals,
-    getProfile,
-    timezoneFromProfile,
     type Meal,
     type NutritionGoals,
-    type Profile,
     type WaterEntry,
     type WeightEntry,
-} from "./supabase.js";
+} from "../db/nutrition.js";
+import {
+    getProfile,
+    timezoneFromProfile,
+    type Profile,
+} from "../db/profiles.js";
 import { formatLocalDateTime } from "./tz.js";
 import { fromGrams, isWeightUnit, type WeightUnit } from "./units.js";
-import { buildZip, type ZipEntry } from "./zip.js";
+import { buildZip, type ZipEntry } from "../zip.js";
 
 const EXPORT_BUCKET = "exports";
 // Signed link lifetime. The cleanup sweep ages files out on the same horizon.

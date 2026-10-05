@@ -14,8 +14,8 @@ import {
     FridgeInputError,
     moveItem,
     updateItemQuantity,
-} from "../../fridge.js";
-import { liveFridgeStore } from "../../supabase.js";
+} from "../../domain/fridge.js";
+import { liveFridgeStore } from "../../db/fridge.js";
 
 export const fridgeRoutes = new Hono();
 

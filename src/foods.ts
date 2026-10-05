@@ -7,7 +7,7 @@
 // back to LLM estimation, so the lookup is always additive, never a hard
 // dependency for logging a meal.
 
-import { getSupabase } from "./supabase.js";
+import { getSupabase } from "./db/client.js";
 import { gramsFromDrink, formatAlcohol, type DrinkUnit } from "./alcohol.js";
 
 const OFF_PRODUCT_URL = "https://world.openfoodfacts.org/api/v2/product";

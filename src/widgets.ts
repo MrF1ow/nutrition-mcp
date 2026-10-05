@@ -23,7 +23,7 @@ const INCLUDE_RE = /\/\*@include\s+([^\s@]+)\s*@\*\//g;
 
 // Second marker: inline a TypeScript module from src/ as plain JS.
 //
-//     /*@inlinets src/csv.ts@*/
+//     /*@inlinets src/domain/csv.ts@*/
 //
 // Exists so a widget can use tested server-side code instead of a hand-copied
 // twin. The CSV parser is the case in point: it faces arbitrary user files, so it

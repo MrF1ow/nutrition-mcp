@@ -14,7 +14,7 @@ import {
     alcoholTrackingEnabledFromProfile,
     preferredDrinkUnitFromProfile,
     getProfile,
-} from "../supabase.js";
+} from "../db/profiles.js";
 import {
     createToolContext,
     NUTRIENT_COVERAGE,

@@ -17,9 +17,10 @@ import {
     clearCheckedLines,
     groceryAllergenWarning,
     GroceryInputError,
-} from "../../grocery.js";
-import { createGroceryStore } from "../../settings.js";
-import { liveGroceryStore, liveSettingsStore } from "../../supabase.js";
+} from "../../domain/grocery.js";
+import { createGroceryStore } from "../../domain/settings.js";
+import { liveGroceryStore } from "../../db/grocery.js";
+import { liveSettingsStore } from "../../db/settings.js";
 
 export const groceryRoutes = new Hono();
 

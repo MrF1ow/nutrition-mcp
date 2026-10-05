@@ -1,6 +1,6 @@
 import { type McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { liveFridgeStore } from "../../supabase.js";
+import { liveFridgeStore } from "../../db/fridge.js";
 import { withAnalytics } from "../../analytics.js";
 import { lookupBarcode } from "../../foods.js";
 import {
@@ -13,7 +13,7 @@ import {
     listFridge,
     moveItem,
     updateItemQuantity,
-} from "../../fridge.js";
+} from "../../domain/fridge.js";
 import type { ToolContext } from "../shared.js";
 
 export function registerFridgeTools(server: McpServer, ctx: ToolContext) {

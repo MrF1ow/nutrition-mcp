@@ -4,7 +4,7 @@ import {
     fridgeLocationFromRow,
     fridgeLocationToRow,
     type FridgeStore,
-} from "../fridge.js";
+} from "../domain/fridge.js";
 import { getSupabase } from "./client.js";
 
 const FRIDGE_LOCATION_COLS = "id, household_id, name, sort_order";

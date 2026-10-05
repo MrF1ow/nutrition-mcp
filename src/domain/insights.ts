@@ -3,7 +3,7 @@ import type {
     NutritionGoals,
     WaterEntry,
     WeightEntry,
-} from "./supabase.js";
+} from "../db/nutrition.js";
 import { dateInTz, hourInTz } from "./tz.js";
 import { formatWeight, fromGrams, type WeightUnit } from "./units.js";
 

@@ -7,19 +7,21 @@ import {
     getWeightInRange,
     updateWeight,
     deleteWeight,
+} from "../../db/nutrition.js";
+import {
     getUserTimezone,
     getPreferredWeightUnit,
     preferredWeightUnitFromProfile,
     timezoneFromProfile,
     getProfile,
-} from "../../supabase.js";
-import type { WeightEntry } from "../../supabase.js";
+} from "../../db/profiles.js";
+import type { WeightEntry } from "../../db/nutrition.js";
 import { withAnalytics } from "../../analytics.js";
-import { todayInTz, shiftLocalDate, dateInTz } from "../../tz.js";
+import { todayInTz, shiftLocalDate, dateInTz } from "../../domain/tz.js";
 import { WIDGET_LOCALE } from "../../routes.js";
-import { computeWeightTrend } from "../../insights.js";
-import { toGrams, formatWeight, fromGrams } from "../../units.js";
-import type { WeightUnit } from "../../units.js";
+import { computeWeightTrend } from "../../domain/insights.js";
+import { toGrams, formatWeight, fromGrams } from "../../domain/units.js";
+import type { WeightUnit } from "../../domain/units.js";
 import {
     WEIGHT_TRENDS_WIDGET_URI,
     formatWeightEntry,

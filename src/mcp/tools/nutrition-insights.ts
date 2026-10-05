@@ -6,13 +6,15 @@ import {
     searchMeals,
     getNutritionGoals,
     getWaterInRange,
+    type Meal,
+} from "../../db/nutrition.js";
+import {
     getUserTimezone,
     timezoneFromProfile,
     getProfile,
-    type Meal,
-} from "../../supabase.js";
+} from "../../db/profiles.js";
 import { withAnalytics } from "../../analytics.js";
-import { todayInTz, shiftLocalDate, dateInTz } from "../../tz.js";
+import { todayInTz, shiftLocalDate, dateInTz } from "../../domain/tz.js";
 import { WIDGET_LOCALE } from "../../routes.js";
 import {
     buildDailyBuckets,
@@ -21,8 +23,8 @@ import {
     computeWeeklyDigest,
     dateDiffDays,
     dayCarries,
-} from "../../insights.js";
-import { exportAllData } from "../../export.js";
+} from "../../domain/insights.js";
+import { exportAllData } from "../../domain/export.js";
 import { formatMealSearchResults } from "../../search.js";
 import { getWidgetHtml } from "../../widgets.js";
 import {

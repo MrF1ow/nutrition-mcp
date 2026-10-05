@@ -1,6 +1,6 @@
 import { test, expect } from "bun:test";
-import { formatQuantity as formatFromFridge } from "../quantity.js";
-import { formatQuantity as formatFromGrocery } from "../quantity.js";
+import { formatQuantity as formatFromFridge } from "../domain/quantity.js";
+import { formatQuantity as formatFromGrocery } from "../domain/quantity.js";
 
 test("fridge and grocery import the same formatQuantity module", () => {
     expect(formatFromFridge).toBe(formatFromGrocery);

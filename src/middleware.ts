@@ -1,7 +1,7 @@
 import type { Context, Next } from "hono";
 import type { AuthContext } from "./auth-context.js";
 import { rateLimitKey } from "./auth-context.js";
-import { lookupBearer } from "./supabase.js";
+import { lookupBearer } from "./db/tokens.js";
 import { maskIp } from "./net.js";
 import { resourceMetadataUrl } from "./discovery.js";
 import { getBaseUrl } from "./url.js";

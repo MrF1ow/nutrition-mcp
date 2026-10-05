@@ -4,10 +4,10 @@ import {
     insertWater,
     getWaterByDate,
     deleteWater,
-    getUserTimezone,
-} from "../../supabase.js";
+} from "../../db/nutrition.js";
+import { getUserTimezone } from "../../db/profiles.js";
 import { withAnalytics } from "../../analytics.js";
-import { todayInTz } from "../../tz.js";
+import { todayInTz } from "../../domain/tz.js";
 import {
     sumWater,
     LOGGED_AT_FORMS,

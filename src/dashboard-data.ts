@@ -1,5 +1,5 @@
 import type { DrinkUnit } from "./alcohol.js";
-import { buildDailyBuckets, dateDiffDays } from "./insights.js";
+import { buildDailyBuckets, dateDiffDays } from "./domain/insights.js";
 import {
     goalsPayloadOf,
     mealBreakdown,
@@ -14,16 +14,18 @@ import {
     getMealsByDate,
     getMealsInRange,
     getNutritionGoals,
-    getProfile,
     getWaterByDate,
     getWaterInRange,
     getWeightInRange,
+    type Meal,
+} from "./db/nutrition.js";
+import {
+    getProfile,
     preferredWeightUnitFromProfile,
     timezoneFromProfile,
-    type Meal,
-} from "./supabase.js";
-import { dateInTz, shiftLocalDate, todayInTz } from "./tz.js";
-import { fromGrams } from "./units.js";
+} from "./db/profiles.js";
+import { dateInTz, shiftLocalDate, todayInTz } from "./domain/tz.js";
+import { fromGrams } from "./domain/units.js";
 
 export type AlcoholDisplay = DrinkUnit | null;
 

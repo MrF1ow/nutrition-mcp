@@ -29,13 +29,13 @@ import {
     addPersonRule,
     addStoreRule,
     RulesInputError,
-} from "../../rules.js";
+} from "../../domain/rules.js";
 import {
     createGroceryStore,
     renameSection,
     setHouseholdLocation,
     SettingsInputError,
-} from "../../settings.js";
+} from "../../domain/settings.js";
 import {
     addHouseholdMemberForHousehold,
     createHouseholdForCaller,
@@ -43,11 +43,11 @@ import {
     rotateHouseholdMcpToken,
     updateHouseholdConfig,
     updateMemberDisplayName,
-    upsertProfile,
-    liveRulesStore,
-    liveSettingsStore,
-} from "../../supabase.js";
-import { validateTz } from "../../tz.js";
+} from "../../db/household.js";
+import { upsertProfile } from "../../db/profiles.js";
+import { liveRulesStore } from "../../db/rules.js";
+import { liveSettingsStore } from "../../db/settings.js";
+import { validateTz } from "../../domain/tz.js";
 
 export const settingsRoutes = new Hono();
 

@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import type { FoodResult } from "./foods.js";
+import type { FoodResult } from "../foods.js";
 import {
     addFoodByBarcode,
     addLocation,
@@ -10,8 +10,8 @@ import {
     moveItem,
     updateItemQuantity,
 } from "./fridge.js";
-import { renderFridgePage } from "./web/pages/fridge.js";
-import { ACCENT_SWATCHES } from "./app/shell.js";
+import { renderFridgePage } from "../web/pages/fridge.js";
+import { ACCENT_SWATCHES } from "../app/shell.js";
 
 const HH = "hh-1";
 

@@ -1,5 +1,5 @@
 import type { FoodIdentity, SupplyIdentity } from "./food-identity.js";
-import { normalizeBarcode, type FoodResult } from "./foods.js";
+import { normalizeBarcode, type FoodResult } from "../foods.js";
 import {
     resolveGrocerySectionId,
     type GroceryLine,

@@ -1,5 +1,5 @@
 import type { FoodIdentity, SupplyIdentity } from "./food-identity.js";
-import { normalizeBarcode, type FoodResult } from "./foods.js";
+import { normalizeBarcode, type FoodResult } from "../foods.js";
 
 export type FridgeKind = "food" | "supply";
 

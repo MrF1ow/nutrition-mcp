@@ -11,11 +11,11 @@ import {
 import type {
     Meal,
     NutritionGoals,
-    Profile,
     WaterEntry,
     WeightEntry,
-} from "./supabase.js";
-import { buildZip } from "./zip.js";
+} from "../db/nutrition.js";
+import type { Profile } from "../db/profiles.js";
+import { buildZip } from "../zip.js";
 
 function meal(overrides: Partial<Meal> = {}): Meal {
     return {

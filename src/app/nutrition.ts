@@ -6,8 +6,8 @@ import type {
     WaterInsertResult,
     WeightInput,
     WeightInsertResult,
-} from "../supabase.js";
-import { isWeightUnit, toGrams, type WeightUnit } from "../units.js";
+} from "../db/nutrition.js";
+import { isWeightUnit, toGrams, type WeightUnit } from "../domain/units.js";
 import { getWidgetHtml, withWidgetData } from "../widgets.js";
 import {
     accentColor,
