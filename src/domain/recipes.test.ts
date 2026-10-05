@@ -16,12 +16,18 @@ import {
     createRecipe,
     deleteRecipe,
     getRecipeView,
+    importRecipeFromText,
     listRecipes,
+    listRecipesFiltered,
     macrosForPerson,
     perPortionAmount,
     RecipeForbiddenError,
     RecipeInputError,
+    removeRecipeIngredient,
+    reorderRecipeIngredients,
     setPersonPortion,
+    updateRecipe,
+    updateRecipeIngredient,
 } from "./recipes.js";
 import { createMemoryFoodsStore, updateFood } from "./foods.js";
 import { createGroceryStore, createMemorySettingsStore } from "./settings.js";
@@ -370,6 +376,12 @@ test("recipes list page is not a stub and detail reuses shared picker", () => {
                 creatorId: ALICE,
                 name: "Mac",
                 yieldPortions: 4,
+                instructions: null,
+                sourceUrl: null,
+                tags: [],
+                notes: null,
+                prepMinutes: null,
+                cookMinutes: null,
             },
         ],
         members: [{ userId: ALICE, displayName: "Alice" }],
@@ -389,6 +401,12 @@ test("recipes list page is not a stub and detail reuses shared picker", () => {
             creatorId: ALICE,
             name: "Mac",
             yieldPortions: 4,
+            instructions: "Boil pasta.",
+            sourceUrl: "https://example.com/mac",
+            tags: ["dinner"],
+            notes: "Use the blue pot.",
+            prepMinutes: 10,
+            cookMinutes: 20,
         },
         ingredients: [
             {
@@ -412,6 +430,7 @@ test("recipes list page is not a stub and detail reuses shared picker", () => {
                     basisUnit: "g",
                 },
                 sortOrder: 0,
+                note: "diced",
                 perPortionAmount: 100,
                 personAmount: 100,
             },
@@ -453,4 +472,218 @@ test("recipes list page is not a stub and detail reuses shared picker", () => {
     expect(detail).toContain("Bob dislikes cilantro.");
     expect(detail).toContain('action="/recipes/r1/add-to-grocery"');
     expect(detail).toContain('action="/recipes/r1/delete"');
+});
+
+test("updateRecipe writes fuller fields and updateRecipeIngredient stores a note", async () => {
+    const store = createMemoryRecipesStore();
+    const foods = createMemoryFoodsStore();
+    const recipe = await createRecipe(store, {
+        householdId: HH,
+        creatorId: ALICE,
+        name: "Mac",
+        yieldPortions: 4,
+    });
+    const updated = await updateRecipe(store, HH, recipe.id, {
+        name: "Baked mac",
+        instructions: "Boil, then bake.",
+        sourceUrl: "https://example.com/mac",
+        tags: ["Dinner", " dinner ", "comfort"],
+        notes: "Blue pot",
+        prepMinutes: 15,
+        cookMinutes: 30,
+    });
+    expect(updated.name).toBe("Baked mac");
+    expect(updated.instructions).toBe("Boil, then bake.");
+    expect(updated.sourceUrl).toBe("https://example.com/mac");
+    expect(updated.tags).toEqual(["dinner", "comfort"]);
+    expect(updated.notes).toBe("Blue pot");
+    expect(updated.prepMinutes).toBe(15);
+    expect(updated.cookMinutes).toBe(30);
+    const ingredient = await addRecipeManualIngredient(store, foods, {
+        householdId: HH,
+        recipeId: recipe.id,
+        name: "Cheddar",
+        amount: 100,
+    });
+    const noted = await updateRecipeIngredient(
+        store,
+        HH,
+        recipe.id,
+        ingredient.id,
+        { note: "grated", amount: 120 },
+    );
+    expect(noted.note).toBe("grated");
+    expect(noted.quantity.amount).toBe(120);
+});
+
+test("remove and reorder recipe ingredients", async () => {
+    const store = createMemoryRecipesStore();
+    const foods = createMemoryFoodsStore();
+    const recipe = await createRecipe(store, {
+        householdId: HH,
+        creatorId: ALICE,
+        name: "Soup",
+        yieldPortions: 2,
+    });
+    const first = await addRecipeManualIngredient(store, foods, {
+        householdId: HH,
+        recipeId: recipe.id,
+        name: "Onion",
+        amount: 50,
+    });
+    const second = await addRecipeManualIngredient(store, foods, {
+        householdId: HH,
+        recipeId: recipe.id,
+        name: "Carrot",
+        amount: 80,
+    });
+    const reordered = await reorderRecipeIngredients(store, HH, recipe.id, [
+        second.id,
+        first.id,
+    ]);
+    expect(reordered.map((row) => row.displayName)).toEqual([
+        "Carrot",
+        "Onion",
+    ]);
+    expect(await removeRecipeIngredient(store, HH, recipe.id, first.id)).toBe(
+        true,
+    );
+    const left = await store.listIngredients(HH, recipe.id);
+    expect(left).toHaveLength(1);
+    expect(left[0]?.displayName).toBe("Carrot");
+});
+
+test("listRecipesFiltered matches tag, can-make-now, and safe-for", async () => {
+    const recipes = createMemoryRecipesStore();
+    const foods = createMemoryFoodsStore();
+    const fridge = createMemoryFridgeStore();
+    const loc = await addLocation(fridge, HH, "Fridge");
+    const pasta = await createRecipe(recipes, {
+        householdId: HH,
+        creatorId: ALICE,
+        name: "Pasta",
+        yieldPortions: 1,
+        tags: ["dinner"],
+    });
+    const salad = await createRecipe(recipes, {
+        householdId: HH,
+        creatorId: ALICE,
+        name: "Salad",
+        yieldPortions: 1,
+        tags: ["lunch"],
+    });
+    const lookup = async (barcode: string) =>
+        food({ name: "Cottage Cheese", barcode });
+    await addRecipeIngredientByBarcode(
+        recipes,
+        foods,
+        {
+            householdId: HH,
+            recipeId: pasta.id,
+            barcode: "070852010016",
+            amount: 50,
+        },
+        { lookup },
+    );
+    await addFoodByBarcode(
+        fridge,
+        foods,
+        {
+            householdId: HH,
+            locationId: loc.id,
+            barcode: "070852010016",
+            amount: 50,
+        },
+        { lookup },
+    );
+    const peanut = await addRecipeManualIngredient(recipes, foods, {
+        householdId: HH,
+        recipeId: salad.id,
+        name: "peanut butter",
+        amount: 20,
+    });
+    await updateFood(foods, HH, peanut.foodId!, {
+        allergens: ["peanut"],
+        nutritionSource: "manual",
+    });
+    const catalog = new Map(
+        (await foods.listFoods(HH)).map((row) => [row.id, row]),
+    );
+    const stock = (await fridge.listItems(HH)).map((item) => ({
+        identity: item.identity,
+        quantity: item.quantity,
+        foodId: item.foodId,
+    }));
+    const byTag = await listRecipesFiltered(recipes, HH, catalog, stock, {
+        tag: "Dinner",
+    });
+    expect(byTag.map((row) => row.name)).toEqual(["Pasta"]);
+    const canMake = await listRecipesFiltered(recipes, HH, catalog, stock, {
+        canMakeNow: true,
+    });
+    expect(canMake.map((row) => row.name)).toEqual(["Pasta"]);
+    const safe = await listRecipesFiltered(recipes, HH, catalog, stock, {
+        safeFor: {
+            allergens: [
+                {
+                    id: "a1",
+                    householdId: HH,
+                    userId: BOB,
+                    allergen: "peanut",
+                    otherLabel: null,
+                },
+            ],
+            dislikes: [],
+        },
+    });
+    expect(safe.map((row) => row.name)).toEqual(["Pasta"]);
+});
+
+test("importRecipeFromText find-or-creates foods and reports nutrition gaps", async () => {
+    const store = createMemoryRecipesStore();
+    const foods = createMemoryFoodsStore();
+    const result = await importRecipeFromText(
+        store,
+        foods,
+        {
+            householdId: HH,
+            creatorId: ALICE,
+            text: "Pancakes\nMix and fry.",
+            sourceUrl: "https://example.com/pancakes",
+            name: "Pancakes",
+            yieldPortions: 4,
+            tags: ["breakfast"],
+            ingredients: [
+                { name: "Flour", amount: 120, unit: "g", note: "sifted" },
+                { name: "Milk", amount: 200, unit: "ml" },
+            ],
+        },
+        { lookup: async () => null },
+    );
+    expect(result.recipe.name).toBe("Pancakes");
+    expect(result.recipe.instructions).toBe("Pancakes\nMix and fry.");
+    expect(result.recipe.sourceUrl).toBe("https://example.com/pancakes");
+    expect(result.ingredients).toHaveLength(2);
+    expect(result.ingredients[0]?.note).toBe("sifted");
+    expect(result.ingredients[0]?.foodId).toBeTruthy();
+    expect(result.ingredients[1]?.quantity.unit).toBe("ml");
+    expect(
+        result.gaps.find((row) => row.displayName === "Flour")?.missing,
+    ).toContain("nutrition");
+    expect(
+        result.gaps.find((row) => row.displayName === "Milk")?.missing,
+    ).toEqual(["nutrition", "grams_per_ml"]);
+    const again = await importRecipeFromText(
+        store,
+        foods,
+        {
+            householdId: HH,
+            creatorId: ALICE,
+            text: "More pancakes",
+            name: "Pancakes 2",
+            ingredients: [{ name: "flour", amount: 50 }],
+        },
+        { lookup: async () => null },
+    );
+    expect(again.ingredients[0]?.foodId).toBe(result.ingredients[0]?.foodId);
 });

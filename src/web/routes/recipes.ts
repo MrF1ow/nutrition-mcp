@@ -16,7 +16,11 @@ import {
     deleteRecipe,
     RecipeForbiddenError,
     RecipeInputError,
+    removeRecipeIngredient,
+    reorderRecipeIngredients,
     setPersonPortion,
+    updateRecipe,
+    updateRecipeIngredient,
 } from "../../domain/recipes.js";
 import { listHouseholdMembers } from "../../db/household.js";
 import { liveFridgeStore } from "../../db/fridge.js";
@@ -66,7 +70,11 @@ async function recipeFormError(
 }
 
 recipesRoutes.get("/recipes", requireSiteUser, async (c) => {
-    const page = await renderRecipesListPage(c.get("userId"));
+    const page = await renderRecipesListPage(c.get("userId"), undefined, {
+        tag: c.req.query("tag") ?? "",
+        canMakeNow: c.req.query("can_make_now") === "1",
+        safeFor: c.req.query("safe_for") ?? "",
+    });
     return c.html(page.html, page.status);
 });
 
@@ -98,6 +106,122 @@ recipesRoutes.get("/recipes/:id", requireSiteUser, async (c) => {
     );
     return c.html(page.html, page.status);
 });
+
+recipesRoutes.post("/recipes/:id", requireMember, async (c) => {
+    const userId = c.get("userId");
+    const member = siteMember(c);
+    const recipeId = c.req.param("id");
+    const body = await c.req.parseBody();
+    try {
+        const prepRaw = formText(body, "prep_minutes").trim();
+        const cookRaw = formText(body, "cook_minutes").trim();
+        await updateRecipe(liveRecipesStore(), member.householdId, recipeId, {
+            name: formText(body, "name"),
+            yieldPortions: formAmount(body, "yield_portions"),
+            instructions: formText(body, "instructions"),
+            sourceUrl: formText(body, "source_url"),
+            tags: formText(body, "tags").split(","),
+            notes: formText(body, "notes"),
+            prepMinutes: prepRaw === "" ? null : Number(prepRaw),
+            cookMinutes: cookRaw === "" ? null : Number(cookRaw),
+        });
+    } catch (err) {
+        const page = await recipeFormError(userId, recipeId, err);
+        return c.html(page.html, page.status);
+    }
+    return c.redirect(`/recipes/${recipeId}`);
+});
+
+recipesRoutes.post(
+    "/recipes/:id/ingredients/:ingredientId/delete",
+    requireMember,
+    async (c) => {
+        const userId = c.get("userId");
+        const member = siteMember(c);
+        const recipeId = c.req.param("id");
+        try {
+            await removeRecipeIngredient(
+                liveRecipesStore(),
+                member.householdId,
+                recipeId,
+                c.req.param("ingredientId"),
+            );
+        } catch (err) {
+            const page = await recipeFormError(userId, recipeId, err);
+            return c.html(page.html, page.status);
+        }
+        return c.redirect(`/recipes/${recipeId}`);
+    },
+);
+
+recipesRoutes.post(
+    "/recipes/:id/ingredients/:ingredientId/move",
+    requireMember,
+    async (c) => {
+        const userId = c.get("userId");
+        const member = siteMember(c);
+        const recipeId = c.req.param("id");
+        const ingredientId = c.req.param("ingredientId");
+        const body = await c.req.parseBody();
+        try {
+            const store = liveRecipesStore();
+            const ingredients = await store.listIngredients(
+                member.householdId,
+                recipeId,
+            );
+            const index = ingredients.findIndex(
+                (row) => row.id === ingredientId,
+            );
+            if (index < 0) throw new RecipeInputError("Unknown ingredient.");
+            const direction = formText(body, "direction");
+            const swapWith = direction === "up" ? index - 1 : index + 1;
+            if (swapWith < 0 || swapWith >= ingredients.length) {
+                return c.redirect(`/recipes/${recipeId}`);
+            }
+            const ids = ingredients.map((row) => row.id);
+            const tmp = ids[index]!;
+            ids[index] = ids[swapWith]!;
+            ids[swapWith] = tmp;
+            await reorderRecipeIngredients(
+                store,
+                member.householdId,
+                recipeId,
+                ids,
+            );
+        } catch (err) {
+            const page = await recipeFormError(userId, recipeId, err);
+            return c.html(page.html, page.status);
+        }
+        return c.redirect(`/recipes/${recipeId}`);
+    },
+);
+
+recipesRoutes.post(
+    "/recipes/:id/ingredients/:ingredientId",
+    requireMember,
+    async (c) => {
+        const userId = c.get("userId");
+        const member = siteMember(c);
+        const recipeId = c.req.param("id");
+        const body = await c.req.parseBody();
+        try {
+            await updateRecipeIngredient(
+                liveRecipesStore(),
+                member.householdId,
+                recipeId,
+                c.req.param("ingredientId"),
+                {
+                    amount: formAmount(body, "amount"),
+                    note: formText(body, "note"),
+                },
+            );
+        } catch (err) {
+            const page = await recipeFormError(userId, recipeId, err);
+            return c.html(page.html, page.status);
+        }
+        return c.redirect(`/recipes/${recipeId}`);
+    },
+);
 
 recipesRoutes.post("/recipes/:id/delete", requireMember, async (c) => {
     const userId = c.get("userId");

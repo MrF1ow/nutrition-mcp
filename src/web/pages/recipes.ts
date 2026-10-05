@@ -1,4 +1,4 @@
-import { formatQuantity } from "../../domain/quantity.js";
+import { formatQuantity, isQuantityUnit } from "../../domain/quantity.js";
 import type {
     Recipe,
     RecipeIngredientView,
@@ -22,11 +22,18 @@ import {
 export type RecipeMember = { userId: string; displayName: string };
 export type RecipeStoreOption = { id: string; name: string };
 
+export type RecipesPageFilter = {
+    tag: string;
+    canMakeNow: boolean;
+    safeFor: string;
+};
+
 export type RecipesPageView = {
     chrome: ViewerChrome;
     recipes: Recipe[];
     members: RecipeMember[];
     viewerId: string;
+    filter?: RecipesPageFilter;
     error?: string;
 };
 
@@ -40,17 +47,26 @@ export type RecipeDetailView = {
     filterUserId: string;
     portionCount: number;
     macros: RecipeMacros;
+    macrosPerPortion?: RecipeMacros;
     allergenWarning?: string;
     dislikeNote?: string;
     isOwner: boolean;
     error?: string;
 };
 
-function gramsLabel(amount: number): string {
-    return formatQuantity({ amount, unit: "g" });
+function quantityLabel(amount: number, unit: string): string {
+    if (isQuantityUnit(unit)) {
+        return formatQuantity({ amount, unit });
+    }
+    return `${amount} ${unit}`;
 }
 
 export function renderRecipesPage(view: RecipesPageView): string {
+    const filter = view.filter ?? {
+        tag: "",
+        canMakeNow: false,
+        safeFor: "",
+    };
     const error = renderErrorBanner(view.error);
     const empty = view.recipes.length === 0 ? renderEmptyRecipes() : "";
     const cards = view.recipes
@@ -59,12 +75,31 @@ export function renderRecipesPage(view: RecipesPageView): string {
                 id: recipe.id,
                 name: recipe.name,
                 yieldPortions: recipe.yieldPortions,
+                tags: recipe.tags,
             }),
         )
         .join("");
+    const memberOptions = [
+        `<option value="">Anyone</option>`,
+        ...view.members.map((member) => {
+            const sel = member.userId === filter.safeFor ? " selected" : "";
+            return `<option value="${escapeHtml(member.userId)}"${sel}>${escapeHtml(member.displayName)}</option>`;
+        }),
+    ].join("");
     const body = `
         <h1>Recipes</h1>
         ${error}
+        <form class="recipe-list-filters" method="get" action="/recipes">
+            <label for="recipe-tag">Tag</label>
+            <input id="recipe-tag" name="tag" type="text" value="${escapeHtml(filter.tag)}" autocomplete="off" />
+            <label class="recipe-filter-check">
+                <input type="checkbox" name="can_make_now" value="1"${filter.canMakeNow ? " checked" : ""} />
+                Can make now
+            </label>
+            <label for="recipe-safe-for">Safe for</label>
+            <select id="recipe-safe-for" name="safe_for">${memberOptions}</select>
+            <button type="submit">Filter</button>
+        </form>
         ${empty}
         <ul class="recipe-list">${cards}</ul>
         <form class="recipe-create" method="post" action="/recipes">
@@ -84,26 +119,45 @@ export function renderRecipesPage(view: RecipesPageView): string {
     });
 }
 
-function ingredientRow(ingredient: RecipeIngredientView): string {
+function ingredientRow(
+    recipeId: string,
+    ingredient: RecipeIngredientView,
+): string {
     return renderRecipeIngredientRow({
         id: ingredient.id,
+        recipeId,
         displayName: ingredient.displayName,
-        totalLabel: gramsLabel(ingredient.quantity.amount),
-        perPortionLabel: gramsLabel(ingredient.perPortionAmount),
-        personLabel: gramsLabel(ingredient.personAmount),
+        totalLabel: quantityLabel(
+            ingredient.quantity.amount,
+            ingredient.quantity.unit,
+        ),
+        perPortionLabel: quantityLabel(
+            ingredient.perPortionAmount,
+            ingredient.quantity.unit,
+        ),
+        personLabel: quantityLabel(
+            ingredient.personAmount,
+            ingredient.quantity.unit,
+        ),
         perPortionAmount: ingredient.perPortionAmount,
         personAmount: ingredient.personAmount,
+        totalAmount: ingredient.quantity.amount,
+        note: ingredient.note,
     });
 }
 
-function macrosBlock(macros: RecipeMacros): string {
+function macrosBlock(
+    macros: RecipeMacros,
+    scope: "portion" | "person",
+): string {
+    const label = scope === "portion" ? "Per portion" : "This portion";
     if (macros.incomplete && macros.calories == null) {
-        return `<p class="recipe-macros" data-incomplete="true">Macros incomplete</p>`;
+        return `<p class="recipe-macros" data-scope="${scope}" data-incomplete="true">${escapeHtml(label)}: Macros incomplete</p>`;
     }
     const incomplete = macros.incomplete
-        ? `<p class="recipe-macros-incomplete">Macros incomplete</p>`
+        ? `<p class="recipe-macros-incomplete">${escapeHtml(label)}: Macros incomplete</p>`
         : "";
-    return `<p class="recipe-macros" data-incomplete="${macros.incomplete ? "true" : "false"}" data-calories="${escapeHtml(String(macros.calories ?? ""))}" data-protein="${escapeHtml(String(macros.protein_g ?? ""))}">Calories ${escapeHtml(String(macros.calories ?? "—"))} · Protein ${escapeHtml(String(macros.protein_g ?? "—"))} g · Carbs ${escapeHtml(String(macros.carbs_g ?? "—"))} g · Fat ${escapeHtml(String(macros.fat_g ?? "—"))} g</p>${incomplete}`;
+    return `<p class="recipe-macros" data-scope="${scope}" data-incomplete="${macros.incomplete ? "true" : "false"}" data-calories="${escapeHtml(String(macros.calories ?? ""))}" data-protein="${escapeHtml(String(macros.protein_g ?? ""))}">${escapeHtml(label)}: Calories ${escapeHtml(String(macros.calories ?? "—"))} · Protein ${escapeHtml(String(macros.protein_g ?? "—"))} g · Carbs ${escapeHtml(String(macros.carbs_g ?? "—"))} g · Fat ${escapeHtml(String(macros.fat_g ?? "—"))} g</p>${incomplete}`;
 }
 
 export function renderRecipeDetailPage(view: RecipeDetailView): string {
@@ -114,7 +168,9 @@ export function renderRecipeDetailPage(view: RecipeDetailView): string {
     const dislike = view.dislikeNote
         ? `<p class="dislike-note">${escapeHtml(view.dislikeNote)}</p>`
         : "";
-    const rows = view.ingredients.map(ingredientRow).join("");
+    const rows = view.ingredients
+        .map((ingredient) => ingredientRow(view.recipe.id, ingredient))
+        .join("");
     const viewingSelf = view.filterUserId === view.viewerId;
     const memberOptions = view.members
         .map((member) => {
@@ -144,6 +200,11 @@ ${renderMemberMultiSelect(view.members, [view.viewerId])}
 <select id="recipe-store" name="store_id" required>${storeOptions}</select>
 <button type="submit">Add to grocery</button>
 </form>`;
+    const recipeId = escapeHtml(view.recipe.id);
+    const personMacros =
+        view.portionCount === 1 ? "" : macrosBlock(view.macros, "person");
+    const perPortion = view.macrosPerPortion ?? view.macros;
+    const tagsValue = escapeHtml(view.recipe.tags.join(", "));
     const body = `
         <p class="recipe-back"><a href="/recipes">Recipes</a></p>
         <h1>${escapeHtml(view.recipe.name)}</h1>
@@ -151,13 +212,33 @@ ${renderMemberMultiSelect(view.members, [view.viewerId])}
         ${allergen}
         ${dislike}
         <p class="recipe-yield" data-yield="${escapeHtml(String(view.recipe.yieldPortions))}">Yield ${escapeHtml(String(view.recipe.yieldPortions))}</p>
-        <form class="recipe-filter" method="get" action="/recipes/${escapeHtml(view.recipe.id)}" data-filter-member="${escapeHtml(view.filterUserId)}">
+        <form class="recipe-edit" method="post" action="/recipes/${recipeId}">
+            <label for="edit-name">Name</label>
+            <input id="edit-name" name="name" type="text" required maxlength="80" value="${escapeHtml(view.recipe.name)}" />
+            <label for="edit-yield">Yield</label>
+            <input id="edit-yield" name="yield_portions" type="number" min="0" step="any" required value="${escapeHtml(String(view.recipe.yieldPortions))}" />
+            <label for="edit-source">Source URL</label>
+            <input id="edit-source" name="source_url" type="text" value="${escapeHtml(view.recipe.sourceUrl ?? "")}" />
+            <label for="edit-tags">Tags</label>
+            <input id="edit-tags" name="tags" type="text" value="${tagsValue}" placeholder="dinner, vegetarian" />
+            <label for="edit-prep">Prep minutes</label>
+            <input id="edit-prep" name="prep_minutes" type="number" min="0" step="1" value="${escapeHtml(view.recipe.prepMinutes == null ? "" : String(view.recipe.prepMinutes))}" />
+            <label for="edit-cook">Cook minutes</label>
+            <input id="edit-cook" name="cook_minutes" type="number" min="0" step="1" value="${escapeHtml(view.recipe.cookMinutes == null ? "" : String(view.recipe.cookMinutes))}" />
+            <label for="edit-instructions">Instructions</label>
+            <textarea id="edit-instructions" name="instructions" rows="8">${escapeHtml(view.recipe.instructions ?? "")}</textarea>
+            <label for="edit-notes">Notes</label>
+            <textarea id="edit-notes" name="notes" rows="3">${escapeHtml(view.recipe.notes ?? "")}</textarea>
+            <button type="submit">Save recipe</button>
+        </form>
+        <form class="recipe-filter" method="get" action="/recipes/${recipeId}" data-filter-member="${escapeHtml(view.filterUserId)}">
             <label for="recipe-member">Filter by person</label>
             <select id="recipe-member" name="member">${memberOptions}</select>
             <button type="submit">View</button>
         </form>
         ${portion}
-        ${macrosBlock(view.macros)}
+        ${macrosBlock(perPortion, "portion")}
+        ${personMacros}
         <ul class="recipe-ingredients">${rows}</ul>
         <h2>Add ingredient</h2>
         ${renderFoodPicker({
@@ -167,7 +248,7 @@ ${renderMemberMultiSelect(view.members, [view.viewerId])}
             includeQuantity: true,
         })}
         ${grocery}
-        <form class="recipe-delete" method="post" action="/recipes/${escapeHtml(view.recipe.id)}/delete">
+        <form class="recipe-delete" method="post" action="/recipes/${recipeId}/delete">
             <button type="submit">Delete recipe</button>
         </form>
     `;

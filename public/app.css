@@ -704,10 +704,15 @@ body {
 }
 
 .recipe-create,
+.recipe-edit,
 .recipe-portion,
 .recipe-filter,
+.recipe-list-filters,
 .recipe-add-grocery,
-.recipe-delete {
+.recipe-delete,
+.recipe-ingredient-edit,
+.recipe-ingredient-move,
+.recipe-ingredient-delete {
     display: grid;
     gap: 8px;
     max-width: 420px;
@@ -716,13 +721,23 @@ body {
 
 .recipe-create input,
 .recipe-create button,
+.recipe-edit input,
+.recipe-edit textarea,
+.recipe-edit button,
 .recipe-portion input,
 .recipe-portion button,
 .recipe-filter select,
 .recipe-filter button,
+.recipe-list-filters input,
+.recipe-list-filters select,
+.recipe-list-filters button,
 .recipe-add-grocery select,
 .recipe-add-grocery button,
-.recipe-delete button {
+.recipe-delete button,
+.recipe-ingredient-edit input,
+.recipe-ingredient-edit button,
+.recipe-ingredient-move button,
+.recipe-ingredient-delete button {
     font: inherit;
     color: var(--text);
     background: var(--panel);
@@ -733,12 +748,39 @@ body {
 }
 
 .recipe-create button,
+.recipe-edit button,
 .recipe-portion button,
 .recipe-add-grocery button {
     color: var(--accent-ink);
     background: var(--accent);
     border-color: var(--accent);
     font-weight: 600;
+}
+
+.recipe-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0;
+}
+
+.recipe-tag {
+    font-size: 0.85em;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+}
+
+.recipe-filter-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.recipe-ingredient-note {
+    color: var(--text-dim);
+    font-style: italic;
 }
 
 .recipe-macros {
