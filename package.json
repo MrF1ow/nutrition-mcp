@@ -35,6 +35,7 @@
         "format": "bunx prettier --write .",
         "format:check": "bunx prettier --check .",
         "typecheck": "bun run scripts/typecheck.ts",
+        "db:dryrun": "bun run scripts/migration-dryrun.ts",
         "gen:pages": "bun run scripts/gen-login.ts",
         "gen:all": "bun run gen:pages",
         "generate-oauth-creds": "echo \"OAUTH_CLIENT_ID=$(openssl rand -hex 16)\" && echo \"OAUTH_CLIENT_SECRET=$(openssl rand -hex 32)\""

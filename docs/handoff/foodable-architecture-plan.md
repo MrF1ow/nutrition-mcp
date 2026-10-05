@@ -1,12 +1,35 @@
 # Foodable architecture plan
 
-Status: draft, not started. Written 2026-10-04 from a full walkthrough of the codebase at `47da66f`.
+Status: Phases 0 to 7 are merged (`3687f53`, PRs #31 to #44). Their migrations are not yet applied to production. Phase 8 is not started. Written 2026-10-04 from a full walkthrough of the codebase at `47da66f`. Status and checkboxes updated 2026-10-05 after an audit of `main`.
 
 Foodable is a self-hosted MCP platform for one household. People use it through their AI agents and a small web app. It has five pillars: Fridge, Groceries, Nutrition, Recipes, and Settings. It is a fork of `akutishevsky/nutrition-mcp`. The fork is personal and open source. It is not a public hosted service. The deploy target and the domain are not decided yet.
 
 The goal is one cohesive system. Every pillar refers to the same foods. Buying, storing, cooking, and eating are steps of one loop, not four separate trackers.
 
-## Where we are
+## Status at handoff (2026-10-05)
+
+`main` passes 1057 tests, `bun run typecheck` and `bun run format:check`. A checked box below means the code is on `main` and was checked against it. It does not mean the item has run in production. Nothing from Phase 2 on has.
+
+**Before production:**
+
+1. Back up: a dashboard backup or `pg_dump`, plus `export_all_data` for each member.
+2. `bun run db:dryrun --data prod-data.sql` against a data-only dump of production. See `docs/self-hosting.md`, "Upgrading an existing deploy".
+3. `supabase db push` applies nine pending migrations. Three are the Phase 0 drops (`20261004230000` to `20261004230200`). Six are Phases 2 to 6 (`20261005010000` to `20261005040000`). Then deploy `main`. The code expects the new tables, so it must not ship first.
+4. Walk the live checks in each phase's Verify list: catalog, units, food-backed meals, put away, cook, eat, discard, and export.
+
+The pre-push dry run caught two bugs in the unapplied migrations, and both were fixed in place. The backfill copied `food_cache` macros into the per-100 g columns even when Open Food Facts reported them per serving. The fridge-locations copy hit the unique key when a household's array repeated a name. `scripts/migration-dryrun/` holds the fixture that pins both.
+
+**Open items and deviations:**
+
+- **Manual fridge edits skip the ledger.** `add_fridge_item`, `update_fridge_item`, `delete_fridge_item` and their web forms change `fridge_items` without a `stock_movements` row. The `adjust` reason is defined but never written. Phase 5's "every stock change goes through one function" therefore does not hold yet. Fix this before anything reads the ledger as a history (usage rates, suggested groceries).
+- **Tool count is 69, not about 40.** The listed merges all landed. Phases 2 to 6 added the food, recipe and stock tools on top.
+- **`fridgeLocations` stays in the household config type and mapper** (`src/household.ts`). It is no longer exposed through MCP or the web. It goes with the column in Phase 8.
+- **The Phase 1 layout is partial.** `src/db/`, `src/domain/`, `src/mcp/` and `src/web/` exist. Auth, OAuth, middleware, rate limiting and analytics still sit at the top of `src/`. `src/mcp.ts` is a re-export barrel. `domain/recipes.ts`, `db/nutrition.ts` and `mcp/shared.ts` are over 1,300 lines.
+- **`groupMealVariations` still groups by text,** not by the `food_id` set.
+- **Old-name leftovers:** the export object path `nutrition-mcp-export.zip`, `bun.lock`'s package name, and test fixtures. The repo URLs wait on the repo rename.
+- **Gated by decision:** the repo rename, brand assets and accent (no logo yet, so sky stays), and the optional weekly household digest. The existing weekly digest is the nutrition-only resource.
+
+## Where we started (2026-10-04)
 
 The baseline is healthy. After `bun install && bun run gen:all`, 1028 tests pass and `bun run typecheck` is clean. The domain modules (`fridge.ts`, `grocery.ts`, `recipes.ts`, `settings.ts`, `rules.ts`, `linking.ts`, `quantity.ts`) follow one sound pattern. Each has a store interface, an in-memory store, row mappers, and pure functions. Keep that pattern for everything new.
 
@@ -53,13 +76,13 @@ Phases 3 and 6 can run in parallel after 2. Each phase is one or more PRs. Each 
 
 ### Rename
 
-- [ ] Set `package.json` `name: "foodable"`, `description`, `author`, `homepage`, and `repository` to the new GitHub repo. Remove `keywords` that name the old product.
-- [ ] Set the `McpServer` constructor name and title in `src/mcp.ts` to Foodable.
-- [ ] Reset the version. Recommendation: `0.1.0`. The version then lives in two places, `package.json` and `src/mcp.ts`, because `server.json` goes away below.
-- [ ] Rewrite `SERVER_INSTRUCTIONS` headline to Foodable. The full rewrite is Phase 7.
-- [ ] Replace the product name in `src/copy/login*.ts` and `chrome*.ts`, `scripts/site-partials.ts`, `public/site.js` header, `public/styles.css` comments, and `src/export.ts` README text. Also replace it in `src/foods.ts`, where the default OFF User-Agent must name Foodable and keep the operator contact from `OFF_USER_AGENT`.
-- [ ] Update `LICENSE` to add your copyright line. **Keep the original `akutishevsky` copyright notice.** MIT requires it to stay.
-- [ ] Rewrite `README.md` for Foodable. Cover what it is, the five pillars, self-hosting, connecting an agent, and a "Forked from nutrition-mcp" credit.
+- [x] Set `package.json` `name: "foodable"`, `description`, `author`, `homepage`, and `repository` to the new GitHub repo. Remove `keywords` that name the old product.
+- [x] Set the `McpServer` constructor name and title in `src/mcp.ts` to Foodable.
+- [x] Reset the version. Recommendation: `0.1.0`. The version then lives in two places, `package.json` and `src/mcp.ts`, because `server.json` goes away below.
+- [x] Rewrite `SERVER_INSTRUCTIONS` headline to Foodable. The full rewrite is Phase 7.
+- [x] Replace the product name in `src/copy/login*.ts` and `chrome*.ts`, `scripts/site-partials.ts`, `public/site.js` header, `public/styles.css` comments, and `src/export.ts` README text. Also replace it in `src/foods.ts`, where the default OFF User-Agent must name Foodable and keep the operator contact from `OFF_USER_AGENT`.
+- [x] Update `LICENSE` to add your copyright line. **Keep the original `akutishevsky` copyright notice.** MIT requires it to stay.
+- [x] Rewrite `README.md` for Foodable. Cover what it is, the five pillars, self-hosting, connecting an agent, and a "Forked from nutrition-mcp" credit.
 - [ ] Rename the GitHub repo. Old URLs redirect, but update the remote anyway.
 
 ### Brand assets
@@ -71,32 +94,32 @@ The logos exist but are not in the repo yet. Drop them in `public/brand/`. Neede
 - [ ] `apple-touch-icon.png` at 180 px.
 - [ ] `icon-192.png` and `icon-512.png`, if the web app should become installable later (manifest is out of scope here).
 - [ ] A brand accent hex. Decide whether it replaces `sky` as the default swatch in `ACCENT_SWATCHES` (`src/app/shell.ts`) and the widget tokens (`public/widgets/src/shared/tokens.css`).
-- [ ] Delete `public/og.png`. There are no public pages to share.
+- [x] Delete `public/og.png`. There are no public pages to share.
 
 ### Remove upstream leftovers
 
-- [ ] Remove Patreon: `src/patreon.ts`, `src/patreon.test.ts`, `getPatreonTokenStore` and `seedPatreonTokensFromEnv` in `src/supabase.ts`, the related wiring in `src/index.ts`, and `.github/FUNDING.yml`. Add a migration that drops the `patreon_tokens` table.
-- [ ] Remove landing stats and the world map: `getLandingStats`, `timezoneLevels`, `TZ_LEVEL_THRESHOLDS`, `LEGACY_TZ_LEVEL`, `scripts/gen-map-data.ts`, `public/map-data.json`, and the `/api/stats` remnants in `ttl-cache.ts` comments. Add a migration that drops the landing-stats functions and views from `20260624090000`, `20260808120000`, and `20260815071050`.
-- [ ] Remove Google Analytics and Glama: the gtag block in `scripts/site-partials.ts`, the GA and googletagmanager hosts in the CSP at `src/index.ts:160`, and the `/.well-known/glama.json` route.
-- [ ] Remove `scripts/depersonalize.ts` and its `package.json` script. There is nothing left to depersonalize.
-- [ ] Remove `src/alt-pages.test.ts` if it only pins removed marketing behavior.
-- [ ] Trim `src/public-site.test.ts` to what still matters: the login template and `/` returning the app or login.
-- [ ] Remove registry publishing: `server.json` and `.github/workflows/publish-mcp.yml`. Keep `ci.yml`.
-- [ ] Decide on Google Fonts. Recommendation: self-host the three families under `public/fonts/` or switch to a system stack. Either way the CSP loses its third-party font and style hosts.
-- [ ] Decide on protocol-era analytics. Recommendation: drop `protocol_era` and `client_name` from `tool_analytics`, and keep the plain per-tool duration and outcome rows. They are cheap and useful for a personal deploy. Keep the dual-era `/mcp` endpoint itself. It is the SDK default and costs nothing.
-- [ ] Decide on i18n. **Recommendation: English only.** That deletes `src/copy/*.{de,es,fr,it,ja,nl,pl,uk}.ts`, `public/{locale}/`, `LOCALES` and the locale switcher, `set_language`, and `profiles.locale` reads. The widget `@i18n` marker would inline the English dictionary only. The new app pages are English-only already. If someone in the household needs another language, keep the machinery and keep just that one locale.
-- [ ] Keep the CSV meal importer (`import.ts`, `csv.ts`, `import-meals` widget). It is how history comes in from MyFitnessPal, Cronometer, and similar apps.
+- [x] Remove Patreon: `src/patreon.ts`, `src/patreon.test.ts`, `getPatreonTokenStore` and `seedPatreonTokensFromEnv` in `src/supabase.ts`, the related wiring in `src/index.ts`, and `.github/FUNDING.yml`. Add a migration that drops the `patreon_tokens` table.
+- [x] Remove landing stats and the world map: `getLandingStats`, `timezoneLevels`, `TZ_LEVEL_THRESHOLDS`, `LEGACY_TZ_LEVEL`, `scripts/gen-map-data.ts`, `public/map-data.json`, and the `/api/stats` remnants in `ttl-cache.ts` comments. Add a migration that drops the landing-stats functions and views from `20260624090000`, `20260808120000`, and `20260815071050`.
+- [x] Remove Google Analytics and Glama: the gtag block in `scripts/site-partials.ts`, the GA and googletagmanager hosts in the CSP at `src/index.ts:160`, and the `/.well-known/glama.json` route.
+- [x] Remove `scripts/depersonalize.ts` and its `package.json` script. There is nothing left to depersonalize.
+- [x] Remove `src/alt-pages.test.ts` if it only pins removed marketing behavior.
+- [x] Trim `src/public-site.test.ts` to what still matters: the login template and `/` returning the app or login.
+- [x] Remove registry publishing: `server.json` and `.github/workflows/publish-mcp.yml`. Keep `ci.yml`.
+- [x] Decide on Google Fonts. Recommendation: self-host the three families under `public/fonts/` or switch to a system stack. Either way the CSP loses its third-party font and style hosts.
+- [x] Decide on protocol-era analytics. Recommendation: drop `protocol_era` and `client_name` from `tool_analytics`, and keep the plain per-tool duration and outcome rows. They are cheap and useful for a personal deploy. Keep the dual-era `/mcp` endpoint itself. It is the SDK default and costs nothing.
+- [x] Decide on i18n. **Recommendation: English only.** That deletes `src/copy/*.{de,es,fr,it,ja,nl,pl,uk}.ts`, `public/{locale}/`, `LOCALES` and the locale switcher, `set_language`, and `profiles.locale` reads. The widget `@i18n` marker would inline the English dictionary only. The new app pages are English-only already. If someone in the household needs another language, keep the machinery and keep just that one locale.
+- [x] Keep the CSV meal importer (`import.ts`, `csv.ts`, `import-meals` widget). It is how history comes in from MyFitnessPal, Cronometer, and similar apps.
 
 ### Host-agnostic config
 
-- [ ] Add optional `PUBLIC_ORIGIN` to `.env.example`. When set, `getBaseUrl` in `src/url.ts` returns it and ignores `X-Forwarded-*`. Today `X-Forwarded-Host` is trusted unconditionally. Without a proxy that strips it, a client can steer the OAuth metadata URLs. When unset, keep current behavior for local dev.
-- [ ] Strip the DigitalOcean, 512 MB, and auto-deploy commentary from `Dockerfile`. Keep `--smol`.
-- [ ] Add a `docs/self-hosting.md` covering Supabase cloud vs self-hosted Supabase, migrations (`supabase db push`), the env vars, a reverse proxy example, and the first-user flow from `closed-household-plan.md`.
-- [ ] Rewrite `CLAUDE.md`. Delete "Deploying" (DigitalOcean), "Publishing to the registry", the i18n sections that no longer apply, and the `tool_analytics` legacy-retirement paragraph. Add a section on the architecture rules in this plan.
+- [x] Add optional `PUBLIC_ORIGIN` to `.env.example`. When set, `getBaseUrl` in `src/url.ts` returns it and ignores `X-Forwarded-*`. Today `X-Forwarded-Host` is trusted unconditionally. Without a proxy that strips it, a client can steer the OAuth metadata URLs. When unset, keep current behavior for local dev.
+- [x] Strip the DigitalOcean, 512 MB, and auto-deploy commentary from `Dockerfile`. Keep `--smol`.
+- [x] Add a `docs/self-hosting.md` covering Supabase cloud vs self-hosted Supabase, migrations (`supabase db push`), the env vars, a reverse proxy example, and the first-user flow from `closed-household-plan.md`.
+- [x] Rewrite `CLAUDE.md`. Delete "Deploying" (DigitalOcean), "Publishing to the registry", the i18n sections that no longer apply, and the `tool_analytics` legacy-retirement paragraph. Add a section on the architecture rules in this plan.
 
 ### Verify
 
-- [ ] `bun test`, `bun run typecheck`, `bun run format:check` are green.
+- [x] `bun test`, `bun run typecheck`, `bun run format:check` are green.
 - [ ] `grep -ri "nutrition-mcp\|akutishevsky\|patreon\|gtag"` over the tree hits only `LICENSE`, the README credit, and old migration files.
 - [ ] Login renders with the Foodable logo. `/mcp` `initialize` returns server name Foodable. The icon URL resolves.
 
@@ -131,17 +154,17 @@ src/
     dashboard.ts     the page loaders (today's src/dashboard.ts)
 ```
 
-- [ ] **1a.** Split `supabase.ts` into `db/*`. Keep a temporary `supabase.ts` barrel that re-exports everything, so `mock.module("./supabase.js")` in tests keeps working. Respect the CLAUDE.md rule: one mock window, restore from a snapshot taken before `mock.module`. Retire the barrel in 1d.
-- [ ] **1b.** Split `mcp.ts` into `mcp/tools/*`. Each file exports `registerXTools(server, ctx)`. `ctx` carries `auth`, `analytics`, actor helpers, and `uiMeta`. The tool list and order must be identical. `mcp.test.ts` asserts `TOOLS` against `tools/list`, which is the guard.
-- [ ] **1c.** Split `index.ts` routes into `web/routes/*`, plus `web/middleware.ts` setting `c.var.member`. Add `formText` and `formAmount` to a `web/form.ts`.
-- [ ] **1d.** Move pure modules into `domain/`, delete the barrel, and update `scripts/typecheck.ts` if paths matter.
-- [ ] **1e.** Split `mcp.test.ts` (6.6k lines) by domain only if the single-mock-window rule allows it. Otherwise leave it and note why. The Linux CI mock leak is documented in CLAUDE.md.
+- [x] **1a.** Split `supabase.ts` into `db/*`. Keep a temporary `supabase.ts` barrel that re-exports everything, so `mock.module("./supabase.js")` in tests keeps working. Respect the CLAUDE.md rule: one mock window, restore from a snapshot taken before `mock.module`. Retire the barrel in 1d.
+- [x] **1b.** Split `mcp.ts` into `mcp/tools/*`. Each file exports `registerXTools(server, ctx)`. `ctx` carries `auth`, `analytics`, actor helpers, and `uiMeta`. The tool list and order must be identical. `mcp.test.ts` asserts `TOOLS` against `tools/list`, which is the guard.
+- [x] **1c.** Split `index.ts` routes into `web/routes/*`, plus `web/middleware.ts` setting `c.var.member`. Add `formText` and `formAmount` to a `web/form.ts`.
+- [x] **1d.** Move pure modules into `domain/`, delete the barrel, and update `scripts/typecheck.ts` if paths matter.
+- [x] **1e.** Split `mcp.test.ts` (6.6k lines) by domain only if the single-mock-window rule allows it. Otherwise leave it and note why. The Linux CI mock leak is documented in CLAUDE.md. _Done as far as the rule allows: the mock-free formatter tests moved to `mcp.format.test.ts` (#38)._
 
 ### Verify
 
 - [ ] Test count is unchanged (1028 or whatever Phase 0 leaves), all green.
-- [ ] `tools/list` output is byte-identical before and after (snapshot it in 1b).
-- [ ] No source file is over about 1,200 lines.
+- [x] `tools/list` output is byte-identical before and after (snapshot it in 1b). _`src/mcp/tools-list.snapshot.json` pins names and order._
+- [ ] No source file is over about 1,200 lines. _Three are still over 1,300; see the status section._
 
 ---
 
@@ -232,37 +255,37 @@ Before running against a real database:
 
 ### Code
 
-- [ ] Add a `domain/foods.ts`: `Food` type, `FoodsStore` interface, a memory store, row mappers, and `normalizeFoodName`. Add `findOrCreateFoodByBarcode(store, householdId, barcode, lookup)`, which checks `food_barcodes`, then OFF via `lookupBarcode`, then creates. Add `findOrCreateManualFood(store, householdId, kind, name)`, which checks normalized name and aliases, then creates. Add `updateFood` and `mergeFoods(keepId, dropId)`, which repoints every `food_id` and moves barcodes and aliases. Merge is how duplicates get cleaned up.
-- [ ] Change `addFoodByBarcode`, `addManualFood`, `addSupply`, the grocery equivalents, and the recipe-ingredient adds to resolve a `food_id` through the functions above, then write it. Keep writing `identity` too until Phase 8. Derive it from the food (`via: 'catalog', source: 'foodable', sourceId: food.id`) so `identityKey` keeps working during the transition.
-- [ ] Switch `linking.ts` (`alreadyHaveTag`, `recipeToGroceryRemainder`) to key on `food_id`.
-- [ ] Change `macrosForPerson` in `recipes.ts` to read nutrition from the joined `foods` row instead of `recipe_ingredients.nutrition`. Manual ingredients become complete as soon as someone fills in the food's nutrition once.
-- [ ] Replace the demo picker search. Add `GET /api/foods/search?q=` (site cookie, member only). It returns household foods first (name and alias match), then `searchFoodsByName` OFF hits. The picker script fetches it with debounce. Delete `PICKER_DEMO_FOODS`, `demoFridgeFood`, and `DEMO_HOUSEHOLD_MEMBERS`. Search hits submit `food_id` for household foods or `barcode` for OFF hits.
-- [ ] Add a **Foods** screen under Settings at `/settings/foods`. It lists foods and edits name, brand, aliases, default unit, nutrition per 100 g, allergens, and archive. It also merges two foods. This is the household's food truth.
-- [ ] Add MCP tools: `search_food` returns household foods first, each with `food_id`. Add `get_food`, `upsert_food`, and `merge_foods`. Fridge, grocery, and recipe add tools accept `food_id` as the preferred input, with `barcode` and `name` still accepted and resolved through find-or-create.
-- [ ] Fix the duplicate fridge locations. Add a migration that inserts every `households.fridge_locations` entry missing from `fridge_locations`, preserving order. Delete `update_fridge_locations` and the `fridgeLocations` field from household config. Drop the column in Phase 8.
+- [x] Add a `domain/foods.ts`: `Food` type, `FoodsStore` interface, a memory store, row mappers, and `normalizeFoodName`. Add `findOrCreateFoodByBarcode(store, householdId, barcode, lookup)`, which checks `food_barcodes`, then OFF via `lookupBarcode`, then creates. Add `findOrCreateManualFood(store, householdId, kind, name)`, which checks normalized name and aliases, then creates. Add `updateFood` and `mergeFoods(keepId, dropId)`, which repoints every `food_id` and moves barcodes and aliases. Merge is how duplicates get cleaned up.
+- [x] Change `addFoodByBarcode`, `addManualFood`, `addSupply`, the grocery equivalents, and the recipe-ingredient adds to resolve a `food_id` through the functions above, then write it. Keep writing `identity` too until Phase 8. Derive it from the food (`via: 'catalog', source: 'foodable', sourceId: food.id`) so `identityKey` keeps working during the transition.
+- [x] Switch `linking.ts` (`alreadyHaveTag`, `recipeToGroceryRemainder`) to key on `food_id`.
+- [x] Change `macrosForPerson` in `recipes.ts` to read nutrition from the joined `foods` row instead of `recipe_ingredients.nutrition`. Manual ingredients become complete as soon as someone fills in the food's nutrition once.
+- [x] Replace the demo picker search. Add `GET /api/foods/search?q=` (site cookie, member only). It returns household foods first (name and alias match), then `searchFoodsByName` OFF hits. The picker script fetches it with debounce. Delete `PICKER_DEMO_FOODS`, `demoFridgeFood`, and `DEMO_HOUSEHOLD_MEMBERS`. Search hits submit `food_id` for household foods or `barcode` for OFF hits.
+- [x] Add a **Foods** screen under Settings at `/settings/foods`. It lists foods and edits name, brand, aliases, default unit, nutrition per 100 g, allergens, and archive. It also merges two foods. This is the household's food truth.
+- [x] Add MCP tools: `search_food` returns household foods first, each with `food_id`. Add `get_food`, `upsert_food`, and `merge_foods`. Fridge, grocery, and recipe add tools accept `food_id` as the preferred input, with `barcode` and `name` still accepted and resolved through find-or-create.
+- [ ] Fix the duplicate fridge locations. Add a migration that inserts every `households.fridge_locations` entry missing from `fridge_locations`, preserving order. Delete `update_fridge_locations` and the `fridgeLocations` field from household config. Drop the column in Phase 8. _Migration and tool removal done. The field survives inside `src/household.ts`; see the status section._
 
 ### Verify
 
-- [ ] Memory-store unit tests: find-or-create by barcode, name, and alias. Merge repoints all references. Manual "Eggs", "eggs ", and "EGGS" resolve to one food.
-- [ ] `linking.test.ts`: a manual recipe ingredient and a manual fridge item with the same name produce a `full` or `partial` already-have tag. Today they produce `null`.
-- [ ] Backfill test against a seeded local Supabase (`supabase start`): seed duplicate manual names and two barcodes, run the migrations, assert food counts and no null `food_id`.
+- [x] Memory-store unit tests: find-or-create by barcode, name, and alias. Merge repoints all references. Manual "Eggs", "eggs ", and "EGGS" resolve to one food.
+- [x] `linking.test.ts`: a manual recipe ingredient and a manual fridge item with the same name produce a `full` or `partial` already-have tag. Today they produce `null`.
+- [x] Backfill test against a seeded local Supabase (`supabase start`): seed duplicate manual names and two barcodes, run the migrations, assert food counts and no null `food_id`. _Done as `bun run db:dryrun` on plain local Postgres with Supabase stubs, not `supabase start`._
 - [ ] Live check: add "chicken thighs" manually to the fridge, create a recipe using "chicken thighs", add it to grocery, and confirm the remainder subtracts the stock.
 
 ---
 
 ## Phase 3. Units that fit food
 
-- [ ] Allow food quantities in `g`, `oz`, `lb`, `ml`, `fl oz`, `cup`, `each`, and `tbsp` and `tsp` (add these two to `quantity.ts` and `units.ts`). The `unit` column on items stays text.
-- [ ] Add `domain/food-quantity.ts` with `toGrams(quantity, food): number | null`. Mass converts directly. Volume needs `food.grams_per_ml`. `each` needs `food.grams_per_each`. A missing factor returns `null` (unknown), never a guess. Everything nutrition-related goes through this one function.
-- [ ] `alreadyHaveTag` compares in the need's unit when dimensions match. Otherwise it compares through grams when both convert, and otherwise reports no tag. That is the same "unknown is not zero" rule.
-- [ ] `quantity-field.ts` drops `FOOD_UNITS = ["g"]`. The picker preselects the food's `default_unit`. The fridge, grocery, and recipe pages print the stored unit, not a forced `g`.
-- [ ] `macrosForPerson` uses `toGrams`. An ingredient whose grams are unknown marks the recipe `incomplete` and names the missing factor, for example "Eggs: set grams per each".
-- [ ] Foods screen and `upsert_food`: edit `default_unit`, `grams_per_each`, and `grams_per_ml`. Prefill `grams_per_each` from OFF `serving_quantity` when the serving is a count.
+- [x] Allow food quantities in `g`, `oz`, `lb`, `ml`, `fl oz`, `cup`, `each`, and `tbsp` and `tsp` (add these two to `quantity.ts` and `units.ts`). The `unit` column on items stays text.
+- [x] Add `domain/food-quantity.ts` with `toGrams(quantity, food): number | null`. Mass converts directly. Volume needs `food.grams_per_ml`. `each` needs `food.grams_per_each`. A missing factor returns `null` (unknown), never a guess. Everything nutrition-related goes through this one function.
+- [x] `alreadyHaveTag` compares in the need's unit when dimensions match. Otherwise it compares through grams when both convert, and otherwise reports no tag. That is the same "unknown is not zero" rule.
+- [x] `quantity-field.ts` drops `FOOD_UNITS = ["g"]`. The picker preselects the food's `default_unit`. The fridge, grocery, and recipe pages print the stored unit, not a forced `g`.
+- [x] `macrosForPerson` uses `toGrams`. An ingredient whose grams are unknown marks the recipe `incomplete` and names the missing factor, for example "Eggs: set grams per each".
+- [x] Foods screen and `upsert_food`: edit `default_unit`, `grams_per_each`, and `grams_per_ml`. Prefill `grams_per_each` from OFF `serving_quantity` when the serving is a count.
 
 ### Verify
 
-- [ ] Unit tests: 3 each at 50 g each is 150 g. 1 cup of milk at 1.03 g/ml is about 244 g. Each without a factor gives null and the recipe is incomplete with a named reason.
-- [ ] A recipe needing 6 eggs, with 4 eggs in the fridge, shows partial: have 4, need 2.
+- [x] Unit tests: 3 each at 50 g each is 150 g. 1 cup of milk at 1.03 g/ml is about 244 g. Each without a factor gives null and the recipe is incomplete with a named reason.
+- [x] A recipe needing 6 eggs, with 4 eggs in the fridge, shows partial: have 4, need 2.
 
 ---
 
@@ -305,16 +328,16 @@ Rules:
 
 ### Code
 
-- [ ] Add a `domain/meals.ts` with `buildMealFromItems(items, foods, recipes)`. It resolves grams, snapshots nutrition, sums totals, and reports which items were unknown. Pure, and tested with memory stores.
-- [ ] Add an optional `items: [{ food_id | recipe_id | name, amount, unit | portions }]` to MCP `log_meal` and `update_meal`. When items are present, totals are computed and any caller-sent totals are ignored, with a warning in `content`. Idempotency: the `auto:` digest includes the item list.
-- [ ] Add MCP `log_recipe_portion(recipe_id, portions, member?, logged_at?, meal_type?)`. It creates a meal with one recipe item. Per-person macros come from `macrosForPerson`.
-- [ ] Web nutrition page: replace the description-only form, which hard-codes `meal_type: "snack"` today. The new form takes a meal type select, then a food picker with quantity (repeatable rows), plus "or describe it" free text with optional macros. Add a "Log a portion" button on the recipe detail page.
-- [ ] `get_meals_*` and `search_meals` include items in their text output. `groupMealVariations` can key on the sorted `food_id` set when items exist.
+- [x] Add a `domain/meals.ts` with `buildMealFromItems(items, foods, recipes)`. It resolves grams, snapshots nutrition, sums totals, and reports which items were unknown. Pure, and tested with memory stores.
+- [x] Add an optional `items: [{ food_id | recipe_id | name, amount, unit | portions }]` to MCP `log_meal` and `update_meal`. When items are present, totals are computed and any caller-sent totals are ignored, with a warning in `content`. Idempotency: the `auto:` digest includes the item list.
+- [x] Add MCP `log_recipe_portion(recipe_id, portions, member?, logged_at?, meal_type?)`. It creates a meal with one recipe item. Per-person macros come from `macrosForPerson`.
+- [x] Web nutrition page: replace the description-only form, which hard-codes `meal_type: "snack"` today. The new form takes a meal type select, then a food picker with quantity (repeatable rows), plus "or describe it" free text with optional macros. Add a "Log a portion" button on the recipe detail page.
+- [x] `get_meals_*` and `search_meals` include items in their text output. `groupMealVariations` can key on the sorted `food_id` set when items exist. _Items are in the output. The grouping still keys on text._
 
 ### Verify
 
-- [ ] Unit: totals equal the sum of snapshots. A food without nutrition makes that item's nutrients null without zeroing the meal. Later food edits do not change logged meals.
-- [ ] `export.test.ts`: `meals.csv` is byte-identical to before for the same data, and `meal_items.csv` has a header with zero rows.
+- [x] Unit: totals equal the sum of snapshots. A food without nutrition makes that item's nutrients null without zeroing the meal. Later food edits do not change logged meals.
+- [x] `export.test.ts`: `meals.csv` is byte-identical to before for the same data, and `meal_items.csv` has a header with zero rows.
 - [ ] Live: log "2 eggs + 1 slice toast" from the web form, and the nutrition widgets reflect the computed totals.
 
 ---
@@ -351,41 +374,41 @@ alter table public.fridge_items
 
 ### Code
 
-- [ ] Add a `domain/stock.ts` with `applyMovement(store, movement)`. It merges into an existing fridge item with the same `food_id`, location, and convertible unit, or creates one. It decrements across items in expiry order, oldest first. It never goes negative: a shortfall is reported, not clamped silently.
-- [ ] **Put away.** On the grocery page, checking a line offers "Put away", which defaults to the food's last-used location. That does a `purchase` movement and deletes the line. MCP `put_away_grocery_lines(line_ids, location_id?)`. "Clear checked" stays for lines you do not want stocked.
-- [ ] **Cook.** MCP `cook_recipe(recipe_id, portions_by_member, deduct_stock = true, log_meals = true)`, plus a "Cooked it" form on the recipe page. It deducts ingredients scaled to the total portions (`cook` movements). When `log_meals` is set, it writes one `log_recipe_portion` meal per member (Phase 4). It returns any shortfalls.
-- [ ] **Eat from fridge.** "Ate it" on a fridge item does an `eat` movement plus a meal with that food item.
-- [ ] **Discard.** "Toss" does a `discard` movement.
-- [ ] Expiring-soon view: a strip at the top of the Fridge page, and MCP `list_expiring(days = 3)`.
+- [x] Add a `domain/stock.ts` with `applyMovement(store, movement)`. It merges into an existing fridge item with the same `food_id`, location, and convertible unit, or creates one. It decrements across items in expiry order, oldest first. It never goes negative: a shortfall is reported, not clamped silently.
+- [x] **Put away.** On the grocery page, checking a line offers "Put away", which defaults to the food's last-used location. That does a `purchase` movement and deletes the line. MCP `put_away_grocery_lines(line_ids, location_id?)`. "Clear checked" stays for lines you do not want stocked.
+- [x] **Cook.** MCP `cook_recipe(recipe_id, portions_by_member, deduct_stock = true, log_meals = true)`, plus a "Cooked it" form on the recipe page. It deducts ingredients scaled to the total portions (`cook` movements). When `log_meals` is set, it writes one `log_recipe_portion` meal per member (Phase 4). It returns any shortfalls.
+- [x] **Eat from fridge.** "Ate it" on a fridge item does an `eat` movement plus a meal with that food item.
+- [x] **Discard.** "Toss" does a `discard` movement.
+- [x] Expiring-soon view: a strip at the top of the Fridge page, and MCP `list_expiring(days = 3)`.
 
 ### Verify
 
-- [ ] Unit: put-away merges into existing stock with a compatible unit. Cook deducts across two fridge items oldest-expiry first and reports a shortfall. Ledger sum equals current state in property-style tests.
+- [x] Unit: put-away merges into existing stock with a compatible unit. Cook deducts across two fridge items oldest-expiry first and reports a shortfall. Ledger sum equals current state in property-style tests.
 - [ ] Live, end to end: recipe, then add-to-grocery (remainder only), check, put away (fridge grows), cook for two members (fridge shrinks, two meals logged, both nutrition dashboards move).
 
 ---
 
 ## Phase 6. Recipes, fuller
 
-- [ ] Schema: `recipes` gets `instructions text` (markdown), `source_url text`, `tags text[] default '{}'`, `notes text`, `prep_minutes int`, `cook_minutes int`. Add a `recipe_ingredients.note text` column, for things like "diced" or "room temp".
-- [ ] Code: `updateRecipe`, `updateRecipeIngredient`, `removeRecipeIngredient`, `reorderRecipeIngredients` in `domain/recipes.ts`, mirrored in MCP and the web page. The `RecipesStore` interface gains the missing update and delete methods.
-- [ ] MCP `import_recipe_from_text(text, source_url?)`. The agent sends structured fields it extracted. The server find-or-creates foods for each ingredient and returns which ingredients lack nutrition or unit factors so the agent can fill them in. Use the existing `households.recipe_search_places` config to tell the agent where to look.
-- [ ] Filter recipes by tag, "can make now" (all ingredients fully covered by fridge stock, via `alreadyHaveTag`), and "safe for" a member (no allergen hits on `foods.allergens`, no dislikes).
+- [x] Schema: `recipes` gets `instructions text` (markdown), `source_url text`, `tags text[] default '{}'`, `notes text`, `prep_minutes int`, `cook_minutes int`. Add a `recipe_ingredients.note text` column, for things like "diced" or "room temp".
+- [x] Code: `updateRecipe`, `updateRecipeIngredient`, `removeRecipeIngredient`, `reorderRecipeIngredients` in `domain/recipes.ts`, mirrored in MCP and the web page. The `RecipesStore` interface gains the missing update and delete methods.
+- [x] MCP `import_recipe_from_text(text, source_url?)`. The agent sends structured fields it extracted. The server find-or-creates foods for each ingredient and returns which ingredients lack nutrition or unit factors so the agent can fill them in. Use the existing `households.recipe_search_places` config to tell the agent where to look.
+- [x] Filter recipes by tag, "can make now" (all ingredients fully covered by fridge stock, via `alreadyHaveTag`), and "safe for" a member (no allergen hits on `foods.allergens`, no dislikes).
 - [ ] Recipe nutrition per portion is shown even when you are not filtering by person, and is stored as `foods` with `nutrition_source = 'recipe'` only if we ever want recipes as ingredients of other recipes. That is deferred, noted here only.
 
 ---
 
 ## Phase 7. Agent surface
 
-- [ ] Rewrite `SERVER_INSTRUCTIONS` around the household model. Cover the five pillars, that foods are the shared identity (always `search_food` and then pass `food_id`), the loop (grocery, put away, fridge, cook or eat, meals), the member targeting rules, store and person rules plus allergens and dislikes as constraints the agent must honor, and the existing time and logging guidance kept as is.
-- [ ] Consolidate tools. Target about 40, down from 70. Candidates:
+- [x] Rewrite `SERVER_INSTRUCTIONS` around the household model. Cover the five pillars, that foods are the shared identity (always `search_food` and then pass `food_id`), the loop (grocery, put away, fridge, cook or eat, meals), the member targeting rules, store and person rules plus allergens and dislikes as constraints the agent must honor, and the existing time and logging guidance kept as is.
+- [x] Consolidate tools. Target about 40, down from 70. _All listed merges landed. The result is 69, because Phases 2 to 6 added tools._ Candidates:
     - `list_store_rules`, `set_store_rules`, `list_person_rules`, `set_person_rules`, `list_person_allergens`, `set_person_allergens`, `list_person_dislikes`, `set_person_dislikes` become `get_household_rules` and `set_household_rules({ store_rules?, person: { user_id, rules?, allergens?, dislikes? }[] })`.
     - `list_fridge_locations` and `list_fridge_items` become `get_fridge`, which returns locations with their items.
     - `get_meals_today`, `get_meals_by_date`, and `get_meals_by_date_range` become `get_meals(date? | from/to?)`.
     - The `get_water_*` tools become `get_water(date? | from/to?)`. The `get_weight_*` tools become `get_weight(date? | from/to?)`.
     - `get_nutrition_goals` folds into `get_goal_progress`.
     - Update `src/copy/tools.ts` `TOOLS` and the `mcp.test.ts` assertion in the same PR.
-- [ ] Add MCP Apps widgets for the household pillars, reusing the shared partials: a `grocery-list` card returned by `list_grocery_lines` (store, then sections, then lines, with already-have tags and app-initiated check-off through `callTool`), and a `fridge` card returned by `get_fridge`. Follow every bridge and sizing invariant in CLAUDE.md, and test both in `bun run harness`.
+- [x] Add MCP Apps widgets for the household pillars, reusing the shared partials: a `grocery-list` card returned by `list_grocery_lines` (store, then sections, then lines, with already-have tags and app-initiated check-off through `callTool`), and a `fridge` card returned by `get_fridge`. Follow every bridge and sizing invariant in CLAUDE.md, and test both in `bun run harness`.
 - [ ] Optional: a weekly digest tool combining the pillars, covering what expires, what we ran out of, nutrition vs goals per member, and suggested grocery lines from the stock ledger.
 
 ---

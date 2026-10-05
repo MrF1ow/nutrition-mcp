@@ -33,6 +33,22 @@ Do not skip migrations. Schema lives only in those files. `supabase db push` app
 
 Auth must allow email and password. Foodable has no Google login. Confirm email can stay off for a household deploy so the first sign-up can sign in immediately; if you leave it on, the first user has to confirm before `/approve` succeeds.
 
+### Upgrading an existing deploy
+
+When a new version brings migrations and the database already holds data:
+
+1. Back up. Take a dashboard backup or `pg_dump`, and run `export_all_data` for each member as a second copy.
+2. Dry-run the pending migrations against a copy of your data, locally:
+
+    ```bash
+    pg_dump "$DATABASE_URL" --data-only --schema=public -f prod-data.sql
+    bun run db:dryrun --data prod-data.sql
+    ```
+
+    This uses a throwaway local Postgres and never touches the remote database. Set `PG_BIN` if `initdb` is not on your `PATH`. `DEFAULT_PENDING_FROM` in `scripts/migration-dryrun.ts` must name the first migration your database has not applied.
+
+3. `supabase db push`, then deploy the matching code. The new code expects the new tables, so do not deploy it first.
+
 ## Self-hosted Supabase
 
 Self-hosted Supabase is the other option, not the default. The app speaks the same PostgREST and GoTrue APIs, so the env vars do not change:
