@@ -32,6 +32,7 @@ import * as actualDbRecipes from "./db/recipes.js";
 import * as actualDbSettings from "./db/settings.js";
 import * as actualDbRules from "./db/rules.js";
 import * as actualDbFoods from "./db/foods.js";
+import * as actualDbStock from "./db/stock.js";
 import * as actualFoods from "./foods.js";
 import * as actualFoodSearch from "./food-search.js";
 
@@ -48,6 +49,7 @@ const realDbRecipes = { ...actualDbRecipes };
 const realDbSettings = { ...actualDbSettings };
 const realDbRules = { ...actualDbRules };
 const realDbFoods = { ...actualDbFoods };
+const realDbStock = { ...actualDbStock };
 const realFoods = { ...actualFoods };
 const realFoodSearch = { ...actualFoodSearch };
 import { DELETED_ACCOUNT_ANALYTICS_ID } from "./analytics.js";
@@ -62,6 +64,7 @@ import {
     type HouseholdConfig,
 } from "./household.js";
 import { createMemoryFridgeStore } from "./domain/fridge.js";
+import { createMemoryStockStore } from "./domain/stock.js";
 import { createMemoryFoodsStore } from "./domain/foods.js";
 import { findOrCreateManualFood, updateFood } from "./domain/foods.js";
 import { createMemoryGroceryStore } from "./domain/grocery.js";
@@ -255,6 +258,7 @@ const db = {
     }[],
     household: null as HouseholdConfig | null,
     fridgeStore: createMemoryFridgeStore(),
+    stockStore: createMemoryStockStore(),
     groceryStore: createMemoryGroceryStore(),
     recipesStore: createMemoryRecipesStore(),
     settingsStore: createMemorySettingsStore(),
@@ -506,6 +510,11 @@ mock.module("./db/fridge.js", () => ({
     liveFridgeStore: () => db.fridgeStore,
 }));
 
+mock.module("./db/stock.js", () => ({
+    ...actualDbStock,
+    liveStockStore: () => db.stockStore,
+}));
+
 mock.module("./db/grocery.js", () => ({
     ...actualDbGrocery,
     liveGroceryStore: () => db.groceryStore,
@@ -547,6 +556,7 @@ afterAll(() => {
     mock.module("./db/profiles.js", () => realProfiles);
     mock.module("./db/household.js", () => realHousehold);
     mock.module("./db/fridge.js", () => realDbFridge);
+    mock.module("./db/stock.js", () => realDbStock);
     mock.module("./db/grocery.js", () => realDbGrocery);
     mock.module("./db/recipes.js", () => realDbRecipes);
     mock.module("./db/settings.js", () => realDbSettings);
@@ -589,6 +599,7 @@ beforeEach(() => {
         },
     ];
     db.fridgeStore = createMemoryFridgeStore();
+    db.stockStore = createMemoryStockStore();
     db.groceryStore = createMemoryGroceryStore();
     db.recipesStore = createMemoryRecipesStore();
     db.settingsStore = createMemorySettingsStore();
@@ -3594,6 +3605,74 @@ describe("phone-app domain MCP tools", () => {
             expect(line.structuredContent?.already_have).toBe(
                 "already have: have 200 g, need 200 g",
             );
+        });
+    });
+
+    test("put_away_grocery_lines stocks the fridge and removes the line", async () => {
+        db.barcodeFoods[cottage.barcode] = cottage;
+        const store = await createGroceryStore(
+            db.settingsStore,
+            "hh-1",
+            "Safeway",
+        );
+        await withPat(async (call) => {
+            const loc = await call("add_fridge_location", { name: "Fridge" });
+            const locationId = loc.structuredContent?.id as string;
+            const line = await call("add_grocery_line", {
+                store_id: store.id,
+                kind: "food",
+                barcode: cottage.barcode,
+                amount: 300,
+            });
+            const lineId = (line.structuredContent as { id?: string })?.id;
+            expect(lineId).toBeTruthy();
+            const put = await call("put_away_grocery_lines", {
+                line_ids: [lineId],
+                location_id: locationId,
+            });
+            expect(put.isError).toBeFalsy();
+            expect(textOf(put)).toContain("Put away");
+            const listed = await call("list_fridge_items");
+            expect(textOf(listed)).toContain("Cottage Cheese");
+            const groceries = await call("list_grocery_lines");
+            expect(textOf(groceries)).not.toContain("Cottage Cheese");
+        });
+    });
+
+    test("cook_recipe deducts stock and logs one meal per member", async () => {
+        db.barcodeFoods[cottage.barcode] = cottage;
+        await withUser(alice, async (call) => {
+            const loc = await call("add_fridge_location", { name: "Fridge" });
+            await call("add_fridge_item", {
+                location_id: loc.structuredContent?.id,
+                kind: "food",
+                barcode: cottage.barcode,
+                amount: 200,
+            });
+            const recipe = await call("create_recipe", {
+                name: "Bowl",
+                yield_portions: 1,
+            });
+            const recipeId = recipe.structuredContent?.id as string;
+            await call("add_recipe_ingredient", {
+                recipe_id: recipeId,
+                food_id: (await db.foodsStore.listFoods("hh-1"))[0]?.id,
+                amount: 150,
+                unit: "g",
+            });
+            const cooked = await call("cook_recipe", {
+                recipe_id: recipeId,
+                portions_by_member: [
+                    { user_id: alice, portions: 1 },
+                    { user_id: bob, portions: 1 },
+                ],
+            });
+            expect(cooked.isError).toBeFalsy();
+            expect(textOf(cooked)).toContain("Shortfall");
+            expect(textOf(cooked)).toContain("Logged 2 meals");
+            expect(db.inserted).toHaveLength(2);
+            const leftover = await call("list_fridge_items");
+            expect(textOf(leftover)).toContain("Fridge is empty.");
         });
     });
 

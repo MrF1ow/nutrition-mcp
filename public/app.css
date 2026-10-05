@@ -372,6 +372,8 @@ body {
 .fridge-add-supply button,
 .fridge-item-edit button,
 .fridge-item-delete button,
+.fridge-item-eat button,
+.fridge-item-discard button,
 .fridge-location-head button {
     font: inherit;
     color: var(--text);
@@ -499,7 +501,8 @@ body {
 
 .grocery-add-store,
 .grocery-clear-checked,
-.grocery-line-check {
+.grocery-line-check,
+.grocery-put-away {
     display: grid;
     gap: 8px;
     max-width: 420px;
@@ -513,6 +516,7 @@ body {
 .grocery-add-store button,
 .grocery-clear-checked button,
 .grocery-line-check button,
+.grocery-put-away button,
 .grocery-store select {
     font: inherit;
     color: var(--text);
@@ -789,4 +793,54 @@ body {
 
 .dislike-note {
     font-weight: 600;
+}
+
+.fridge-expiring {
+    margin: 0 0 20px;
+    padding: 12px 16px;
+    border: 1px solid var(--panel-border);
+    border-radius: 14px;
+    background: var(--panel);
+}
+
+.fridge-expiring h2 {
+    margin: 0 0 8px;
+    font-size: 1rem;
+}
+
+.fridge-expiring ul {
+    margin: 0;
+    padding-left: 1.2em;
+}
+
+.fridge-item-eat,
+.fridge-item-discard,
+.grocery-put-away,
+.recipe-cook {
+    display: grid;
+    gap: 8px;
+    max-width: 420px;
+    margin: 0 0 12px;
+}
+
+.fridge-item-eat button,
+.fridge-item-discard button,
+.grocery-put-away button,
+.recipe-cook button {
+    font: inherit;
+    color: var(--accent-ink);
+    background: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 10px;
+    min-height: 44px;
+    padding: 8px 12px;
+    font-weight: 600;
+}
+
+.recipe-cook fieldset {
+    display: grid;
+    gap: 8px;
+    border: 1px solid var(--panel-border);
+    border-radius: 14px;
+    padding: 12px;
 }

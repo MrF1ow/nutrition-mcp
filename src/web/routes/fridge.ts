@@ -15,8 +15,22 @@ import {
     moveItem,
     updateItemQuantity,
 } from "../../domain/fridge.js";
+import {
+    discardFridgeItem,
+    eatFridgeItem,
+    StockInputError,
+} from "../../domain/stock.js";
 import { liveFridgeStore } from "../../db/fridge.js";
 import { liveFoodsStore } from "../../db/foods.js";
+import { liveRecipesStore } from "../../db/recipes.js";
+import { liveStockStore } from "../../db/stock.js";
+import { insertMeal, snapshotToMealItemWrite } from "../../db/nutrition.js";
+import {
+    descriptionFromItems,
+    itemListDigest,
+    MealItemsError,
+    resolveAndBuildMeal,
+} from "../../domain/meals.js";
 
 export const fridgeRoutes = new Hono();
 
@@ -32,9 +46,13 @@ async function fridgeFormError(userId: string, err: unknown) {
     const message =
         err instanceof FridgeInputError
             ? err.message
-            : err instanceof Error
+            : err instanceof StockInputError
               ? err.message
-              : "Could not update the fridge.";
+              : err instanceof MealItemsError
+                ? err.message
+                : err instanceof Error
+                  ? err.message
+                  : "Could not update the fridge.";
     const page = await renderFridgeInventoryPage(userId, message);
     return { html: page.html, status: 400 as const };
 }
@@ -148,6 +166,89 @@ fridgeRoutes.post("/fridge/items/:id", requireMember, async (c) => {
         if (locationId) {
             await moveItem(store, member.householdId, itemId, locationId);
         }
+        const expiresOn = formText(body, "expires_on").trim();
+        const items = await store.listItems(member.householdId);
+        const current = items.find((item) => item.id === itemId);
+        if (current) {
+            await store.updateItem({
+                ...current,
+                expiresOn: expiresOn || null,
+            });
+        }
+    } catch (err) {
+        const page = await fridgeFormError(userId, err);
+        return c.html(page.html, page.status);
+    }
+    return c.redirect("/fridge");
+});
+
+fridgeRoutes.post("/fridge/items/:id/eat", requireMember, async (c) => {
+    const userId = c.get("userId");
+    const member = siteMember(c);
+    try {
+        const eaten = await eatFridgeItem(
+            liveFridgeStore(),
+            liveStockStore(),
+            liveFoodsStore(),
+            {
+                householdId: member.householdId,
+                itemId: c.req.param("id"),
+                actorUserId: userId,
+            },
+        );
+        const applied = Math.abs(eaten.movement.delta);
+        if (applied > 0 && eaten.itemBefore.foodId) {
+            const { built, specs } = await resolveAndBuildMeal({
+                householdId: member.householdId,
+                foods: liveFoodsStore(),
+                recipes: liveRecipesStore(),
+                items: [
+                    {
+                        foodId: eaten.itemBefore.foodId,
+                        amount: applied,
+                        unit: eaten.itemBefore.quantity.unit,
+                        name: eaten.itemBefore.displayName,
+                    },
+                ],
+            });
+            await insertMeal(userId, {
+                description: descriptionFromItems(built.items),
+                meal_type: "snack",
+                calories: built.totals.calories ?? undefined,
+                protein_g: built.totals.protein_g ?? undefined,
+                carbs_g: built.totals.carbs_g ?? undefined,
+                fat_g: built.totals.fat_g ?? undefined,
+                fiber_g: built.totals.fiber_g ?? undefined,
+                sugar_g: built.totals.sugar_g ?? undefined,
+                alcohol_g: built.totals.alcohol_g ?? undefined,
+                caffeine_mg: built.totals.caffeine_mg ?? undefined,
+                items: built.items.map((item) =>
+                    snapshotToMealItemWrite(item, member.householdId),
+                ),
+                item_digest: itemListDigest(specs),
+            });
+        }
+    } catch (err) {
+        const page = await fridgeFormError(userId, err);
+        return c.html(page.html, page.status);
+    }
+    return c.redirect("/fridge");
+});
+
+fridgeRoutes.post("/fridge/items/:id/discard", requireMember, async (c) => {
+    const userId = c.get("userId");
+    const member = siteMember(c);
+    try {
+        await discardFridgeItem(
+            liveFridgeStore(),
+            liveStockStore(),
+            liveFoodsStore(),
+            {
+                householdId: member.householdId,
+                itemId: c.req.param("id"),
+                actorUserId: userId,
+            },
+        );
     } catch (err) {
         const page = await fridgeFormError(userId, err);
         return c.html(page.html, page.status);

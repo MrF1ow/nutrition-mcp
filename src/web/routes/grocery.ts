@@ -19,10 +19,13 @@ import {
     groceryAllergenWarning,
     GroceryInputError,
 } from "../../domain/grocery.js";
+import { putAwayGroceryLines, StockInputError } from "../../domain/stock.js";
 import { createGroceryStore } from "../../domain/settings.js";
 import { liveGroceryStore } from "../../db/grocery.js";
 import { liveFoodsStore } from "../../db/foods.js";
+import { liveFridgeStore } from "../../db/fridge.js";
 import { liveSettingsStore } from "../../db/settings.js";
+import { liveStockStore } from "../../db/stock.js";
 import { findFoodById } from "../../domain/foods.js";
 
 export const groceryRoutes = new Hono();
@@ -31,9 +34,11 @@ async function groceryFormError(userId: string, err: unknown) {
     const message =
         err instanceof GroceryInputError
             ? err.message
-            : err instanceof Error
+            : err instanceof StockInputError
               ? err.message
-              : "Could not update the grocery list.";
+              : err instanceof Error
+                ? err.message
+                : "Could not update the grocery list.";
     const page = await renderGroceryListPage(userId, {
         error: message,
     });
@@ -176,5 +181,29 @@ groceryRoutes.post("/grocery/lines/:id/check", requireMember, async (c) => {
 groceryRoutes.post("/grocery/clear-checked", requireMember, async (c) => {
     const member = siteMember(c);
     await clearCheckedLines(liveGroceryStore(), member.householdId);
+    return c.redirect("/grocery");
+});
+
+groceryRoutes.post("/grocery/lines/:id/put-away", requireMember, async (c) => {
+    const userId = c.get("userId");
+    const member = siteMember(c);
+    const body = await c.req.parseBody();
+    try {
+        await putAwayGroceryLines(
+            liveGroceryStore(),
+            liveFridgeStore(),
+            liveStockStore(),
+            liveFoodsStore(),
+            {
+                householdId: member.householdId,
+                lineIds: [c.req.param("id")],
+                locationId: formText(body, "location_id") || undefined,
+                actorUserId: userId,
+            },
+        );
+    } catch (err) {
+        const page = await groceryFormError(userId, err);
+        return c.html(page.html, page.status);
+    }
     return c.redirect("/grocery");
 });

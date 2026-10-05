@@ -22,6 +22,7 @@ import {
 
 export type GroceryLineView = GroceryLine & {
     alreadyHave: AlreadyHaveTag | null;
+    lastLocationId?: string | null;
 };
 
 export type GrocerySectionView = GrocerySection & {
@@ -36,6 +37,7 @@ export type GroceryStoreView = GroceryStore & {
 export type GroceryPageView = {
     chrome: ViewerChrome;
     stores: GroceryStoreView[];
+    locations?: { id: string; name: string }[];
     isOwner?: boolean;
     error?: string;
     allergenWarning?: string;
@@ -74,7 +76,25 @@ function alreadyHaveHtml(tag: AlreadyHaveTag | null): string {
     });
 }
 
-function lineRow(line: GroceryLineView): string {
+function lineRow(
+    line: GroceryLineView,
+    locations: { id: string; name: string }[],
+): string {
+    let putAwayHtml = "";
+    if (line.checked && locations.length > 0) {
+        const selected = line.lastLocationId ?? locations[0]!.id;
+        const options = locations
+            .map((loc) => {
+                const sel = loc.id === selected ? " selected" : "";
+                return `<option value="${escapeHtml(loc.id)}"${sel}>${escapeHtml(loc.name)}</option>`;
+            })
+            .join("");
+        putAwayHtml = `<form class="grocery-put-away" method="post" action="/grocery/lines/${escapeHtml(line.id)}/put-away">
+<label for="put-away-loc-${escapeHtml(line.id)}">Location</label>
+<select id="put-away-loc-${escapeHtml(line.id)}" name="location_id">${options}</select>
+<button type="submit">Put away</button>
+</form>`;
+    }
     return renderGroceryLineRow({
         id: line.id,
         kind: line.kind,
@@ -82,17 +102,23 @@ function lineRow(line: GroceryLineView): string {
         displayName: line.displayName,
         quantityLabel: quantityLabel(line),
         alreadyHaveHtml: alreadyHaveHtml(line.alreadyHave),
+        putAwayHtml,
     });
 }
 
-function storeSection(store: GroceryStoreView): string {
+function storeSection(
+    store: GroceryStoreView,
+    locations: { id: string; name: string }[],
+): string {
     const rules = store.rules
         .map((rule) => `<li class="store-rule">${escapeHtml(rule.body)}</li>`)
         .join("");
     const sections = store.sections
         .filter((section) => section.lines.length > 0)
         .map((section) => {
-            const rows = section.lines.map(lineRow).join("");
+            const rows = section.lines
+                .map((line) => lineRow(line, locations))
+                .join("");
             return `<section class="grocery-section" data-section-id="${escapeHtml(section.id)}" data-section-name="${escapeHtml(section.name)}">
 <h3>${escapeHtml(section.name)}</h3>
 <ul class="grocery-lines">${rows}</ul>
@@ -137,7 +163,10 @@ export function renderGroceryPage(view: GroceryPageView): string {
 <button type="submit">Add store</button>
 </form>`
         : "";
-    const stores = view.stores.map(storeSection).join("");
+    const locations = view.locations ?? [];
+    const stores = view.stores
+        .map((store) => storeSection(store, locations))
+        .join("");
     const body = `
         <h1>Groceries</h1>
         ${error}
