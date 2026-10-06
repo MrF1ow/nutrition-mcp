@@ -101,7 +101,7 @@ With `PUBLIC_ORIGIN=https://foodable.example.com` the advertised OAuth `/authori
 
 ## Railway
 
-`railway.toml` at the repo root builds from the `Dockerfile` (`builder = "DOCKERFILE"`, `dockerfilePath = "Dockerfile"`) and health-checks `GET /health` (`healthcheckTimeout` 60, `restartPolicyType` `ON_FAILURE`). That file prepares a future Railway service. It does not create a Railway project, service, or domain.
+`railway.toml` at the repo root builds from the `Dockerfile` (`builder = "DOCKERFILE"`, `dockerfilePath = "Dockerfile"`) and health-checks `GET /health` (`healthcheckTimeout` 60, `restartPolicyType` `ON_FAILURE`). Committing it creates nothing on Railway. Create the project and a service from the GitHub repo yourself; Railway then picks the file up on every deploy.
 
 Set the same variables as `.env.example` on the service:
 
@@ -116,7 +116,7 @@ Set the same variables as `.env.example` on the service:
 
 Do **not** set `PORT`. Railway injects it, and the app reads it.
 
-`PUBLIC_ORIGIN` is the generated Railway domain with no trailing slash. Set it after that domain exists, then redeploy. This PR does not create that domain.
+Generate a domain in the service's networking settings, set `PUBLIC_ORIGIN` to that `https://` origin with no trailing slash, then redeploy. If you add a custom domain later, change `PUBLIC_ORIGIN` to it.
 
 ## First-user flow
 
