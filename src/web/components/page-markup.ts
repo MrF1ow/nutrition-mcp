@@ -112,13 +112,15 @@ export function renderRecipeCard(opts: {
             ? `<p class="recipe-tags">${opts.tags
                   .map(
                       (tag) =>
-                          `<span class="recipe-tag">${escapeHtml(tag)}</span>`,
+                          `<span class="recipe-tag pill pill-dim">${escapeHtml(tag)}</span>`,
                   )
                   .join("")}</p>`
             : "";
     return `<li class="recipe-card" data-recipe-id="${escapeHtml(opts.id)}">
-<a href="/recipes/${escapeHtml(opts.id)}">${escapeHtml(opts.name)}</a>
-<p class="recipe-yield">Yield ${escapeHtml(String(opts.yieldPortions))}</p>
+<div class="row">
+<a class="row-title" href="/recipes/${escapeHtml(opts.id)}">${escapeHtml(opts.name)}</a>
+<p class="recipe-yield row-meta">Yield ${escapeHtml(String(opts.yieldPortions))}</p>
+</div>
 ${tags}
 </li>`;
 }
@@ -136,29 +138,37 @@ export function renderRecipeIngredientRow(opts: {
     note?: string | null;
 }): string {
     const note = opts.note
-        ? `<p class="recipe-ingredient-note">${escapeHtml(opts.note)}</p>`
+        ? `<p class="recipe-ingredient-note muted">${escapeHtml(opts.note)}</p>`
         : "";
     const id = escapeHtml(opts.id);
     const recipeId = escapeHtml(opts.recipeId);
+    const name = escapeHtml(opts.displayName);
     return `<li class="recipe-ingredient" data-ingredient-id="${id}" data-per-portion="${escapeHtml(String(opts.perPortionAmount))}" data-person-amount="${escapeHtml(String(opts.personAmount))}">
-<p class="recipe-ingredient-name">${escapeHtml(opts.displayName)}</p>
-<p class="recipe-ingredient-total">Total ${escapeHtml(opts.totalLabel)}</p>
-<p class="recipe-ingredient-per-portion">Per portion ${escapeHtml(opts.perPortionLabel)}</p>
-<p class="recipe-ingredient-person">${escapeHtml(opts.personLabel)}</p>
+<div class="row">
+<p class="recipe-ingredient-name row-title">${name}</p>
+<p class="recipe-ingredient-total row-meta">Total ${escapeHtml(opts.totalLabel)}</p>
+</div>
+<p class="recipe-ingredient-per-portion muted">Per portion ${escapeHtml(opts.perPortionLabel)}</p>
+<p class="recipe-ingredient-person muted">${escapeHtml(opts.personLabel)}</p>
 ${note}
+<div class="row-actions">
+<form class="recipe-ingredient-move" method="post" action="/recipes/${recipeId}/ingredients/${id}/move">
+<button type="submit" name="direction" value="up" class="btn-sm" aria-label="Move ${name} up">↑</button>
+<button type="submit" name="direction" value="down" class="btn-sm" aria-label="Move ${name} down">↓</button>
+</form>
+<details class="more">
+<summary>Edit</summary>
 <form class="recipe-ingredient-edit" method="post" action="/recipes/${recipeId}/ingredients/${id}">
 <label for="note-${id}">Note</label>
 <input id="note-${id}" name="note" type="text" maxlength="500" value="${escapeHtml(opts.note ?? "")}" autocomplete="off" />
 <label for="amount-${id}">Amount</label>
 <input id="amount-${id}" name="amount" type="number" min="0" step="any" required value="${escapeHtml(String(opts.totalAmount))}" />
-<button type="submit">Save ingredient</button>
+<button type="submit" class="btn-primary">Save ingredient</button>
 </form>
-<form class="recipe-ingredient-move" method="post" action="/recipes/${recipeId}/ingredients/${id}/move">
-<button type="submit" name="direction" value="up">Move up</button>
-<button type="submit" name="direction" value="down">Move down</button>
-</form>
+</details>
 <form class="recipe-ingredient-delete" method="post" action="/recipes/${recipeId}/ingredients/${id}/delete">
-<button type="submit">Remove</button>
+<button type="submit" class="btn-sm btn-danger">Remove</button>
 </form>
+</div>
 </li>`;
 }

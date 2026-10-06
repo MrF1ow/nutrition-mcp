@@ -86,29 +86,41 @@ export function renderRecipesPage(view: RecipesPageView): string {
             return `<option value="${escapeHtml(member.userId)}"${sel}>${escapeHtml(member.displayName)}</option>`;
         }),
     ].join("");
+    const filtering =
+        filter.tag !== "" || filter.canMakeNow || filter.safeFor !== "";
+    const list =
+        view.recipes.length === 0
+            ? ""
+            : `<section class="panel"><ul class="recipe-list list">${cards}</ul></section>`;
     const body = `
         <h1>Recipes</h1>
         ${error}
-        <form class="recipe-list-filters" method="get" action="/recipes">
-            <label for="recipe-tag">Tag</label>
-            <input id="recipe-tag" name="tag" type="text" value="${escapeHtml(filter.tag)}" autocomplete="off" />
-            <label class="recipe-filter-check">
-                <input type="checkbox" name="can_make_now" value="1"${filter.canMakeNow ? " checked" : ""} />
-                Can make now
-            </label>
-            <label for="recipe-safe-for">Safe for</label>
-            <select id="recipe-safe-for" name="safe_for">${memberOptions}</select>
-            <button type="submit">Filter</button>
-        </form>
+        <details class="more"${filtering ? " open" : ""}>
+            <summary>Filter</summary>
+            <form class="recipe-list-filters" method="get" action="/recipes">
+                <label for="recipe-tag">Tag</label>
+                <input id="recipe-tag" name="tag" type="text" value="${escapeHtml(filter.tag)}" autocomplete="off" />
+                <label class="recipe-filter-check">
+                    <input type="checkbox" name="can_make_now" value="1"${filter.canMakeNow ? " checked" : ""} />
+                    Can make now
+                </label>
+                <label for="recipe-safe-for">Safe for</label>
+                <select id="recipe-safe-for" name="safe_for">${memberOptions}</select>
+                <button type="submit" class="btn-primary">Filter</button>
+            </form>
+        </details>
         ${empty}
-        <ul class="recipe-list">${cards}</ul>
-        <form class="recipe-create" method="post" action="/recipes">
-            <label for="recipe-name">Name</label>
-            <input id="recipe-name" name="name" type="text" required maxlength="80" autocomplete="off" />
-            <label for="recipe-yield">Yield</label>
-            <input id="recipe-yield" name="yield_portions" type="number" min="0" step="any" required value="4" />
-            <button type="submit">Create recipe</button>
-        </form>
+        ${list}
+        <details class="more"${view.recipes.length === 0 ? " open" : ""}>
+            <summary>New recipe</summary>
+            <form class="recipe-create" method="post" action="/recipes">
+                <label for="recipe-name">Name</label>
+                <input id="recipe-name" name="name" type="text" required maxlength="80" autocomplete="off" />
+                <label for="recipe-yield">Yield</label>
+                <input id="recipe-yield" name="yield_portions" type="number" min="0" step="any" required value="4" />
+                <button type="submit" class="btn-primary">Create recipe</button>
+            </form>
+        </details>
     `;
     return renderAppShell({
         title: "Recipes",
@@ -184,12 +196,12 @@ export function renderRecipeDetailPage(view: RecipeDetailView): string {
         })
         .join("");
     const portion = viewingSelf
-        ? `<form class="recipe-portion" method="post" action="/recipes/${escapeHtml(view.recipe.id)}/portions">
+        ? `<form class="recipe-portion inline-form" method="post" action="/recipes/${escapeHtml(view.recipe.id)}/portions">
 <label for="portion-count">Your portion</label>
 <input id="portion-count" name="portion_count" type="number" min="0" step="any" required value="${escapeHtml(String(view.portionCount))}" />
-<button type="submit">Save portion</button>
+<button type="submit">Save</button>
 </form>`
-        : `<p class="person-portion" data-portion-count="${escapeHtml(String(view.portionCount))}" data-readonly="true">Portion ${escapeHtml(String(view.portionCount))}</p>`;
+        : `<p class="person-portion muted" data-portion-count="${escapeHtml(String(view.portionCount))}" data-readonly="true">Portion ${escapeHtml(String(view.portionCount))}</p>`;
     const storeOptions = view.stores
         .map(
             (store) =>
@@ -203,7 +215,7 @@ export function renderRecipeDetailPage(view: RecipeDetailView): string {
 ${renderMemberMultiSelect(view.members, [view.viewerId])}
 <label for="recipe-store">Store</label>
 <select id="recipe-store" name="store_id" required>${storeOptions}</select>
-<button type="submit">Add to grocery</button>
+<button type="submit" class="btn-primary">Add to grocery</button>
 </form>`;
     const recipeId = escapeHtml(view.recipe.id);
     const personMacros =
@@ -211,87 +223,111 @@ ${renderMemberMultiSelect(view.members, [view.viewerId])}
     const perPortion = view.macrosPerPortion ?? view.macros;
     const tagsValue = escapeHtml(view.recipe.tags.join(", "));
     const body = `
-        <p class="recipe-back"><a href="/recipes">Recipes</a></p>
+        <p class="recipe-back"><a href="/recipes">← Recipes</a></p>
         <h1>${escapeHtml(view.recipe.name)}</h1>
         ${error}
         ${allergen}
         ${dislike}
-        <p class="recipe-yield" data-yield="${escapeHtml(String(view.recipe.yieldPortions))}">Yield ${escapeHtml(String(view.recipe.yieldPortions))}</p>
-        <form class="recipe-edit" method="post" action="/recipes/${recipeId}">
-            <label for="edit-name">Name</label>
-            <input id="edit-name" name="name" type="text" required maxlength="80" value="${escapeHtml(view.recipe.name)}" />
-            <label for="edit-yield">Yield</label>
-            <input id="edit-yield" name="yield_portions" type="number" min="0" step="any" required value="${escapeHtml(String(view.recipe.yieldPortions))}" />
-            <label for="edit-source">Source URL</label>
-            <input id="edit-source" name="source_url" type="text" value="${escapeHtml(view.recipe.sourceUrl ?? "")}" />
-            <label for="edit-tags">Tags</label>
-            <input id="edit-tags" name="tags" type="text" value="${tagsValue}" placeholder="dinner, vegetarian" />
-            <label for="edit-prep">Prep minutes</label>
-            <input id="edit-prep" name="prep_minutes" type="number" min="0" step="1" value="${escapeHtml(view.recipe.prepMinutes == null ? "" : String(view.recipe.prepMinutes))}" />
-            <label for="edit-cook">Cook minutes</label>
-            <input id="edit-cook" name="cook_minutes" type="number" min="0" step="1" value="${escapeHtml(view.recipe.cookMinutes == null ? "" : String(view.recipe.cookMinutes))}" />
-            <label for="edit-instructions">Instructions</label>
-            <textarea id="edit-instructions" name="instructions" rows="8">${escapeHtml(view.recipe.instructions ?? "")}</textarea>
-            <label for="edit-notes">Notes</label>
-            <textarea id="edit-notes" name="notes" rows="3">${escapeHtml(view.recipe.notes ?? "")}</textarea>
-            <button type="submit">Save recipe</button>
-        </form>
-        <form class="recipe-filter" method="get" action="/recipes/${recipeId}" data-filter-member="${escapeHtml(view.filterUserId)}">
-            <label for="recipe-member">Filter by person</label>
-            <select id="recipe-member" name="member">${memberOptions}</select>
-            <button type="submit">View</button>
-        </form>
-        ${portion}
-        ${macrosBlock(perPortion, "portion")}
-        ${personMacros}
-        <form class="recipe-log-portion" method="post" action="/recipes/${recipeId}/log-portion">
-            <label for="log-portion-count">Portions</label>
-            <input id="log-portion-count" name="portions" type="number" min="0" step="any" required value="${escapeHtml(String(view.portionCount))}" />
-            <label for="log-portion-type">Meal type</label>
-            <select id="log-portion-type" name="meal_type">
-                <option value="breakfast">Breakfast</option>
-                <option value="lunch">Lunch</option>
-                <option value="dinner">Dinner</option>
-                <option value="snack" selected>Snack</option>
-            </select>
-            <button type="submit">Log a portion</button>
-        </form>
-        <form class="recipe-cook" method="post" action="/recipes/${recipeId}/cook">
-            <fieldset>
-                <legend>Cooked it</legend>
-                ${view.members
-                    .map((member) => {
-                        const value =
-                            member.userId === view.viewerId
-                                ? String(view.portionCount)
-                                : "1";
-                        return `<label for="cook-portion-${escapeHtml(member.userId)}">${escapeHtml(member.displayName)}</label>
-<input id="cook-portion-${escapeHtml(member.userId)}" name="portion:${escapeHtml(member.userId)}" type="number" min="0" step="any" value="${escapeHtml(value)}" />`;
-                    })
-                    .join("")}
-                <label for="cook-meal-type">Meal type</label>
-                <select id="cook-meal-type" name="meal_type">
-                    <option value="breakfast">Breakfast</option>
-                    <option value="lunch">Lunch</option>
-                    <option value="dinner" selected>Dinner</option>
-                    <option value="snack">Snack</option>
-                </select>
-                <label><input type="checkbox" name="deduct_stock" value="1" checked /> Deduct stock</label>
-                <label><input type="checkbox" name="log_meals" value="1" checked /> Log meals</label>
-                <button type="submit">Cooked it</button>
-            </fieldset>
-        </form>
-        <ul class="recipe-ingredients">${rows}</ul>
-        <h2>Add ingredient</h2>
-        ${renderFoodPicker({
-            id: "recipe-picker",
-            action: `/recipes/${view.recipe.id}/ingredients`,
-            method: "post",
-            includeQuantity: true,
-        })}
-        ${grocery}
+        <p class="recipe-yield muted" data-yield="${escapeHtml(String(view.recipe.yieldPortions))}">Yield ${escapeHtml(String(view.recipe.yieldPortions))}</p>
+        <section class="panel">
+            <h2>Nutrition</h2>
+            <form class="recipe-filter inline-form" method="get" action="/recipes/${recipeId}" data-filter-member="${escapeHtml(view.filterUserId)}">
+                <label for="recipe-member">Filter by person</label>
+                <select id="recipe-member" name="member">${memberOptions}</select>
+                <button type="submit">View</button>
+            </form>
+            ${portion}
+            ${macrosBlock(perPortion, "portion")}
+            ${personMacros}
+        </section>
+        <section class="panel">
+            <h2>Ingredients</h2>
+            <ul class="recipe-ingredients list">${rows}</ul>
+            <details class="more">
+                <summary>Add ingredient</summary>
+                ${renderFoodPicker({
+                    id: "recipe-picker",
+                    action: `/recipes/${view.recipe.id}/ingredients`,
+                    method: "post",
+                    includeQuantity: true,
+                })}
+            </details>
+        </section>
+        <section class="panel">
+            <h2>Cook and log</h2>
+            <form class="recipe-log-portion field-grid" method="post" action="/recipes/${recipeId}/log-portion">
+                <label>Portions
+                    <input id="log-portion-count" name="portions" type="number" min="0" step="any" required value="${escapeHtml(String(view.portionCount))}" />
+                </label>
+                <label>Meal type
+                    <select id="log-portion-type" name="meal_type">
+                        <option value="breakfast">Breakfast</option>
+                        <option value="lunch">Lunch</option>
+                        <option value="dinner">Dinner</option>
+                        <option value="snack" selected>Snack</option>
+                    </select>
+                </label>
+                <button type="submit" class="btn-primary">Log a portion</button>
+            </form>
+            <details class="more">
+                <summary>Cooked it</summary>
+                <form class="recipe-cook field-grid" method="post" action="/recipes/${recipeId}/cook">
+                    ${view.members
+                        .map((member) => {
+                            const value =
+                                member.userId === view.viewerId
+                                    ? String(view.portionCount)
+                                    : "1";
+                            return `<label>${escapeHtml(member.displayName)}
+<input id="cook-portion-${escapeHtml(member.userId)}" name="portion:${escapeHtml(member.userId)}" type="number" min="0" step="any" value="${escapeHtml(value)}" />
+</label>`;
+                        })
+                        .join("")}
+                    <label>Meal type
+                        <select id="cook-meal-type" name="meal_type">
+                            <option value="breakfast">Breakfast</option>
+                            <option value="lunch">Lunch</option>
+                            <option value="dinner" selected>Dinner</option>
+                            <option value="snack">Snack</option>
+                        </select>
+                    </label>
+                    <fieldset class="choice-row">
+                        <legend>Also</legend>
+                        <label><input type="checkbox" name="deduct_stock" value="1" checked /> Deduct stock</label>
+                        <label><input type="checkbox" name="log_meals" value="1" checked /> Log meals</label>
+                    </fieldset>
+                    <button type="submit" class="btn-primary">Cooked it</button>
+                </form>
+            </details>
+        </section>
+        <section class="panel">
+            <h2>Groceries</h2>
+            ${grocery}
+        </section>
+        <details class="more">
+            <summary>Edit recipe</summary>
+            <form class="recipe-edit" method="post" action="/recipes/${recipeId}">
+                <label for="edit-name">Name</label>
+                <input id="edit-name" name="name" type="text" required maxlength="80" value="${escapeHtml(view.recipe.name)}" />
+                <label for="edit-yield">Yield</label>
+                <input id="edit-yield" name="yield_portions" type="number" min="0" step="any" required value="${escapeHtml(String(view.recipe.yieldPortions))}" />
+                <label for="edit-source">Source URL</label>
+                <input id="edit-source" name="source_url" type="text" value="${escapeHtml(view.recipe.sourceUrl ?? "")}" />
+                <label for="edit-tags">Tags</label>
+                <input id="edit-tags" name="tags" type="text" value="${tagsValue}" placeholder="dinner, vegetarian" />
+                <label for="edit-prep">Prep minutes</label>
+                <input id="edit-prep" name="prep_minutes" type="number" min="0" step="1" value="${escapeHtml(view.recipe.prepMinutes == null ? "" : String(view.recipe.prepMinutes))}" />
+                <label for="edit-cook">Cook minutes</label>
+                <input id="edit-cook" name="cook_minutes" type="number" min="0" step="1" value="${escapeHtml(view.recipe.cookMinutes == null ? "" : String(view.recipe.cookMinutes))}" />
+                <label for="edit-instructions">Instructions</label>
+                <textarea id="edit-instructions" name="instructions" rows="8">${escapeHtml(view.recipe.instructions ?? "")}</textarea>
+                <label for="edit-notes">Notes</label>
+                <textarea id="edit-notes" name="notes" rows="3">${escapeHtml(view.recipe.notes ?? "")}</textarea>
+                <button type="submit" class="btn-primary">Save recipe</button>
+            </form>
+        </details>
         <form class="recipe-delete" method="post" action="/recipes/${recipeId}/delete">
-            <button type="submit">Delete recipe</button>
+            <button type="submit" class="btn-danger">Delete recipe</button>
         </form>
     `;
     return renderAppShell({
