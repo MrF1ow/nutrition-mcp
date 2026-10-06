@@ -4,20 +4,22 @@ Written 2026-10-05. For an agent with access to GitHub, Supabase, and Railway. I
 
 Read `CLAUDE.md` and `docs/handoff/foodable-architecture-plan.md` (its "Status at handoff" section) first. This file does not repeat them.
 
-## Status (2026-10-05)
+## Status (updated 2026-10-06)
 
 **Done**
 
 - Preflight was green at `ee7f06f`: `bun test`, `bun run typecheck`, `bun run format:check`, `bun run gen:all`, and `bun run db:dryrun` all passed.
 - A new empty Supabase project exists: ref `dapbxswqfiqvxutsobhr`, region `us-east-1`, name **Foodable**. All 39 migrations are applied there. `public` has 31 tables. The `exports` storage bucket exists. Email and password sign-in is enabled; confirmation email is off (mailer autoconfirm). No data was copied from the old project. The old Supabase project and the old server were not touched.
 - Local server checks on an agent machine against that project passed: `GET /health` returned `ok`, `GET /` served the Foodable sign-in page, and OAuth discovery URLs used host `127.0.0.1` with `PUBLIC_ORIGIN` unset. The server was then stopped (port 8080); it is **not** still running.
+- On `main`: PR #48 (`c3c5c7e`) — `railway.toml` and the Railway section in `docs/self-hosting.md` (Ethan's standing-doc wording from `2adef82`). This does **not** create a Railway service, domain, or DNS change.
+- On `main`: PR #49 (`bf6a668`) — export archive path is `foodable-export.zip`. The old `nutrition-mcp-export.zip` path stays on the deletion list. Repo URLs were not renamed. `bun.lock` package name is `foodable`.
+- On `main`: PR #50 (`6de1791`) — manual fridge add, update, and delete write `adjust` movements. Still true outside that fix: deleting a location removes items without movements; adding the same food in the same location with no expiry merges; an item with no `food_id` cannot get a movement.
 
 **Not done**
 
 - The two-person household sign-in (step 4) has not been done.
 - The end-to-end walk (step 5) has not been done.
-- Railway was not created. DNS was not changed. Phase 8 has not started.
-- The fridge ledger gap and the old-name leftovers are still open on `main`. Separate pull requests for them were opened at the same time as the doc update that recorded this status; they are **not** on `main` yet.
+- No Railway **service** exists yet. DNS was not changed. Phase 8 has not started.
 
 **Unchanged gates:** repo name `MrF1ow/nutrition-mcp`, sky accent, version `0.1.0`.
 
@@ -105,7 +107,7 @@ Against the new project, with env vars set locally and `PUBLIC_ORIGIN` unset:
 
 ## 3. Railway
 
-- [ ] Add `railway.toml` at the repo root in a small PR, so the deploy config lives with the code:
+- [x] Add `railway.toml` at the repo root in a small PR, so the deploy config lives with the code. (On `main`, PR #48, merge `c3c5c7e`. Railway deploy steps live in `docs/self-hosting.md`.)
 
     ```toml
     [build]
@@ -178,7 +180,7 @@ This is Cursor's end-to-end walk, run on the live site with two members. Capture
     - `list_grocery_lines` and `get_fridge` render their cards in a widget-capable client.
 - [ ] **Barcode.** `lookup_barcode` on a real product returns data, which proves `OFF_USER_AGENT` is set.
 
-Known gap, not a walk failure: manual fridge add, edit and delete do not write `stock_movements` rows (see the plan's open items). Do not "fix" it during the launch.
+Known ledger limits, not walk failures: deleting a location removes items without movements; same food and location with no expiry merges on add; an item with no `food_id` cannot get a movement. Manual add, update, and delete now write `adjust` movements (#50 on `main`).
 
 ## 6. Retire the old deploy
 
@@ -191,13 +193,13 @@ The decision is to delete all old user data. Confirm with the user once, right b
 ## 7. Repo follow-up (after launch)
 
 - [x] `docs/handoff/foodable-architecture-plan.md`: "Status at handoff" updated on 2026-10-05 with preflight, the new Supabase project ref, local smoke, and what remains before deploy day. Walk result stays unchecked until step 5 runs.
-- [ ] `docs/self-hosting.md`: add a short Railway section, with the `railway.toml` above, the variables, "do not set `PORT`", and `PUBLIC_ORIGIN` from the generated domain. Belongs in the Railway config pull request (with `railway.toml`); that PR does not create the Railway service.
+- [x] `docs/self-hosting.md`: Railway section on `main` (PR #48, with `railway.toml`). Standing docs only; it does not create a Railway service.
 - [ ] Update the memory or notes the user keeps on hosting: Railway, chosen 2026-10-05, "for now". (After Railway exists.)
 
 ## 8. After launch, in order
 
-1. **Ledger gap.** Make manual fridge add, edit and delete go through `applyMovement` with reason `adjust`, so `ledgerMatchesStock` holds for every item. Do this before anything reads the ledger as history.
-2. **Old-name leftovers.** The export object path `nutrition-mcp-export.zip`, `bun.lock`'s package name, and test fixtures. The fresh start means no old export files are left to strand, so renaming the path is free now.
+1. **Ledger gap.** Done on `main` (PR #50, `6de1791`): manual add, update, and delete go through `applyMovement` with reason `adjust`. Remaining limits: deleting a location removes items without movements; same food and location with no expiry merges; no movement for items without `food_id`.
+2. **Old-name leftovers.** Done on `main` for export path and lockfile (PR #49, `bf6a668`): archive path `foodable-export.zip`; `nutrition-mcp-export.zip` stays on the stale-object deletion list; `bun.lock` name `foodable`. Repo URLs still wait on the gated repo rename.
 3. **Phase 8 (contract)** once the deploy has run stably, after a fresh backup. With a fresh start there is no legacy `identity` data to worry about, only rows written since launch.
 4. **Gated items** when the user decides: the repo rename, the logo and brand accent, and the optional weekly household digest.
 
