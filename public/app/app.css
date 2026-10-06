@@ -628,3 +628,18 @@ details.more > summary > :is(h2, h3) {
 .recipe-ingredient-note {
     font-style: italic;
 }
+
+/* A wrapping row of .pill list items. */
+.pills {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.pills:empty,
+.store-rule-list:empty,
+.person-rule-list:empty {
+    display: none;
+}

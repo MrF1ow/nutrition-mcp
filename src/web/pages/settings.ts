@@ -9,6 +9,7 @@ import {
     isWeightUnit,
     type WeightUnit,
 } from "../../domain/units.js";
+import { renderSettingsNav } from "../components/settings-nav.js";
 
 export type SettingsPageView = {
     chrome: ViewerChrome;
@@ -100,8 +101,8 @@ export function renderSettingsPage(view: SettingsPageView): string {
     const alcoholChecked = view.alcoholTrackingEnabled ? " checked" : "";
     const body = `
         <h1>Settings</h1>
+        ${renderSettingsNav("account")}
         ${error}
-        <p class="settings-lead"><a href="/settings/household">Household</a> · <a href="/settings/foods">Foods</a></p>
         <form method="POST" action="/settings" class="appearance panel">
             <input type="hidden" name="group" value="account" />
             <h2>Account</h2>

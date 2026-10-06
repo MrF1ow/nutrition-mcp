@@ -144,3 +144,34 @@ test("member household page is read-only without add-member", () => {
     expect(html).not.toContain("Add household member");
     expect(html).not.toContain('action="/settings/household/stores"');
 });
+
+test("household settings groups owner tools into cards and disclosures", () => {
+    const html = renderHouseholdSettingsPage({
+        chrome,
+        householdName: "Home",
+        location: "",
+        members: [alice, bob],
+        stores: [],
+        memberRules: [
+            {
+                member: alice,
+                rules: [],
+                allergens: [{ allergen: "peanut", otherLabel: null }],
+                dislikes: [{ displayName: "Olives" }],
+            },
+        ],
+        isOwner: true,
+    } as never);
+    expect(html).toContain(
+        '<a href="/settings/household" aria-current="page">Household</a>',
+    );
+    for (const heading of ["Household", "Members", "Grocery stores", "Rules"]) {
+        expect(html).toContain(`<h2>${heading}</h2>`);
+    }
+    expect(html).toContain("<summary>Add household member</summary>");
+    expect(html).toContain('<li class="allergen pill pill-bad">');
+    expect(html).toContain('<li class="dislike pill pill-dim">Olives</li>');
+    expect(html).toContain(
+        '<form method="post" action="/settings/household/name" class="household-name inline-form">',
+    );
+});
