@@ -4,20 +4,21 @@ Written 2026-10-05. For an agent with access to GitHub, Supabase, and Railway. I
 
 Read `CLAUDE.md` and `docs/handoff/foodable-architecture-plan.md` (its "Status at handoff" section) first. This file does not repeat them.
 
-## Status (2026-10-05)
+## Status (2026-10-06)
 
 **Done**
 
 - Preflight was green at `ee7f06f`: `bun test`, `bun run typecheck`, `bun run format:check`, `bun run gen:all`, and `bun run db:dryrun` all passed.
 - A new empty Supabase project exists: ref `dapbxswqfiqvxutsobhr`, region `us-east-1`, name **Foodable**. All 39 migrations are applied there. `public` has 31 tables. The `exports` storage bucket exists. Email and password sign-in is enabled; confirmation email is off (mailer autoconfirm). No data was copied from the old project. The old Supabase project and the old server were not touched.
 - Local server checks on an agent machine against that project passed: `GET /health` returned `ok`, `GET /` served the Foodable sign-in page, and OAuth discovery URLs used host `127.0.0.1` with `PUBLIC_ORIGIN` unset. The server was then stopped (port 8080); it is **not** still running.
+- 2026-10-06: the live schema was checked against the repo. The SQL applied to the project is identical to all 39 committed migration files, and its `public` schema (columns, constraints, indexes, RLS, policies, function bodies, triggers, grants) and storage buckets match a clean local build of those files. No drift.
+- 2026-10-06: the fridge ledger gap (#50), the old-name leftovers (#49) and `railway.toml` with a Railway section in `docs/self-hosting.md` (#48) are merged. None of them adds a migration.
 
 **Not done**
 
-- The two-person household sign-in (step 4) has not been done.
+- The two-person household sign-in (step 4) has not been done. The project is no longer empty, though. On 2026-10-05 one Auth user signed up, created a household named "Flow" as owner, and logged two test meals of "Milk". Keep it if that account is the intended owner. Otherwise wipe Auth and the `public` data before step 4, because only the first sign-up is allowed.
 - The end-to-end walk (step 5) has not been done.
 - Railway was not created. DNS was not changed. Phase 8 has not started.
-- The fridge ledger gap and the old-name leftovers are still open on `main`. Separate pull requests for them were opened at the same time as the doc update that recorded this status; they are **not** on `main` yet.
 
 **Unchanged gates:** repo name `MrF1ow/nutrition-mcp`, sky accent, version `0.1.0`.
 
@@ -178,7 +179,7 @@ This is Cursor's end-to-end walk, run on the live site with two members. Capture
     - `list_grocery_lines` and `get_fridge` render their cards in a widget-capable client.
 - [ ] **Barcode.** `lookup_barcode` on a real product returns data, which proves `OFF_USER_AGENT` is set.
 
-Known gap, not a walk failure: manual fridge add, edit and delete do not write `stock_movements` rows (see the plan's open items). Do not "fix" it during the launch.
+Manual fridge add, edit and delete write `adjust` movements since #50, so after each step every item's stock should match its ledger.
 
 ## 6. Retire the old deploy
 
@@ -196,8 +197,8 @@ The decision is to delete all old user data. Confirm with the user once, right b
 
 ## 8. After launch, in order
 
-1. **Ledger gap.** Make manual fridge add, edit and delete go through `applyMovement` with reason `adjust`, so `ledgerMatchesStock` holds for every item. Do this before anything reads the ledger as history.
-2. **Old-name leftovers.** The export object path `nutrition-mcp-export.zip`, `bun.lock`'s package name, and test fixtures. The fresh start means no old export files are left to strand, so renaming the path is free now.
+1. ~~**Ledger gap.**~~ Done in #50 (2026-10-06).
+2. ~~**Old-name leftovers.**~~ Done in #49 (2026-10-06). Repo URLs still wait on the repo rename.
 3. **Phase 8 (contract)** once the deploy has run stably, after a fresh backup. With a fresh start there is no legacy `identity` data to worry about, only rows written since launch.
 4. **Gated items** when the user decides: the repo rename, the logo and brand accent, and the optional weekly household digest.
 
