@@ -69,6 +69,32 @@ test("self dashboard reuses widget iframes and has no household facts", async ()
     expect(html).not.toContain('class="error-banner"');
 });
 
+test("self dashboard logs through one compact panel of disclosures", async () => {
+    const html = await renderDashboardHtml({
+        access: { ok: true, mode: "self", viewer: alice, subject: alice },
+        members: [alice],
+        summary: { locale: "en" },
+        goals: { locale: "en" },
+        trends: { locale: "en" },
+        weight: { locale: "en" },
+        chrome: lightChrome,
+    });
+    expect(html).toContain(
+        '<section class="panel log-panel" aria-label="Log">',
+    );
+    expect(html).toContain("<summary>Log meal</summary>");
+    expect(html).toContain("<summary>Log water</summary>");
+    expect(html).toContain("<summary>Log weight</summary>");
+    expect(html).toContain(
+        '<label class="meal-item-name">Food<input name="item_name" type="text" autocomplete="off" data-meal-item-name /></label>',
+    );
+    expect(html).not.toContain("fridge-add-supply");
+    // The log panel sits above the first widget.
+    expect(html.indexOf("log-panel")).toBeLessThan(
+        html.indexOf("widget-frame"),
+    );
+});
+
 test("owner self dashboard has no add-member form", async () => {
     const html = await renderDashboardHtml({
         access: { ok: true, mode: "self", viewer: alice, subject: alice },

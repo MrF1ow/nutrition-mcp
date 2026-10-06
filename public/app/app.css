@@ -643,3 +643,33 @@ details.more > summary > :is(h2, h3) {
 .person-rule-list:empty {
     display: none;
 }
+
+/* ---- nutrition log ---- */
+
+/* Three disclosure pills in a row; the opened one moves to the top of the
+   card and takes its full width. */
+.log-panel {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+.log-panel > details[open] {
+    flex-basis: 100%;
+    order: -1;
+}
+.meal-items {
+    display: grid;
+    gap: 12px;
+}
+.meal-item {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 10px;
+}
+.meal-item > label {
+    display: grid;
+    gap: 4px;
+}
+.meal-item-name,
+.meal-item-results {
+    grid-column: 1 / -1;
+}
