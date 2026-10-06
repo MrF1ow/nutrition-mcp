@@ -48,7 +48,7 @@ import {
     viewerChromeFromProfile,
     type NutritionView,
 } from "../app/nutrition.js";
-import { escapeHtml } from "../app/shell.js";
+import { appHead, escapeHtml, htmlOpen } from "../app/shell.js";
 
 function alcoholOf(
     profile: Parameters<typeof alcoholTrackingEnabledFromProfile>[0],
@@ -74,18 +74,18 @@ export function createHouseholdFormHtml(error?: string): string {
     return renderBare(
         "Create household",
         `<header class="dash-head">
-            <p class="eyebrow">Household</p>
             <h1>Create household</h1>
-            <p class="logout"><a href="/logout">Log out</a></p>
+            <p class="muted">Name the household. Everyone else is added from Settings.</p>
         </header>
-        <form method="POST" action="/create-household" class="create-household">
+        <form method="POST" action="/create-household" class="create-household panel">
             ${formErrorHtml(error)}
             <label for="household_name">Household name</label>
             <input id="household_name" name="household_name" required maxlength="80" />
             <label for="display_name">Your name</label>
             <input id="display_name" name="display_name" required maxlength="80" />
-            <button type="submit">Create household</button>
-        </form>`,
+            <button type="submit" class="btn-primary">Create household</button>
+        </form>
+        <p class="logout"><a href="/logout">Log out</a></p>`,
     );
 }
 
@@ -561,25 +561,19 @@ export async function renderRecipeDetailRoute(
     };
 }
 
+// Pages shown before the viewer has a household (create, forbidden). Same
+// stylesheet as the app, no bottom nav, and no saved theme to read yet, so
+// they follow the OS.
 function renderBare(title: string, body: string): string {
     return `<!doctype html>
-<html lang="en">
+${htmlOpen("system")}
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${escapeHtml(title)}</title>
-    <link rel="stylesheet" href="/styles.css" />
-    <style>
-        .dash-head { margin: 24px auto 16px; max-width: 720px; padding: 0 16px; }
-        .logout { margin-top: 16px; }
-        .empty { max-width: 720px; margin: 48px auto; padding: 0 16px; }
-        .create-household, .add-member { max-width: 720px; margin: 0 auto 32px; padding: 0 16px; display: grid; gap: 8px; }
-        .create-household input, .create-household button, .add-member input, .add-member button { font: inherit; padding: 8px; }
-        .error-banner { margin: 0 0 8px; }
-    </style>
+${appHead(title, "system")}
 </head>
 <body>
+<main class="app-main native">
 ${body}
+</main>
 </body>
 </html>`;
 }

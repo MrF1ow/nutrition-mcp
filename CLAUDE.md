@@ -186,6 +186,19 @@ The first-user / closed-household flow is documented in `docs/self-hosting.md` a
 
 ---
 
+## Household app styling
+
+One design system. The widget partials in `public/widgets/src/shared/` (`tokens.css`, `base.css`, `form.css`, `table.css`, `seg.css`) are the source of truth for the in-chat widgets, the household app and the login page. `public/app/app.css` `@include`s them and adds only app layout. `getAppCss()` in `src/widgets.ts` assembles it with the widget resolver, caches it, warms it at boot and serves it at `/app.css`. Editing a partial changes the widgets and the app together; check both (`bun run harness`, `bun run preview:app --shots`).
+
+- **Plain markup inside `.native`.** App pages render inside `<main class="app-main native">`. `form.css` styles native `input` / `select` / `textarea` / `button` there through `:where(.native …)`, which has zero specificity, so a component class on the same element always wins. Never add a bare `.native button` rule: it outranks `.btn-primary`. App-layer rules in `app.css` follow the same convention.
+- **The vocabulary.** Sections are `.panel` (sub-blocks `.psec`). Lists are `ul.list` of rows: `.row` holding `.row-title` and a right-aligned `.row-meta`, then `.row-actions` (each action is its own POST form, `display: contents`). Secondary forms (edit, add, filter) go behind `<details class="more"><summary>…</summary>`. Buttons: plain = neutral, `.btn-primary` = the one main action, `.btn-danger` = destructive, `.btn-sm` = in-row. Two-column fields: `.field-grid` with `<label>Text<input></label>`. Label + control + button on one line: `.inline-form`. Picker tabs are `.seg` / `.seg-btn` with `aria-selected`.
+- **One accent, three themes.** The accent is `--accent` from `tokens.css` and nothing overrides it: no swatch picker and no inline accent. `profiles.theme` is `light`, `dark` or null (System). Explicit themes stamp `data-theme` on `<html>` (`htmlOpen` in `src/app/shell.ts`); System leaves it off so the media query decides. Embedded widgets get the same treatment (`withWidgetData`). `profiles.accent_swatch` is unused, pending a contract migration.
+- **`[hidden]` is `display: none !important`** in `app.css`. Component `display` rules used to override the attribute.
+- **Embedded widgets.** `.widget-frame` is pulled out by the widget's own 12–14px gutter so cards line up with page panels, and `bridge.js` skips its chat-only footer when `window.__WIDGET_DATA__` seeded the paint.
+- **Test-pinned class names.** Some classes are asserted exactly by tests (see `src/web/components/shared-import.test.ts`, `src/domain/*.test.ts`). Style those by name in `app.css` rather than appending classes in markup.
+
+---
+
 # Claude Code Operating Instructions
 
 ## Core Philosophy
