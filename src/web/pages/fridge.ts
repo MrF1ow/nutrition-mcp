@@ -119,7 +119,7 @@ function locationSection(
         ? ""
         : renderAddItemPrompt(location.name);
     const pickerId = `picker-${location.id}`;
-    return `<section class="fridge-location" data-location-id="${escapeHtml(location.id)}">
+    return `<section class="fridge-location panel" data-location-id="${escapeHtml(location.id)}">
 <div class="fridge-location-head">
 <h2>${escapeHtml(location.name)}</h2>
 <form method="post" action="/fridge/locations/${escapeHtml(location.id)}/delete">

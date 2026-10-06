@@ -27,7 +27,10 @@
 .seg-btn:hover {
     color: var(--text);
 }
-.seg-btn.active {
+/* aria-selected is the same state for a role="tab" control (the app's food
+   picker), so it does not need a second class kept in sync by script. */
+.seg-btn.active,
+.seg-btn[aria-selected="true"] {
     background: var(--accent);
     color: var(--bg);
 }

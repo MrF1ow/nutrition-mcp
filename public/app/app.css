@@ -1,26 +1,26 @@
-:root {
-    --text: #1d1d1f;
-    --text-dim: #6e6e73;
-    --bg: #f5f5f7;
-    --panel: #ffffff;
-    --panel-border: #e6e6ea;
-    --accent: #2f8fd4;
-    --accent-ink: #ffffff;
-    --accent-soft: color-mix(in srgb, var(--accent) 16%, #ffffff);
-    color-scheme: light;
-}
+/* Household web app stylesheet, served at /app.css.
+ *
+ * Assembled by getAppCss() in src/widgets.ts from the same shared partials the
+ * in-chat widgets inline, so the app and the widgets share one set of tokens
+ * and components (spec: public/widgets/STYLE_GUIDE.md). Anything both surfaces
+ * use belongs in a shared/ partial. Only app layout lives below.
+ *
+ * App markup is plain HTML inside <main class="native">: form.css styles its
+ * controls through zero-specificity :where(.native …) hooks, and the rules
+ * here follow the same convention, so any component class wins.
+ */
 
-html[data-theme="dark"] {
-    --text: #f5f5f7;
-    --text-dim: #98989d;
-    --bg: #000000;
-    --panel: #1c1c1e;
-    --panel-border: #2c2c2e;
-    --accent: #5eb8f0;
-    --accent-ink: #0b1220;
-    --accent-soft: color-mix(in srgb, var(--accent) 22%, #1c1c1e);
-    color-scheme: dark;
-}
+/*@include shared/tokens.css@*/
+
+/*@include shared/base.css@*/
+
+/*@include shared/form.css@*/
+
+/*@include shared/table.css@*/
+
+/*@include shared/seg.css@*/
+
+/* ---- base ---- */
 
 *,
 *::before,
@@ -28,525 +28,18 @@ html[data-theme="dark"] {
     box-sizing: border-box;
 }
 
-html,
-body {
-    margin: 0;
-    padding: 0;
+/* `hidden` must beat any display rule. Without this, `.food-picker-panel
+   { display: grid }` overrode the attribute and every picker showed all three
+   tabs at once. */
+[hidden] {
+    display: none !important;
 }
 
 body {
     min-height: 100dvh;
     display: flex;
     flex-direction: column;
-    color: var(--text);
-    background: var(--bg);
-    font-family:
-        ui-sans-serif,
-        system-ui,
-        -apple-system,
-        "Segoe UI",
-        Roboto,
-        Helvetica,
-        Arial,
-        sans-serif;
     font-size: 15px;
-    line-height: 1.45;
-}
-
-.app-main {
-    flex: 1;
-    padding: 18px 16px 88px;
-}
-
-.bottom-nav {
-    position: sticky;
-    bottom: 0;
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 4px;
-    padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
-    background: var(--panel);
-    border-top: 1px solid var(--panel-border);
-}
-
-.bottom-nav a {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 0;
-    min-height: 44px;
-    padding: 8px 4px;
-    color: var(--text-dim);
-    text-decoration: none;
-}
-
-.bottom-nav svg {
-    width: 24px;
-    height: 24px;
-    display: block;
-    flex-shrink: 0;
-}
-
-.bottom-nav a[aria-current="page"] {
-    color: var(--accent);
-}
-
-.coming-soon {
-    color: var(--text-dim);
-}
-
-.app-bar {
-    display: flex;
-    justify-content: flex-end;
-    padding: 12px 16px 0;
-}
-
-.app-bar a {
-    color: var(--text-dim);
-    font-size: 13px;
-    font-weight: 600;
-    text-decoration: none;
-}
-
-.dash-head {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin: 0 0 12px;
-}
-
-.dash-head h1 {
-    margin: 0;
-    font-size: 22px;
-}
-
-.member-switch {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-
-.member-switch a {
-    color: var(--text-dim);
-    text-decoration: none;
-    font-size: 13px;
-    font-weight: 600;
-    padding: 5px 10px;
-    border: 1px solid var(--panel-border);
-    border-radius: 999px;
-    background: var(--panel);
-}
-
-.member-switch a[aria-current="page"] {
-    color: var(--accent);
-    border-color: var(--accent);
-    background: var(--accent-soft);
-}
-
-.peer-note {
-    margin: 0;
-    color: var(--text-dim);
-    font-size: 13px;
-}
-
-.widget-frame {
-    display: block;
-    width: 100%;
-    margin: 0 0 16px;
-    border: 0;
-    min-height: 280px;
-}
-
-.appearance {
-    display: grid;
-    gap: 16px;
-    margin-top: 16px;
-}
-
-.appearance fieldset {
-    border: 1px solid var(--panel-border);
-    border-radius: 14px;
-    padding: 12px;
-    background: var(--panel);
-}
-
-.appearance button {
-    font: inherit;
-    font-weight: 600;
-    color: var(--accent-ink);
-    background: var(--accent);
-    border: 0;
-    border-radius: 10px;
-    padding: 10px 14px;
-}
-
-.swatches {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-}
-
-.swatch {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 13px;
-}
-
-.swatch-chip {
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    border: 1px solid var(--panel-border);
-}
-
-.component-demo {
-    display: grid;
-    gap: 16px;
-    margin-top: 20px;
-    max-width: 420px;
-}
-
-.component-demo h2 {
-    margin: 8px 0 0;
-    font-size: 15px;
-}
-
-.quantity-field,
-.food-picker,
-.member-multi-select,
-.store-section-list {
-    display: grid;
-    gap: 8px;
-    padding: 12px;
-    border: 1px solid var(--panel-border);
-    border-radius: 14px;
-    background: var(--panel);
-}
-
-.quantity-field {
-    align-items: stretch;
-}
-
-.quantity-field-amount,
-.quantity-field-unit,
-.food-picker label,
-.member-choice {
-    color: var(--text);
-    font-size: 13px;
-    font-weight: 600;
-}
-
-.quantity-field input,
-.quantity-field select,
-.food-picker input,
-.food-picker button,
-.member-choice input {
-    font: inherit;
-    color: var(--text);
-    background: var(--bg);
-    border: 1px solid var(--panel-border);
-    border-radius: 10px;
-    min-height: 44px;
-    padding: 8px 10px;
-}
-
-.quantity-field input {
-    width: 100%;
-}
-
-.food-picker-tabs {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 4px;
-}
-
-.food-picker-tabs [role="tab"] {
-    font: inherit;
-    font-size: 13px;
-    font-weight: 600;
-    min-height: 44px;
-    color: var(--text-dim);
-    background: var(--bg);
-    border: 1px solid var(--panel-border);
-    border-radius: 10px;
-}
-
-.food-picker-tabs [aria-selected="true"] {
-    color: var(--accent-ink);
-    background: var(--accent);
-    border-color: var(--accent);
-}
-
-.food-picker-panel {
-    display: grid;
-    gap: 8px;
-}
-
-.food-picker-barcode {
-    display: grid;
-    gap: 8px;
-}
-
-.food-picker-barcode button,
-.food-picker button[type="submit"] {
-    color: var(--accent-ink);
-    background: var(--accent);
-    border-color: var(--accent);
-    font-weight: 600;
-}
-
-.food-picker-results {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: grid;
-    gap: 6px;
-}
-
-.food-picker-results li {
-    padding: 10px 12px;
-    border-radius: 10px;
-    background: var(--bg);
-    border: 1px solid var(--panel-border);
-    color: var(--text);
-}
-
-.already-have-tag {
-    display: inline-flex;
-    align-items: center;
-    min-height: 32px;
-    padding: 4px 10px;
-    border-radius: 999px;
-    background: var(--accent-soft);
-    color: var(--text);
-    font-size: 13px;
-    font-weight: 600;
-}
-
-.store-section-list {
-    list-style: none;
-    margin: 0;
-}
-
-.store-section-list li {
-    color: var(--text);
-    padding: 6px 0;
-    border-bottom: 1px solid var(--panel-border);
-}
-
-.store-section-list li:last-child {
-    border-bottom: 0;
-}
-
-.member-choice {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-height: 44px;
-}
-
-.member-multi-select legend {
-    color: var(--text);
-    font-weight: 600;
-}
-
-.empty-fridge,
-.add-item-prompt {
-    color: var(--text-dim);
-}
-
-.fridge-add-location,
-.fridge-add-supply,
-.fridge-item-edit {
-    display: grid;
-    gap: 8px;
-    max-width: 420px;
-    margin: 0 0 20px;
-}
-
-.fridge-add-location input,
-.fridge-add-supply input,
-.fridge-item-edit select,
-.fridge-add-location button,
-.fridge-add-supply button,
-.fridge-item-edit button,
-.fridge-item-delete button,
-.fridge-item-eat button,
-.fridge-item-discard button,
-.fridge-location-head button {
-    font: inherit;
-    color: var(--text);
-    background: var(--panel);
-    border: 1px solid var(--panel-border);
-    border-radius: 10px;
-    min-height: 44px;
-    padding: 8px 12px;
-}
-
-.fridge-add-location button,
-.fridge-add-supply button,
-.fridge-item-edit button {
-    color: var(--accent-ink);
-    background: var(--accent);
-    border-color: var(--accent);
-    font-weight: 600;
-}
-
-.fridge-location {
-    display: grid;
-    gap: 12px;
-    margin: 0 0 28px;
-    padding: 16px;
-    border: 1px solid var(--panel-border);
-    border-radius: 14px;
-    background: var(--panel);
-}
-
-.fridge-location-head,
-.fridge-item-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-}
-
-.fridge-location h2,
-.fridge-location h3 {
-    margin: 0;
-}
-
-.fridge-items {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: grid;
-    gap: 12px;
-}
-
-.fridge-item {
-    display: grid;
-    gap: 8px;
-    padding: 12px 0;
-    border-top: 1px solid var(--panel-border);
-}
-
-.fridge-item-name {
-    margin: 0;
-    font-weight: 600;
-}
-
-.fridge-item-qty {
-    margin: 0;
-    color: var(--text-dim);
-}
-
-.empty-grocery,
-.grocery-line-qty {
-    color: var(--text-dim);
-}
-
-.grocery-store {
-    display: grid;
-    gap: 12px;
-    margin: 0 0 28px;
-    padding: 16px;
-    border: 1px solid var(--panel-border);
-    border-radius: 14px;
-    background: var(--panel);
-}
-
-.grocery-store h2,
-.grocery-store h3,
-.grocery-section h3 {
-    margin: 0;
-}
-
-.grocery-lines {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: grid;
-    gap: 12px;
-}
-
-.grocery-line {
-    display: grid;
-    gap: 8px;
-    padding: 12px 0;
-    border-top: 1px solid var(--panel-border);
-}
-
-.grocery-line.is-checked .grocery-line-name {
-    text-decoration: line-through;
-    color: var(--text-dim);
-}
-
-.grocery-line-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    flex-wrap: wrap;
-}
-
-.grocery-line-name {
-    margin: 0;
-    font-weight: 600;
-}
-
-.grocery-line-qty {
-    margin: 0;
-}
-
-.grocery-add-store,
-.grocery-clear-checked,
-.grocery-line-check,
-.grocery-put-away {
-    display: grid;
-    gap: 8px;
-    max-width: 420px;
-}
-
-.grocery-add-store {
-    margin: 0 0 20px;
-}
-
-.grocery-add-store input,
-.grocery-add-store button,
-.grocery-clear-checked button,
-.grocery-line-check button,
-.grocery-put-away button,
-.grocery-store select {
-    font: inherit;
-    color: var(--text);
-    background: var(--panel);
-    border: 1px solid var(--panel-border);
-    border-radius: 10px;
-    min-height: 44px;
-    padding: 8px 12px;
-}
-
-.grocery-add-store button,
-.grocery-clear-checked button {
-    color: var(--accent-ink);
-    background: var(--accent);
-    border-color: var(--accent);
-    font-weight: 600;
-}
-
-.allergen-warning,
-.allergen-unknown {
-    font-weight: 600;
-}
-
-.allergen-warning {
-    color: #b42318;
-}
-
-.error-banner {
-    color: #b42318;
-    font-weight: 600;
 }
 
 .visually-hidden {
@@ -561,286 +54,310 @@ body {
     border: 0;
 }
 
-.settings-lead {
-    margin: 0 0 16px;
+/* ---- shell ---- */
+
+.app-bar {
+    display: flex;
+    justify-content: flex-end;
+    width: 100%;
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 12px 16px 0;
+}
+.app-bar a {
+    color: var(--text-dim);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
 }
 
-.settings-lead a {
+.app-main {
+    flex: 1;
+    width: 100%;
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 8px 16px 96px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+.app-main h1 {
+    margin: 4px 0 0;
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+}
+.app-main h2 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+}
+.app-main h3 {
+    margin: 0;
+    font-size: 11.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+}
+.app-main p {
+    margin: 0;
+}
+.app-main a {
     color: var(--accent);
     font-weight: 600;
     text-decoration: none;
 }
+.app-main .panel {
+    padding: 14px 16px;
+    gap: 12px;
+}
 
-.nutrition-prefs fieldset,
-.add-member,
-.rotate-token,
-.household-name,
-.household-location,
-.add-store,
-.store-rule-form,
-.allergen-form,
-.dislike-form,
-.person-rule-form,
-.section-rename {
+.bottom-nav {
+    position: sticky;
+    bottom: 0;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 4px;
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+    background: var(--panel);
+    border-top: 1px solid var(--panel-border);
+}
+.bottom-nav a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    min-height: 44px;
+    padding: 8px 4px;
+    color: var(--text-dim);
+    text-decoration: none;
+}
+.bottom-nav svg {
+    width: 24px;
+    height: 24px;
+    display: block;
+    flex-shrink: 0;
+}
+.bottom-nav a[aria-current="page"] {
+    color: var(--accent);
+}
+
+/* ---- native controls inside .native ----
+   Phone-sized targets, and 16px field text so iOS Safari does not zoom the
+   page when a field takes focus. */
+
+:where(
+    .native
+        :is(
+            input:not(
+                [type="checkbox"],
+                [type="radio"],
+                [type="hidden"],
+                [type="file"]
+            ),
+            select,
+            textarea
+        )
+) {
+    min-height: 44px;
+    font-size: 16px;
+}
+:where(.native textarea) {
+    resize: vertical;
+}
+:where(.native button) {
+    min-height: 44px;
+    font-size: 14px;
+}
+:where(.native) .btn-sm {
+    min-height: 34px;
+}
+:where(.native label) {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-dim);
+}
+:where(.native label:has(> input[type="checkbox"], > input[type="radio"])) {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 36px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+}
+:where(.native :is(input[type="checkbox"], input[type="radio"])) {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    accent-color: var(--accent);
+}
+:where(.native form) {
     display: grid;
     gap: 8px;
-    margin: 0 0 20px;
-}
-
-.nutrition-prefs input,
-.nutrition-prefs select,
-.add-member input,
-.household-name input,
-.household-location input,
-.add-store input,
-.store-rule-form textarea,
-.allergen-form select,
-.allergen-form input,
-.dislike-form input,
-.person-rule-form textarea,
-.section-rename input,
-.add-member button,
-.rotate-token button,
-.household-name button,
-.household-location button,
-.add-store button,
-.store-rule-form button,
-.allergen-form button,
-.dislike-form button,
-.person-rule-form button,
-.section-rename button {
-    font: inherit;
-    color: var(--text);
-    background: var(--panel);
-    border: 1px solid var(--panel-border);
-    border-radius: 10px;
-    min-height: 44px;
-    padding: 8px 12px;
-}
-
-.add-member button,
-.rotate-token button,
-.household-name button,
-.household-location button,
-.add-store button,
-.store-rule-form button,
-.allergen-form button,
-.dislike-form button,
-.person-rule-form button,
-.section-rename button {
-    color: var(--accent-ink);
-    background: var(--accent);
-    border-color: var(--accent);
-    font-weight: 600;
-}
-
-.household-store,
-.member-rules {
-    display: grid;
-    gap: 12px;
-    margin: 0 0 24px;
-    padding: 16px;
-    border: 1px solid var(--panel-border);
-    border-radius: 14px;
-    background: var(--panel);
-}
-
-.household-store h3,
-.member-rules h3 {
     margin: 0;
 }
-
-.household-members,
-.allergen-list,
-.dislike-list,
-.person-rule-list,
-.store-rule-list {
-    list-style: none;
+:where(.native fieldset) {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
     margin: 0;
     padding: 0;
-    display: grid;
-    gap: 6px;
+    border: 0;
+}
+:where(.native legend) {
+    padding: 0;
+    margin-bottom: 4px;
+    font-size: 13.5px;
+    font-weight: 800;
+    color: var(--text);
 }
 
+/* ---- notices and quiet text ---- */
+
+.error-banner,
+.allergen-warning {
+    padding: 9px 11px;
+    border: 1px solid color-mix(in srgb, var(--over) 45%, var(--panel-border));
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--over) 9%, var(--panel));
+    color: var(--over);
+    font-size: 13.5px;
+    font-weight: 600;
+}
+.allergen-unknown {
+    padding: 9px 11px;
+    border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--panel-border));
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--warn) 9%, var(--panel));
+    color: var(--warn);
+    font-size: 13.5px;
+    font-weight: 600;
+}
 .token-once {
-    padding: 12px;
-    border-radius: 12px;
-    background: var(--accent-soft);
+    padding: 9px 11px;
+    border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--panel-border));
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--accent) 9%, var(--panel));
+    font-size: 13.5px;
     font-weight: 600;
     overflow-wrap: anywhere;
 }
 
-.empty-stores {
-    color: var(--text-dim);
-}
-
+/* Empty states and secondary text. The empty-* classes are pinned by tests,
+   so they are listed here rather than given a second class in markup. */
+.muted,
+.peer-note,
+.empty-fridge,
+.empty-grocery,
 .empty-recipes,
-.recipe-yield,
-.recipe-ingredient-total,
-.recipe-ingredient-per-portion,
-.recipe-ingredient-person,
-.person-portion,
-.dislike-note {
+.empty-recipe-store,
+.empty-stores,
+.add-item-prompt {
     color: var(--text-dim);
+    font-size: 13.5px;
+}
+.dislike-note {
+    color: var(--warn);
+    font-size: 13.5px;
+    font-weight: 600;
 }
 
-.recipe-list,
-.recipe-ingredients {
+.already-have-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 9px;
+    border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* ---- page header and segmented links ---- */
+
+.dash-head {
+    display: grid;
+    gap: 10px;
+}
+
+/* Member switch (nutrition) and settings sub-navigation: links styled as the
+   widgets' segmented control. */
+.member-switch,
+.subnav {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    width: fit-content;
+    padding: 3px;
+    border-radius: 999px;
+    background: var(--track);
+}
+.member-switch a,
+.subnav a {
+    padding: 6px 14px;
+    border-radius: 999px;
+    color: var(--text-dim);
+    font-size: 13px;
+    font-weight: 600;
+}
+.member-switch a[aria-current="page"],
+.subnav a[aria-current="page"] {
+    background: var(--accent);
+    color: var(--bg);
+}
+
+/* ---- shared form components ---- */
+
+/* Amount and unit side by side, each label above its control. */
+.quantity-field {
+    display: grid;
+    grid-template-rows: auto auto;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    gap: 4px 8px;
+}
+
+.food-picker,
+.food-picker-panel,
+.food-picker-panel > form {
+    display: grid;
+    gap: 8px;
+}
+.food-picker-results {
     list-style: none;
-    margin: 0 0 24px;
+    margin: 0;
     padding: 0;
     display: grid;
-    gap: 12px;
+    gap: 6px;
+}
+.food-picker-results:empty {
+    display: none;
+}
+.food-picker-results button {
+    width: 100%;
+    text-align: left;
 }
 
-.recipe-card,
-.recipe-ingredient {
-    display: grid;
-    gap: 4px;
-    padding: 12px 0;
-    border-top: 1px solid var(--panel-border);
-}
-
-.recipe-card a {
-    color: var(--text);
-    font-weight: 600;
-    text-decoration: none;
-}
-
-.recipe-create,
-.recipe-edit,
-.recipe-portion,
-.recipe-filter,
-.recipe-list-filters,
-.recipe-add-grocery,
-.recipe-delete,
-.recipe-ingredient-edit,
-.recipe-ingredient-move,
-.recipe-ingredient-delete {
-    display: grid;
-    gap: 8px;
-    max-width: 420px;
-    margin: 0 0 24px;
-}
-
-.recipe-create input,
-.recipe-create button,
-.recipe-edit input,
-.recipe-edit textarea,
-.recipe-edit button,
-.recipe-portion input,
-.recipe-portion button,
-.recipe-filter select,
-.recipe-filter button,
-.recipe-list-filters input,
-.recipe-list-filters select,
-.recipe-list-filters button,
-.recipe-add-grocery select,
-.recipe-add-grocery button,
-.recipe-delete button,
-.recipe-ingredient-edit input,
-.recipe-ingredient-edit button,
-.recipe-ingredient-move button,
-.recipe-ingredient-delete button {
-    font: inherit;
-    color: var(--text);
-    background: var(--panel);
-    border: 1px solid var(--panel-border);
-    border-radius: 10px;
-    min-height: 44px;
-    padding: 8px 12px;
-}
-
-.recipe-create button,
-.recipe-edit button,
-.recipe-portion button,
-.recipe-add-grocery button {
-    color: var(--accent-ink);
-    background: var(--accent);
-    border-color: var(--accent);
-    font-weight: 600;
-}
-
-.recipe-tags {
+.member-multi-select {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 2px 16px;
+}
+.member-multi-select legend {
+    width: 100%;
+}
+
+/* ---- widgets embedded in the page ---- */
+
+.widget-frame {
+    display: block;
+    width: 100%;
+    min-height: 280px;
     margin: 0;
-}
-
-.recipe-tag {
-    font-size: 0.85em;
-    padding: 2px 8px;
-    border-radius: 999px;
-    background: var(--panel);
-    border: 1px solid var(--panel-border);
-}
-
-.recipe-filter-check {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.recipe-ingredient-note {
-    color: var(--text-dim);
-    font-style: italic;
-}
-
-.recipe-macros {
-    font-weight: 600;
-}
-
-.dislike-note {
-    font-weight: 600;
-}
-
-.fridge-expiring {
-    margin: 0 0 20px;
-    padding: 12px 16px;
-    border: 1px solid var(--panel-border);
-    border-radius: 14px;
-    background: var(--panel);
-}
-
-.fridge-expiring h2 {
-    margin: 0 0 8px;
-    font-size: 1rem;
-}
-
-.fridge-expiring ul {
-    margin: 0;
-    padding-left: 1.2em;
-}
-
-.fridge-item-eat,
-.fridge-item-discard,
-.grocery-put-away,
-.recipe-cook {
-    display: grid;
-    gap: 8px;
-    max-width: 420px;
-    margin: 0 0 12px;
-}
-
-.fridge-item-eat button,
-.fridge-item-discard button,
-.grocery-put-away button,
-.recipe-cook button {
-    font: inherit;
-    color: var(--accent-ink);
-    background: var(--accent);
-    border: 1px solid var(--accent);
-    border-radius: 10px;
-    min-height: 44px;
-    padding: 8px 12px;
-    font-weight: 600;
-}
-
-.recipe-cook fieldset {
-    display: grid;
-    gap: 8px;
-    border: 1px solid var(--panel-border);
-    border-radius: 14px;
-    padding: 12px;
+    border: 0;
 }

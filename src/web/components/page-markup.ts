@@ -35,7 +35,7 @@ export function renderExpiringStrip(
                 `<li data-item-id="${escapeHtml(item.id)}">${escapeHtml(item.displayName)} — ${escapeHtml(item.expiresOn)}</li>`,
         )
         .join("");
-    return `<section class="fridge-expiring">
+    return `<section class="fridge-expiring panel">
 <h2>Expiring soon</h2>
 <ul>${rows}</ul>
 </section>`;

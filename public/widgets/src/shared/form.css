@@ -7,7 +7,15 @@
  * Native controls need `color-scheme` (declared in tokens.css) or the browser
  * paints OS chrome that ignores every token: a <select> in a dark widget comes
  * out light, and its dropdown list stays light regardless of what we set here.
- */
+ *
+ * The household web app includes this partial too (public/app/app.css). Its
+ * markup is plain HTML — <input>, <select>, <button> with no classes — inside
+ * <main class="native">. The :where(.native …) selectors below give those
+ * controls the same look at ZERO specificity, so a component class on the same
+ * element (.btn-primary, .btn-danger, .btn-sm) always wins. Never write a bare
+ * .native…button selector (without :where): it would outrank .btn-primary.
+ * Widgets never contain a
+ * .native ancestor, so none of these selectors match inside a widget. */
 
 /* ---- layout ---- */
 
@@ -43,7 +51,20 @@
 /* ---- shared control surface ---- */
 
 .input,
-.select {
+.select,
+:where(
+    .native
+        :is(
+            input:not(
+                [type="checkbox"],
+                [type="radio"],
+                [type="hidden"],
+                [type="file"]
+            ),
+            select,
+            textarea
+        )
+) {
     appearance: none;
     -webkit-appearance: none;
     width: 100%;
@@ -58,15 +79,18 @@
         border-color 0.12s ease,
         box-shadow 0.12s ease;
 }
-.input::placeholder {
+.input::placeholder,
+:where(.native :is(input, textarea))::placeholder {
     color: var(--text-dim);
 }
 .input:hover:not(:disabled),
-.select:hover:not(:disabled) {
+.select:hover:not(:disabled),
+:where(.native :is(input, select, textarea)):hover:not(:disabled) {
     border-color: var(--text-dim);
 }
 .input:disabled,
-.select:disabled {
+.select:disabled,
+:where(.native :is(input, select, textarea)):disabled {
     opacity: 0.55;
     cursor: not-allowed;
 }
@@ -74,7 +98,8 @@
 /* Chevron drawn as a background image so no external asset is needed (the
    sandbox CSP allows data: images only). currentColor is not available inside
    url(), so the stroke is a literal that reads acceptably on both themes. */
-.select {
+.select,
+:where(.native select) {
     padding-right: 30px;
     background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' fill='none' stroke='%238e8e93' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
@@ -87,7 +112,8 @@
 .select:focus-visible,
 .btn:focus-visible,
 .drop:focus-visible,
-.seg-btn:focus-visible {
+.seg-btn:focus-visible,
+:where(.native :is(input, select, textarea, button)):focus-visible {
     outline: none;
     border-color: var(--accent);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
@@ -95,7 +121,8 @@
 
 /* ---- buttons ---- */
 
-.btn {
+.btn,
+:where(.native button) {
     appearance: none;
     -webkit-appearance: none;
     font: inherit;
@@ -113,10 +140,12 @@
         border-color 0.12s ease,
         opacity 0.12s ease;
 }
-.btn:hover:not(:disabled) {
+.btn:hover:not(:disabled),
+:where(.native button):hover:not(:disabled) {
     border-color: var(--text-dim);
 }
-.btn:disabled {
+.btn:disabled,
+:where(.native button):disabled {
     opacity: 0.5;
     cursor: not-allowed;
 }

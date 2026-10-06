@@ -220,6 +220,9 @@ describe("runtime surfaces that stay", () => {
         expect(r.headers.get("content-security-policy") ?? "").not.toContain(
             "googletagmanager",
         );
+        expect(r.headers.get("content-security-policy") ?? "").toContain(
+            "img-src 'self' data:",
+        );
     });
 });
 

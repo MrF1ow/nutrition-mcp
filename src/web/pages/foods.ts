@@ -30,7 +30,7 @@ function foodCard(food: Food & { aliases: string[] }): string {
         })
         .join("");
     const archived = food.archivedAt ? " checked" : "";
-    return `<form method="post" action="/settings/foods/${escapeHtml(food.id)}" class="appearance food-edit">
+    return `<form method="post" action="/settings/foods/${escapeHtml(food.id)}" class="appearance food-edit panel">
 <input type="hidden" name="food_id" value="${escapeHtml(food.id)}" />
 <fieldset>
 <legend>${escapeHtml(food.name)}</legend>
@@ -72,7 +72,7 @@ export function renderFoodsSettingsPage(view: FoodsSettingsView): string {
         .join("");
     const merge =
         view.foods.length >= 2
-            ? `<form method="post" action="/settings/foods/merge" class="appearance">
+            ? `<form method="post" action="/settings/foods/merge" class="appearance panel">
 <fieldset>
 <legend>Merge foods</legend>
 <label for="keep_id">Keep</label>

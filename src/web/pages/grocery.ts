@@ -132,7 +132,7 @@ function storeSection(
         store_id: store.id,
     };
     if (other) hidden.section_id = other.id;
-    return `<section class="grocery-store" data-store-id="${escapeHtml(store.id)}">
+    return `<section class="grocery-store panel" data-store-id="${escapeHtml(store.id)}">
 <h2>${escapeHtml(store.name)}</h2>
 ${rules ? `<ul class="store-rule-list">${rules}</ul>` : ""}
 ${sections}

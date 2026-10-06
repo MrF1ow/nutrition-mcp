@@ -61,9 +61,11 @@ app.use("*", async (c, next) => {
     c.header("X-Content-Type-Options", "nosniff");
     c.header("X-Frame-Options", "DENY");
     if (!c.res.headers.get("Content-Security-Policy")) {
+        // img-src data: — form.css draws the <select> chevron as an inline
+        // SVG data URI; srcdoc widget frames inherit this policy too.
         c.header(
             "Content-Security-Policy",
-            "default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self'; frame-ancestors 'none'",
+            "default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; frame-ancestors 'none'",
         );
     }
     c.header("Referrer-Policy", "no-referrer");

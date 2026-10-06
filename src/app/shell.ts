@@ -103,7 +103,7 @@ ${appHead(chrome.title, chrome.theme, chrome.accent)}
 </head>
 <body>
 <header class="app-bar"><a href="/logout">Log out</a></header>
-<main class="app-main">${chrome.body}</main>
+<main class="app-main native">${chrome.body}</main>
 ${bottomNav(chrome.active)}
 <script>
 document.querySelectorAll(".widget-frame").forEach((frame) => {

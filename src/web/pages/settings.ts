@@ -109,7 +109,7 @@ export function renderSettingsPage(view: SettingsPageView): string {
         <h1>Settings</h1>
         ${error}
         <p class="settings-lead"><a href="/settings/household">Household</a> · <a href="/settings/foods">Foods</a></p>
-        <form method="POST" action="/settings" class="appearance">
+        <form method="POST" action="/settings" class="appearance panel">
             <input type="hidden" name="group" value="account" />
             <fieldset>
                 <legend>Account</legend>
@@ -127,7 +127,7 @@ export function renderSettingsPage(view: SettingsPageView): string {
             </fieldset>
             <button type="submit">Save account</button>
         </form>
-        <form method="POST" action="/settings" class="appearance nutrition-prefs">
+        <form method="POST" action="/settings" class="appearance nutrition-prefs panel">
             <input type="hidden" name="group" value="nutrition" />
             <fieldset>
                 <legend>Nutrition prefs</legend>

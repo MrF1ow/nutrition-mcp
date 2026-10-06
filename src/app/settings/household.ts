@@ -81,7 +81,7 @@ function storeCard(store: HouseholdStoreView, canEdit: boolean): string {
 <button type="submit">Save store rule</button>
 </form>`
         : "";
-    return `<section class="household-store" data-store-id="${escapeHtml(store.id)}">
+    return `<section class="household-store panel" data-store-id="${escapeHtml(store.id)}">
 <h3>${escapeHtml(store.name)}</h3>
 <ul class="store-section-list">${sections}</ul>
 <ul class="store-rule-list">${rules}</ul>
@@ -136,7 +136,7 @@ ${allergenOptions}
 <button type="submit">Save person rule</button>
 </form>`
         : "";
-    return `<section class="member-rules" data-user-id="${escapeHtml(view.member.userId)}">
+    return `<section class="member-rules panel" data-user-id="${escapeHtml(view.member.userId)}">
 <h3>${escapeHtml(view.member.displayName)}</h3>
 <ul class="allergen-list">${allergens}</ul>
 <ul class="dislike-list">${dislikes}</ul>
