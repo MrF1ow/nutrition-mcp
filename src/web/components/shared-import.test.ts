@@ -581,3 +581,14 @@ test("runBarcodeLookupAction normalizes digits then calls lookupBarcode", async 
     expect(seen).toEqual(["3017620422003"]);
     expect(result).toEqual({ barcode: "3017620422003", food: hit });
 });
+
+test("food picker tabs are a segmented control driven by aria-selected", () => {
+    const html = renderFoodPicker();
+    expect(html).toContain('class="food-picker-tabs seg" role="tablist"');
+    expect(html).toContain(
+        'class="seg-btn" id="food-picker-tab-barcode" data-tab="barcode"',
+    );
+    expect(html).toContain(
+        '<button type="submit" class="btn-primary">Look up</button>',
+    );
+});

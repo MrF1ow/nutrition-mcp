@@ -203,16 +203,16 @@ ${extras}
 <label for="${escapeHtml(id)}-name">Name</label>
 <input id="${escapeHtml(id)}-name" name="food_name" type="text" required autocomplete="off" />
 ${manualQty}
-<button type="submit">Add food</button>
+<button type="submit" class="btn-primary">Add food</button>
 </form>`
             : `<label for="${escapeHtml(id)}-name">Name</label>
 <input id="${escapeHtml(id)}-name" name="food_name" type="text" autocomplete="off" />
 ${manualQty}`;
     return `<div class="food-picker" id="${escapeHtml(id)}" data-food-picker>
-<div class="food-picker-tabs" role="tablist" aria-label="Food identity">
-<button type="button" role="tab" id="${escapeHtml(id)}-tab-barcode" data-tab="barcode" aria-controls="${escapeHtml(barcodePanel)}" aria-selected="true">Barcode</button>
-<button type="button" role="tab" id="${escapeHtml(id)}-tab-search" data-tab="search" aria-controls="${escapeHtml(searchPanel)}" aria-selected="false">Search</button>
-<button type="button" role="tab" id="${escapeHtml(id)}-tab-manual" data-tab="manual" aria-controls="${escapeHtml(manualPanel)}" aria-selected="false">Manual</button>
+<div class="food-picker-tabs seg" role="tablist" aria-label="Food identity">
+<button type="button" role="tab" class="seg-btn" id="${escapeHtml(id)}-tab-barcode" data-tab="barcode" aria-controls="${escapeHtml(barcodePanel)}" aria-selected="true">Barcode</button>
+<button type="button" role="tab" class="seg-btn" id="${escapeHtml(id)}-tab-search" data-tab="search" aria-controls="${escapeHtml(searchPanel)}" aria-selected="false">Search</button>
+<button type="button" role="tab" class="seg-btn" id="${escapeHtml(id)}-tab-manual" data-tab="manual" aria-controls="${escapeHtml(manualPanel)}" aria-selected="false">Manual</button>
 </div>
 <div class="food-picker-panel" role="tabpanel" id="${escapeHtml(barcodePanel)}" data-panel="barcode" aria-labelledby="${escapeHtml(id)}-tab-barcode">
 <form class="food-picker-barcode" data-barcode-form data-lookup-path="lookupBarcode" action="${escapeHtml(action)}" method="${method}">
@@ -220,7 +220,7 @@ ${extras}
 <label for="${escapeHtml(id)}-barcode">Barcode</label>
 <input id="${escapeHtml(id)}-barcode" name="barcode" inputmode="numeric" pattern="[0-9]*" autocomplete="off" />
 ${qty}
-<button type="submit">${escapeHtml(barcodeSubmit)}</button>
+<button type="submit" class="btn-primary">${escapeHtml(barcodeSubmit)}</button>
 </form>
 <ul class="food-picker-results" data-barcode-results></ul>
 </div>

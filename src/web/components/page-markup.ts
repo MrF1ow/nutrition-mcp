@@ -32,12 +32,12 @@ export function renderExpiringStrip(
     const rows = items
         .map(
             (item) =>
-                `<li data-item-id="${escapeHtml(item.id)}">${escapeHtml(item.displayName)} — ${escapeHtml(item.expiresOn)}</li>`,
+                `<li data-item-id="${escapeHtml(item.id)}"><div class="row"><span class="row-title">${escapeHtml(item.displayName)}</span><span class="row-meta">${escapeHtml(item.expiresOn)}</span></div></li>`,
         )
         .join("");
     return `<section class="fridge-expiring panel">
 <h2>Expiring soon</h2>
-<ul>${rows}</ul>
+<ul class="list">${rows}</ul>
 </section>`;
 }
 
@@ -71,22 +71,32 @@ export function renderFridgeItemRow(opts: {
     kind: string;
     displayName: string;
     quantityLabel: string;
+    expiresOn?: string | null;
     editFields: string;
     extraActions?: string;
 }): string {
-    return `<li class="fridge-item" data-item-id="${escapeHtml(opts.id)}" data-kind="${opts.kind}">
-<div class="fridge-item-head">
-<p class="fridge-item-name">${escapeHtml(opts.displayName)}</p>
-<p class="fridge-item-qty">${escapeHtml(opts.quantityLabel)}</p>
+    const id = escapeHtml(opts.id);
+    const expires = opts.expiresOn
+        ? ` · exp ${escapeHtml(opts.expiresOn)}`
+        : "";
+    return `<li class="fridge-item" data-item-id="${id}" data-kind="${opts.kind}">
+<div class="fridge-item-head row">
+<p class="fridge-item-name row-title">${escapeHtml(opts.displayName)}</p>
+<p class="fridge-item-qty row-meta">${escapeHtml(opts.quantityLabel)}${expires}</p>
 </div>
-<form class="fridge-item-edit" method="post" action="/fridge/items/${escapeHtml(opts.id)}">
-${opts.editFields}
-<button type="submit">Save</button>
-</form>
+<div class="row-actions">
 ${opts.extraActions ?? ""}
-<form class="fridge-item-delete" method="post" action="/fridge/items/${escapeHtml(opts.id)}/delete">
-<button type="submit">Delete</button>
+<details class="more">
+<summary>Edit</summary>
+<form class="fridge-item-edit" method="post" action="/fridge/items/${id}">
+${opts.editFields}
+<button type="submit" class="btn-primary">Save</button>
 </form>
+<form class="fridge-item-delete" method="post" action="/fridge/items/${id}/delete">
+<button type="submit" class="btn-danger">Delete</button>
+</form>
+</details>
+</div>
 </li>`;
 }
 

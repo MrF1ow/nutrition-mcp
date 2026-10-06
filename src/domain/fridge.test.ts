@@ -244,3 +244,49 @@ test("fridge page reuses quantity field and food picker", () => {
     expect(html).toContain('value="roll"');
     expect(html).toContain('action="/fridge/items"');
 });
+
+test("fridge rows show quantity and expiry, with edit and delete behind a disclosure", () => {
+    const html = renderFridgePage({
+        chrome: { theme: "light" },
+        locations: [
+            { id: "loc-1", householdId: "hh-1", name: "Fridge", sortOrder: 0 },
+        ],
+        items: [
+            {
+                id: "it-1",
+                householdId: "hh-1",
+                locationId: "loc-1",
+                kind: "food",
+                displayName: "Eggs",
+                quantity: { amount: 6, unit: "each" },
+                identity: { kind: "food", via: "manual", displayName: "Eggs" },
+                foodId: "f-1",
+                expiresOn: "2026-10-08",
+            },
+        ],
+    } as never);
+    expect(html).toContain('<ul class="fridge-items list">');
+    expect(html).toContain("6 each · exp 2026-10-08");
+    expect(html).toMatch(
+        /<details class="more">\s*<summary>Edit<\/summary>\s*<form class="fridge-item-edit"/,
+    );
+    expect(html).toContain(
+        '<button type="submit" class="btn-danger">Delete</button>',
+    );
+    expect(html).toContain(
+        '<button type="submit" class="btn-sm">Ate it</button>',
+    );
+    expect(html).toMatch(/<summary><h3>Add food<\/h3><\/summary>/);
+    expect(html).toMatch(/<summary><h3>Add supply<\/h3><\/summary>/);
+});
+
+test("the add-location disclosure starts open only when there are no locations", () => {
+    const empty = renderFridgePage({
+        chrome: { theme: "light" },
+        locations: [],
+        items: [],
+    } as never);
+    expect(empty).toContain(
+        '<details class="more" open>\n<summary>Add location</summary>',
+    );
+});

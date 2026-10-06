@@ -89,6 +89,7 @@ function itemRow(item: FridgeItem, locations: FridgeLocation[]): string {
         kind: item.kind,
         displayName: item.displayName,
         quantityLabel: quantityLabel(item),
+        expiresOn: item.expiresOn,
         editFields: `${qty}
 <label for="move-${escapeHtml(item.id)}">Location</label>
 ${locationSelect(locations, item.locationId, "location_id", `move-${item.id}`)}
@@ -98,10 +99,10 @@ ${locationSelect(locations, item.locationId, "location_id", `move-${item.id}`)}
             item.foodId == null
                 ? ""
                 : `<form class="fridge-item-eat" method="post" action="/fridge/items/${escapeHtml(item.id)}/eat">
-<button type="submit">Ate it</button>
+<button type="submit" class="btn-sm">Ate it</button>
 </form>
 <form class="fridge-item-discard" method="post" action="/fridge/items/${escapeHtml(item.id)}/discard">
-<button type="submit">Toss</button>
+<button type="submit" class="btn-sm">Toss</button>
 </form>`,
     });
 }
@@ -120,15 +121,16 @@ function locationSection(
         : renderAddItemPrompt(location.name);
     const pickerId = `picker-${location.id}`;
     return `<section class="fridge-location panel" data-location-id="${escapeHtml(location.id)}">
-<div class="fridge-location-head">
-<h2>${escapeHtml(location.name)}</h2>
-<form method="post" action="/fridge/locations/${escapeHtml(location.id)}/delete">
-<button type="submit">Remove</button>
+<div class="fridge-location-head row">
+<h2 class="row-title">${escapeHtml(location.name)}</h2>
+<form class="row-meta" method="post" action="/fridge/locations/${escapeHtml(location.id)}/delete">
+<button type="submit" class="btn-sm btn-danger">Remove</button>
 </form>
 </div>
 ${empty}
-<ul class="fridge-items">${rows}</ul>
-<h3>Add food</h3>
+<ul class="fridge-items list">${rows}</ul>
+<details class="more">
+<summary><h3>Add food</h3></summary>
 ${renderFoodPicker({
     id: pickerId,
     action: "/fridge/items",
@@ -136,7 +138,9 @@ ${renderFoodPicker({
     hiddenFields: { kind: "food", location_id: location.id },
     includeQuantity: true,
 })}
-<h3>Add supply</h3>
+</details>
+<details class="more">
+<summary><h3>Add supply</h3></summary>
 <form class="fridge-add-supply" method="post" action="/fridge/items">
 <input type="hidden" name="kind" value="supply" />
 <input type="hidden" name="location_id" value="${escapeHtml(location.id)}" />
@@ -150,8 +154,9 @@ ${renderQuantityField({
     namePrefix: "qty",
     required: true,
 })}
-<button type="submit">Add supply</button>
+<button type="submit" class="btn-primary">Add supply</button>
 </form>
+</details>
 </section>`;
 }
 
@@ -173,12 +178,15 @@ export function renderFridgePage(view: FridgePageView): string {
         ${error}
         ${emptyPrompt}
         ${expiring}
-        <form class="fridge-add-location" method="post" action="/fridge/locations">
-            <label for="location_name">Location name</label>
-            <input id="location_name" name="name" type="text" required maxlength="80" autocomplete="off" />
-            <button type="submit">Add location</button>
-        </form>
         ${sections}
+        <details class="more"${view.locations.length === 0 ? " open" : ""}>
+<summary>Add location</summary>
+<form class="fridge-add-location" method="post" action="/fridge/locations">
+<label for="location_name">Location name</label>
+<input id="location_name" name="name" type="text" required maxlength="80" autocomplete="off" />
+<button type="submit" class="btn-primary">Add location</button>
+</form>
+</details>
     `;
     return renderAppShell({
         title: "Fridge",

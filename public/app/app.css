@@ -381,3 +381,129 @@ body {
 .choice-row legend {
     width: 100%;
 }
+
+/* ---- lists and rows ---- */
+
+.list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.list > li {
+    display: grid;
+    gap: 8px;
+    padding: 10px 0;
+    border-top: 1px solid var(--panel-border);
+}
+.list > li:first-child {
+    border-top: 0;
+    padding-top: 2px;
+}
+.list:empty {
+    display: none;
+}
+
+/* Title left, figure pushed right; wraps under the title on a narrow card. */
+.row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 12px;
+}
+.row-title {
+    min-width: 0;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+.row-meta {
+    margin-left: auto;
+    color: var(--text-dim);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* One wrapping line of row buttons. Each action is its own POST form; with
+   display: contents the buttons sit in the line as if the forms were not
+   there. An opened disclosure takes the whole width below them. */
+.row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+.row-actions > form {
+    display: contents;
+}
+.row-actions > details[open] {
+    flex-basis: 100%;
+}
+.row-actions select {
+    width: auto;
+    flex: 1 1 140px;
+}
+
+/* ---- disclosure ---- */
+
+details.more > summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    width: fit-content;
+    min-height: 36px;
+    padding: 6px 12px;
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    background: var(--panel);
+    color: var(--text);
+    font-size: 13.5px;
+    font-weight: 600;
+    list-style: none;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+details.more > summary::-webkit-details-marker {
+    display: none;
+}
+details.more > summary::after {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-right: 1.75px solid var(--text-dim);
+    border-bottom: 1.75px solid var(--text-dim);
+    transform: translateY(-2px) rotate(45deg);
+}
+details.more[open] > summary::after {
+    transform: translateY(1px) rotate(-135deg);
+}
+details.more[open] > summary {
+    margin-bottom: 10px;
+}
+details.more > summary:hover {
+    border-color: var(--text-dim);
+}
+details.more > summary:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+/* A heading inside a summary keeps its place in the outline but reads as the
+   summary label. */
+details.more > summary > :is(h2, h3) {
+    margin: 0;
+    font: inherit;
+    color: inherit;
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+/* ---- food picker tabs ---- */
+
+.food-picker .seg {
+    display: flex;
+    margin: 0;
+}
+.food-picker .seg-btn {
+    flex: 1;
+    min-height: 36px;
+}
