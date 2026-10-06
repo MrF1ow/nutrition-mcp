@@ -32,12 +32,12 @@ export function renderExpiringStrip(
     const rows = items
         .map(
             (item) =>
-                `<li data-item-id="${escapeHtml(item.id)}">${escapeHtml(item.displayName)} — ${escapeHtml(item.expiresOn)}</li>`,
+                `<li data-item-id="${escapeHtml(item.id)}"><div class="row"><span class="row-title">${escapeHtml(item.displayName)}</span><span class="row-meta">${escapeHtml(item.expiresOn)}</span></div></li>`,
         )
         .join("");
-    return `<section class="fridge-expiring">
+    return `<section class="fridge-expiring panel">
 <h2>Expiring soon</h2>
-<ul>${rows}</ul>
+<ul class="list">${rows}</ul>
 </section>`;
 }
 
@@ -52,16 +52,17 @@ export function renderGroceryLineRow(opts: {
 }): string {
     const checked = opts.checked ? "true" : "false";
     const next = opts.checked ? "0" : "1";
+    const verb = opts.checked ? "Uncheck" : "Check";
     return `<li class="grocery-line${opts.checked ? " is-checked" : ""}" data-line-id="${escapeHtml(opts.id)}" data-checked="${checked}" data-kind="${opts.kind}">
-<div class="grocery-line-head">
-<p class="grocery-line-name">${escapeHtml(opts.displayName)}</p>
-<p class="grocery-line-qty">${escapeHtml(opts.quantityLabel)}</p>
-${opts.alreadyHaveHtml}
-</div>
+<div class="grocery-line-head row">
 <form class="grocery-line-check" method="post" action="/grocery/lines/${escapeHtml(opts.id)}/check">
 <input type="hidden" name="checked" value="${next}" />
-<button type="submit">${opts.checked ? "Checked" : "Check"}</button>
+<button type="submit" class="check-btn" aria-pressed="${checked}"><span class="visually-hidden">${verb} ${escapeHtml(opts.displayName)}</span></button>
 </form>
+<p class="grocery-line-name row-title">${escapeHtml(opts.displayName)}</p>
+${opts.alreadyHaveHtml}
+<p class="grocery-line-qty row-meta">${escapeHtml(opts.quantityLabel)}</p>
+</div>
 ${opts.putAwayHtml ?? ""}
 </li>`;
 }
@@ -71,22 +72,32 @@ export function renderFridgeItemRow(opts: {
     kind: string;
     displayName: string;
     quantityLabel: string;
+    expiresOn?: string | null;
     editFields: string;
     extraActions?: string;
 }): string {
-    return `<li class="fridge-item" data-item-id="${escapeHtml(opts.id)}" data-kind="${opts.kind}">
-<div class="fridge-item-head">
-<p class="fridge-item-name">${escapeHtml(opts.displayName)}</p>
-<p class="fridge-item-qty">${escapeHtml(opts.quantityLabel)}</p>
+    const id = escapeHtml(opts.id);
+    const expires = opts.expiresOn
+        ? ` · exp ${escapeHtml(opts.expiresOn)}`
+        : "";
+    return `<li class="fridge-item" data-item-id="${id}" data-kind="${opts.kind}">
+<div class="fridge-item-head row">
+<p class="fridge-item-name row-title">${escapeHtml(opts.displayName)}</p>
+<p class="fridge-item-qty row-meta">${escapeHtml(opts.quantityLabel)}${expires}</p>
 </div>
-<form class="fridge-item-edit" method="post" action="/fridge/items/${escapeHtml(opts.id)}">
-${opts.editFields}
-<button type="submit">Save</button>
-</form>
+<div class="row-actions">
 ${opts.extraActions ?? ""}
-<form class="fridge-item-delete" method="post" action="/fridge/items/${escapeHtml(opts.id)}/delete">
-<button type="submit">Delete</button>
+<details class="more">
+<summary>Edit</summary>
+<form class="fridge-item-edit" method="post" action="/fridge/items/${id}">
+${opts.editFields}
+<button type="submit" class="btn-primary">Save</button>
 </form>
+<form class="fridge-item-delete" method="post" action="/fridge/items/${id}/delete">
+<button type="submit" class="btn-danger">Delete</button>
+</form>
+</details>
+</div>
 </li>`;
 }
 
@@ -101,13 +112,15 @@ export function renderRecipeCard(opts: {
             ? `<p class="recipe-tags">${opts.tags
                   .map(
                       (tag) =>
-                          `<span class="recipe-tag">${escapeHtml(tag)}</span>`,
+                          `<span class="recipe-tag pill pill-dim">${escapeHtml(tag)}</span>`,
                   )
                   .join("")}</p>`
             : "";
     return `<li class="recipe-card" data-recipe-id="${escapeHtml(opts.id)}">
-<a href="/recipes/${escapeHtml(opts.id)}">${escapeHtml(opts.name)}</a>
-<p class="recipe-yield">Yield ${escapeHtml(String(opts.yieldPortions))}</p>
+<div class="row">
+<a class="row-title" href="/recipes/${escapeHtml(opts.id)}">${escapeHtml(opts.name)}</a>
+<p class="recipe-yield row-meta">Yield ${escapeHtml(String(opts.yieldPortions))}</p>
+</div>
 ${tags}
 </li>`;
 }
@@ -125,29 +138,37 @@ export function renderRecipeIngredientRow(opts: {
     note?: string | null;
 }): string {
     const note = opts.note
-        ? `<p class="recipe-ingredient-note">${escapeHtml(opts.note)}</p>`
+        ? `<p class="recipe-ingredient-note muted">${escapeHtml(opts.note)}</p>`
         : "";
     const id = escapeHtml(opts.id);
     const recipeId = escapeHtml(opts.recipeId);
+    const name = escapeHtml(opts.displayName);
     return `<li class="recipe-ingredient" data-ingredient-id="${id}" data-per-portion="${escapeHtml(String(opts.perPortionAmount))}" data-person-amount="${escapeHtml(String(opts.personAmount))}">
-<p class="recipe-ingredient-name">${escapeHtml(opts.displayName)}</p>
-<p class="recipe-ingredient-total">Total ${escapeHtml(opts.totalLabel)}</p>
-<p class="recipe-ingredient-per-portion">Per portion ${escapeHtml(opts.perPortionLabel)}</p>
-<p class="recipe-ingredient-person">${escapeHtml(opts.personLabel)}</p>
+<div class="row">
+<p class="recipe-ingredient-name row-title">${name}</p>
+<p class="recipe-ingredient-total row-meta">Total ${escapeHtml(opts.totalLabel)}</p>
+</div>
+<p class="recipe-ingredient-per-portion muted">Per portion ${escapeHtml(opts.perPortionLabel)}</p>
+<p class="recipe-ingredient-person muted">${escapeHtml(opts.personLabel)}</p>
 ${note}
+<div class="row-actions">
+<form class="recipe-ingredient-move" method="post" action="/recipes/${recipeId}/ingredients/${id}/move">
+<button type="submit" name="direction" value="up" class="btn-sm" aria-label="Move ${name} up">↑</button>
+<button type="submit" name="direction" value="down" class="btn-sm" aria-label="Move ${name} down">↓</button>
+</form>
+<details class="more">
+<summary>Edit</summary>
 <form class="recipe-ingredient-edit" method="post" action="/recipes/${recipeId}/ingredients/${id}">
 <label for="note-${id}">Note</label>
 <input id="note-${id}" name="note" type="text" maxlength="500" value="${escapeHtml(opts.note ?? "")}" autocomplete="off" />
 <label for="amount-${id}">Amount</label>
 <input id="amount-${id}" name="amount" type="number" min="0" step="any" required value="${escapeHtml(String(opts.totalAmount))}" />
-<button type="submit">Save ingredient</button>
+<button type="submit" class="btn-primary">Save ingredient</button>
 </form>
-<form class="recipe-ingredient-move" method="post" action="/recipes/${recipeId}/ingredients/${id}/move">
-<button type="submit" name="direction" value="up">Move up</button>
-<button type="submit" name="direction" value="down">Move down</button>
-</form>
+</details>
 <form class="recipe-ingredient-delete" method="post" action="/recipes/${recipeId}/ingredients/${id}/delete">
-<button type="submit">Remove</button>
+<button type="submit" class="btn-sm btn-danger">Remove</button>
 </form>
+</div>
 </li>`;
 }

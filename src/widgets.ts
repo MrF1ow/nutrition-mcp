@@ -155,20 +155,40 @@ export async function getWidgetHtml(key: string): Promise<string> {
     return html;
 }
 
+// The household web app's stylesheet, served at /app.css. Assembled from the
+// same shared partials as the widgets so the two surfaces cannot drift: its
+// @include markers resolve against public/widgets/src/ exactly like a
+// template's. Cached like a widget and warmed at boot.
+export const APP_CSS_SOURCE = "./public/app/app.css";
+let appCss: string | undefined;
+
+export async function getAppCss(): Promise<string> {
+    if (appCss !== undefined) return appCss;
+    const file = Bun.file(APP_CSS_SOURCE);
+    if (!(await file.exists())) {
+        throw new Error(`app stylesheet source not found: ${APP_CSS_SOURCE}`);
+    }
+    appCss = await resolveIncludes(await file.text(), APP_CSS_SOURCE, [
+        APP_CSS_SOURCE,
+    ]);
+    return appCss;
+}
+
 export type WidgetViewerChrome = {
-    theme: "light" | "dark";
-    accent: string;
+    theme: "light" | "dark" | "system";
 };
 
-function injectViewerAccent(html: string, chrome: WidgetViewerChrome): string {
+// The web app embeds widgets as srcdoc iframes. An explicit viewer theme is
+// stamped on the widget's <html> so it matches the page; "system" leaves the
+// attribute off and the widget follows prefers-color-scheme, as the page does.
+// The accent is never overridden: there is one brand green.
+function applyViewerTheme(html: string, chrome: WidgetViewerChrome): string {
     const withoutTheme = html.replace(/\sdata-theme="[^"]*"/g, "");
-    const withTheme = withoutTheme.replace(
+    if (chrome.theme === "system") return withoutTheme;
+    return withoutTheme.replace(
         /<html\b/i,
         `<html data-theme="${chrome.theme}"`,
     );
-    const style = `<style id="viewer-accent">:root[data-theme="${chrome.theme}"]{--accent:${chrome.accent}}</style>`;
-    if (!withTheme.includes("</head>")) return style + withTheme;
-    return withTheme.replace("</head>", `${style}</head>`);
 }
 
 export function withWidgetData(
@@ -181,13 +201,14 @@ export function withWidgetData(
         "<script>",
         `<script>window.__WIDGET_DATA__=${json};`,
     );
-    return chrome ? injectViewerAccent(seeded, chrome) : seeded;
+    return chrome ? applyViewerTheme(seeded, chrome) : seeded;
 }
 
-// Assemble every widget once so a broken partial/marker fails fast at startup
-// rather than on a client's first tool call.
+// Assemble every widget and the app stylesheet once, so a broken partial or
+// marker fails fast at startup rather than on a client's first request.
 export async function warmWidgets(): Promise<void> {
-    await Promise.all(
-        Object.keys(WIDGET_TEMPLATES).map((key) => getWidgetHtml(key)),
-    );
+    await Promise.all([
+        ...Object.keys(WIDGET_TEMPLATES).map((key) => getWidgetHtml(key)),
+        getAppCss(),
+    ]);
 }

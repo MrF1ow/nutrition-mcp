@@ -108,10 +108,7 @@ settingsRoutes.post("/settings", requireMember, async (c) => {
         await upsertProfile(userId, prefs);
         return c.redirect("/settings");
     }
-    const appearance = parseAppearanceInput({
-        theme: body.theme,
-        accent_swatch: body.accent_swatch,
-    });
+    const appearance = parseAppearanceInput({ theme: body.theme });
     await upsertProfile(userId, appearance);
     const displayName = formText(body, "display_name").trim();
     if (displayName) {

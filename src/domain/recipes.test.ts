@@ -35,7 +35,6 @@ import {
     renderRecipeDetailPage,
     renderRecipesPage,
 } from "../web/pages/recipes.js";
-import { ACCENT_SWATCHES } from "../app/shell.js";
 import type { FoodResult } from "../foods.js";
 
 const HH = "hh-1";
@@ -412,7 +411,7 @@ test("create recipe requires a name and a positive yield", async () => {
 
 test("recipes list page is not a stub and detail reuses shared picker", () => {
     const list = renderRecipesPage({
-        chrome: { theme: "light", accent: ACCENT_SWATCHES.sky },
+        chrome: { theme: "light" },
         recipes: [
             {
                 id: "r1",
@@ -438,7 +437,7 @@ test("recipes list page is not a stub and detail reuses shared picker", () => {
     expect(list).toContain('action="/recipes"');
 
     const detail = renderRecipeDetailPage({
-        chrome: { theme: "light", accent: ACCENT_SWATCHES.sky },
+        chrome: { theme: "light" },
         recipe: {
             id: "r1",
             householdId: HH,
@@ -519,6 +518,83 @@ test("recipes list page is not a stub and detail reuses shared picker", () => {
     expect(detail).toContain("Bob dislikes cilantro.");
     expect(detail).toContain('action="/recipes/r1/add-to-grocery"');
     expect(detail).toContain('action="/recipes/r1/delete"');
+});
+
+test("recipe pages group forms into cards and disclosures", () => {
+    const recipe = {
+        id: "r1",
+        householdId: "hh-1",
+        creatorId: "u1",
+        name: "Mac",
+        yieldPortions: 4,
+        instructions: null,
+        sourceUrl: null,
+        tags: ["dinner"],
+        notes: null,
+        prepMinutes: null,
+        cookMinutes: null,
+    };
+    const list = renderRecipesPage({
+        chrome: { theme: "light" },
+        recipes: [recipe],
+        members: [],
+        viewerId: "u1",
+    } as never);
+    expect(list).toContain('<ul class="recipe-list list">');
+    expect(list).toContain(
+        '<span class="recipe-tag pill pill-dim">dinner</span>',
+    );
+    expect(list).toContain("<summary>Filter</summary>");
+    expect(list).toContain("<summary>New recipe</summary>");
+
+    const detail = renderRecipeDetailPage({
+        chrome: { theme: "light" },
+        recipe,
+        ingredients: [
+            {
+                id: "ing1",
+                recipeId: "r1",
+                foodId: "f1",
+                displayName: "Pasta",
+                quantity: { amount: 400, unit: "g" },
+                note: null,
+                sortOrder: 0,
+                perPortionAmount: 100,
+                personAmount: 100,
+            },
+        ],
+        members: [{ userId: "u1", displayName: "Ethan" }],
+        stores: [{ id: "s1", name: "Safeway" }],
+        viewerId: "u1",
+        filterUserId: "u1",
+        portionCount: 1,
+        macros: {
+            calories: 300,
+            protein_g: 10,
+            carbs_g: 50,
+            fat_g: 5,
+            fiber_g: 3,
+            sugar_g: 2,
+            alcohol_g: 0,
+            incomplete: false,
+            incompleteReasons: [],
+        },
+        isOwner: true,
+    } as never);
+    for (const heading of [
+        "Nutrition",
+        "Ingredients",
+        "Cook and log",
+        "Groceries",
+    ]) {
+        expect(detail).toContain(`<h2>${heading}</h2>`);
+    }
+    expect(detail).toContain('<ul class="recipe-ingredients list">');
+    expect(detail).toContain('aria-label="Move Pasta up"');
+    expect(detail).toContain("<summary>Edit recipe</summary>");
+    expect(detail).toContain(
+        '<button type="submit" class="btn-danger">Delete recipe</button>',
+    );
 });
 
 test("updateRecipe writes fuller fields and updateRecipeIngredient stores a note", async () => {

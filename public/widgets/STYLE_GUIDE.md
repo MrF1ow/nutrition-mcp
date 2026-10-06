@@ -45,6 +45,30 @@ When the design changes, edit the partial in `src/shared/` once — every widget
 picks it up on next assembly. The blocks below document those partials; keep this
 spec in sync when you change them.
 
+## The household app is a second consumer
+
+`public/app/app.css` `@include`s `tokens.css`, `base.css`, `form.css`,
+`table.css` and `seg.css`, and `getAppCss()` (`src/widgets.ts`) assembles it into
+`/app.css`. Changing a partial therefore changes the web app too; check both with
+`bun run harness` and `bun run preview:app --shots`.
+
+App pages are server-rendered plain HTML inside `<main class="app-main native">`.
+`form.css` styles native `input`, `select`, `textarea` and `button` elements inside
+`.native` through `:where(.native …)` selectors. `:where()` has zero specificity,
+so a component class on the same element always wins:
+
+```html
+<button type="submit">Save</button>
+<!-- neutral .btn look -->
+<button type="submit" class="btn-primary">Save</button>
+<!-- accent fill -->
+<button type="submit" class="btn-sm btn-danger">Delete</button>
+```
+
+Never write a bare `.native button` rule. It outranks `.btn-primary` and repaints
+every primary button. `.seg-btn[aria-selected="true"]` is the same state as
+`.seg-btn.active`, for `role="tab"` controls.
+
 ## Design language
 
 Apple-like and neutral: grays/whites surfaces, one brand **green accent**

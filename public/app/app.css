@@ -1,0 +1,702 @@
+/* Household web app stylesheet, served at /app.css.
+ *
+ * Assembled by getAppCss() in src/widgets.ts from the same shared partials the
+ * in-chat widgets inline, so the app and the widgets share one set of tokens
+ * and components (spec: public/widgets/STYLE_GUIDE.md). Anything both surfaces
+ * use belongs in a shared/ partial. Only app layout lives below.
+ *
+ * App markup is plain HTML inside <main class="native">: form.css styles its
+ * controls through zero-specificity :where(.native …) hooks, and the rules
+ * here follow the same convention, so any component class wins.
+ */
+
+/*@include shared/tokens.css@*/
+
+/*@include shared/base.css@*/
+
+/*@include shared/form.css@*/
+
+/*@include shared/table.css@*/
+
+/*@include shared/seg.css@*/
+
+/* ---- base ---- */
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+/* `hidden` must beat any display rule. Without this, `.food-picker-panel
+   { display: grid }` overrode the attribute and every picker showed all three
+   tabs at once. */
+[hidden] {
+    display: none !important;
+}
+
+body {
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    font-size: 15px;
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ---- shell ---- */
+
+.app-bar {
+    display: flex;
+    justify-content: flex-end;
+    width: 100%;
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 12px 16px 0;
+}
+.app-bar a {
+    color: var(--text-dim);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.app-main {
+    flex: 1;
+    width: 100%;
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 8px 16px 96px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+/* Element defaults for page content, at element-only specificity so any
+   class wins (.row-meta's margin-left: auto lost to `.app-main p` before). */
+:where(.app-main) h1 {
+    margin: 4px 0 0;
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+}
+:where(.app-main) h2 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+}
+:where(.app-main) h3 {
+    margin: 0;
+    font-size: 11.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+}
+:where(.app-main) p {
+    margin: 0;
+}
+:where(.app-main) a {
+    color: var(--accent);
+    font-weight: 600;
+    text-decoration: none;
+}
+.app-main .panel {
+    padding: 14px 16px;
+    gap: 12px;
+}
+
+.bottom-nav {
+    position: sticky;
+    bottom: 0;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 4px;
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+    background: var(--panel);
+    border-top: 1px solid var(--panel-border);
+}
+.bottom-nav a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    min-height: 44px;
+    padding: 8px 4px;
+    color: var(--text-dim);
+    text-decoration: none;
+}
+.bottom-nav svg {
+    width: 24px;
+    height: 24px;
+    display: block;
+    flex-shrink: 0;
+}
+.bottom-nav a[aria-current="page"] {
+    color: var(--accent);
+}
+
+/* ---- native controls inside .native ----
+   Phone-sized targets, and 16px field text so iOS Safari does not zoom the
+   page when a field takes focus. */
+
+:where(
+    .native
+        :is(
+            input:not(
+                [type="checkbox"],
+                [type="radio"],
+                [type="hidden"],
+                [type="file"]
+            ),
+            select,
+            textarea
+        )
+) {
+    min-height: 44px;
+    font-size: 16px;
+}
+:where(.native textarea) {
+    resize: vertical;
+}
+:where(.native button) {
+    min-height: 44px;
+    font-size: 14px;
+}
+:where(.native) .btn-sm {
+    min-height: 34px;
+}
+:where(.native label) {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-dim);
+}
+:where(.native label:has(> input[type="checkbox"], > input[type="radio"])) {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 36px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+}
+:where(.native :is(input[type="checkbox"], input[type="radio"])) {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    accent-color: var(--accent);
+}
+:where(.native form) {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+}
+:where(.native fieldset) {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+:where(.native legend) {
+    padding: 0;
+    margin-bottom: 4px;
+    font-size: 13.5px;
+    font-weight: 800;
+    color: var(--text);
+}
+
+/* ---- notices and quiet text ---- */
+
+.error-banner,
+.allergen-warning {
+    padding: 9px 11px;
+    border: 1px solid color-mix(in srgb, var(--over) 45%, var(--panel-border));
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--over) 9%, var(--panel));
+    color: var(--over);
+    font-size: 13.5px;
+    font-weight: 600;
+}
+.allergen-unknown {
+    padding: 9px 11px;
+    border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--panel-border));
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--warn) 9%, var(--panel));
+    color: var(--warn);
+    font-size: 13.5px;
+    font-weight: 600;
+}
+.token-once {
+    padding: 9px 11px;
+    border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--panel-border));
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--accent) 9%, var(--panel));
+    font-size: 13.5px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+/* Empty states and secondary text. The empty-* classes are pinned by tests,
+   so they are listed here rather than given a second class in markup. */
+.muted,
+.peer-note,
+.empty-fridge,
+.empty-grocery,
+.empty-recipes,
+.empty-recipe-store,
+.empty-stores,
+.add-item-prompt {
+    color: var(--text-dim);
+    font-size: 13.5px;
+}
+.dislike-note {
+    color: var(--warn);
+    font-size: 13.5px;
+    font-weight: 600;
+}
+
+.already-have-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 9px;
+    border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* ---- page header and segmented links ---- */
+
+.dash-head {
+    display: grid;
+    gap: 10px;
+}
+
+/* Member switch (nutrition) and settings sub-navigation: links styled as the
+   widgets' segmented control. */
+.member-switch,
+.subnav {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    width: fit-content;
+    padding: 3px;
+    border-radius: 999px;
+    background: var(--track);
+}
+.member-switch a,
+.subnav a {
+    padding: 6px 14px;
+    border-radius: 999px;
+    color: var(--text-dim);
+    font-size: 13px;
+    font-weight: 600;
+}
+.member-switch a[aria-current="page"],
+.subnav a[aria-current="page"] {
+    background: var(--accent);
+    color: var(--bg);
+}
+
+/* ---- shared form components ---- */
+
+/* Amount and unit side by side, each label above its control. */
+.quantity-field {
+    display: grid;
+    grid-template-rows: auto auto;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    gap: 4px 8px;
+}
+
+.food-picker,
+.food-picker-panel,
+.food-picker-panel > form {
+    display: grid;
+    gap: 8px;
+}
+.food-picker-results {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 6px;
+}
+.food-picker-results:empty {
+    display: none;
+}
+.food-picker-results button {
+    width: 100%;
+    text-align: left;
+}
+
+.member-multi-select {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 16px;
+}
+.member-multi-select legend {
+    width: 100%;
+}
+
+/* ---- widgets embedded in the page ---- */
+
+/* Widgets render in srcdoc iframes whose .wrap.tight adds a 12px gutter
+   (14px from 560px; base.css). Pull the frame out by the same amount so the
+   widget card's edges line up with the page's own panels. */
+.widget-frame {
+    display: block;
+    width: calc(100% + 24px);
+    min-height: 120px;
+    margin: -12px;
+    border: 0;
+    background: transparent;
+}
+@media (min-width: 560px) {
+    .widget-frame {
+        width: calc(100% + 28px);
+        margin: -14px;
+    }
+}
+
+/* A row of radio or checkbox choices under one legend. */
+.choice-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 18px;
+}
+.choice-row legend {
+    width: 100%;
+}
+
+/* ---- lists and rows ---- */
+
+.list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.list > li {
+    display: grid;
+    gap: 8px;
+    padding: 10px 0;
+    border-top: 1px solid var(--panel-border);
+}
+.list > li:first-child {
+    border-top: 0;
+    padding-top: 2px;
+}
+.list:empty {
+    display: none;
+}
+
+/* Title left, figure pushed right; wraps under the title on a narrow card. */
+.row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 12px;
+}
+.row-title {
+    min-width: 0;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+.row-meta {
+    margin-left: auto;
+    color: var(--text-dim);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* One wrapping line of row buttons. Each action is its own POST form; with
+   display: contents the buttons sit in the line as if the forms were not
+   there. An opened disclosure takes the whole width below them. */
+.row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+.row-actions > form {
+    display: contents;
+}
+.row-actions > details[open] {
+    flex-basis: 100%;
+}
+.row-actions select {
+    width: auto;
+    flex: 1 1 140px;
+}
+
+/* ---- disclosure ---- */
+
+details.more > summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    width: fit-content;
+    min-height: 36px;
+    padding: 6px 12px;
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    background: var(--panel);
+    color: var(--text);
+    font-size: 13.5px;
+    font-weight: 600;
+    list-style: none;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+details.more > summary::-webkit-details-marker {
+    display: none;
+}
+details.more > summary::after {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-right: 1.75px solid var(--text-dim);
+    border-bottom: 1.75px solid var(--text-dim);
+    transform: translateY(-2px) rotate(45deg);
+}
+details.more[open] > summary::after {
+    transform: translateY(1px) rotate(-135deg);
+}
+details.more[open] > summary {
+    margin-bottom: 10px;
+}
+details.more > summary:hover {
+    border-color: var(--text-dim);
+}
+details.more > summary:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+/* A heading inside a summary keeps its place in the outline but reads as the
+   summary label. */
+details.more > summary > :is(h2, h3) {
+    margin: 0;
+    font: inherit;
+    color: inherit;
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+/* ---- food picker tabs ---- */
+
+.food-picker .seg {
+    display: flex;
+    margin: 0;
+}
+.food-picker .seg-btn {
+    flex: 1;
+    min-height: 36px;
+}
+
+/* ---- grocery ---- */
+
+.grocery-section {
+    display: grid;
+    gap: 6px;
+}
+.grocery-line-head {
+    align-items: center;
+    flex-wrap: nowrap;
+}
+.grocery-line-head .row-title {
+    flex: 1 1 auto;
+}
+.grocery-line.is-checked .grocery-line-name {
+    color: var(--text-dim);
+    text-decoration: line-through;
+}
+.store-rule-list {
+    margin: 0;
+    padding-left: 1.1em;
+}
+
+/* Round check button: a 44px target with a 24px circle drawn inside it. */
+.check-btn {
+    position: relative;
+    flex: none;
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+    margin: -10px -6px -10px -10px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+}
+.check-btn::before {
+    content: "";
+    position: absolute;
+    inset: 10px;
+    border: 1.75px solid var(--text-dim);
+    border-radius: 999px;
+}
+.check-btn:hover::before {
+    border-color: var(--text);
+}
+.check-btn[aria-pressed="true"]::before {
+    border-color: var(--accent);
+    background: var(--accent);
+}
+.check-btn[aria-pressed="true"]::after {
+    content: "";
+    position: absolute;
+    left: 19px;
+    top: 14px;
+    width: 6px;
+    height: 11px;
+    border-right: 2px solid var(--bg);
+    border-bottom: 2px solid var(--bg);
+    transform: rotate(45deg);
+}
+.check-btn:focus-visible {
+    box-shadow: none;
+}
+.check-btn:focus-visible::before {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* ---- compact form layouts ---- */
+
+/* Label on its own line, then the control and its button side by side. */
+.inline-form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 6px 8px;
+}
+.inline-form > label {
+    grid-column: 1 / -1;
+}
+
+/* Two columns of <label>Text<input></label> pairs. */
+.field-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 10px;
+    align-items: end;
+}
+.field-grid > label {
+    display: grid;
+    gap: 4px;
+}
+.field-grid > :is(button, fieldset, .span-2) {
+    grid-column: 1 / -1;
+}
+
+/* ---- recipes ---- */
+
+.recipe-card .row-title {
+    color: var(--text);
+}
+.recipe-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.recipe-macros {
+    font-size: 14px;
+    font-weight: 600;
+}
+.recipe-macros-reasons {
+    margin: 0;
+    padding-left: 1.1em;
+    color: var(--text-dim);
+    font-size: 13px;
+}
+.recipe-ingredient-note {
+    font-style: italic;
+}
+
+/* A wrapping row of .pill list items. */
+.pills {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.pills:empty,
+.store-rule-list:empty,
+.person-rule-list:empty {
+    display: none;
+}
+
+/* ---- nutrition log ---- */
+
+/* Three disclosure pills in a row; the opened one moves to the top of the
+   card and takes its full width. */
+.log-panel {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+.log-panel > details[open] {
+    flex-basis: 100%;
+    order: -1;
+}
+.meal-items {
+    display: grid;
+    gap: 12px;
+}
+.meal-item {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 10px;
+}
+.meal-item > label {
+    display: grid;
+    gap: 4px;
+}
+.meal-item-name,
+.meal-item-results {
+    grid-column: 1 / -1;
+}
+
+/* ---- polish ---- */
+
+/* A control nested in its <label> (field-grid, meal items) would otherwise
+   inherit the label's bold, dimmed weight. */
+:where(.native label :is(input, select, textarea)) {
+    font-weight: 400;
+}
+
+/* Forms that are just one button sit at their natural width instead of
+   stretching across the page or card. */
+.grocery-clear-checked,
+.rotate-token,
+.recipe-delete {
+    align-self: flex-start;
+    justify-items: start;
+}
+
+/* Keep a control and its button the same height on one line. */
+.inline-form > button {
+    min-height: 44px;
+}
+.row-actions select {
+    min-height: 34px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+}

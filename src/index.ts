@@ -11,7 +11,7 @@ import { handleMcp, closeMcpHandler } from "./mcp.js";
 import { startExportCleanup } from "./domain/export.js";
 import { registerDiscoveryRoutes } from "./discovery.js";
 import { maskIp } from "./net.js";
-import { warmWidgets } from "./widgets.js";
+import { getAppCss, warmWidgets } from "./widgets.js";
 import { clearSiteCookieHeader } from "./site-session.js";
 import { foodsRoutes } from "./web/routes/foods.js";
 import { fridgeRoutes } from "./web/routes/fridge.js";
@@ -61,9 +61,11 @@ app.use("*", async (c, next) => {
     c.header("X-Content-Type-Options", "nosniff");
     c.header("X-Frame-Options", "DENY");
     if (!c.res.headers.get("Content-Security-Policy")) {
+        // img-src data: — form.css draws the <select> chevron as an inline
+        // SVG data URI; srcdoc widget frames inherit this policy too.
         c.header(
             "Content-Security-Policy",
-            "default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self'; frame-ancestors 'none'",
+            "default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; frame-ancestors 'none'",
         );
     }
     c.header("Referrer-Policy", "no-referrer");
@@ -218,8 +220,9 @@ app.get("/styles.css", async (c) => {
     return c.body(await file.text(), 200, { "Content-Type": "text/css" });
 });
 app.get("/app.css", async (c) => {
-    const file = Bun.file("./public/app.css");
-    return c.body(await file.text(), 200, { "Content-Type": "text/css" });
+    return c.body(await getAppCss(), 200, {
+        "Content-Type": "text/css; charset=utf-8",
+    });
 });
 app.get("/site.js", async (c) => {
     const file = Bun.file("./public/site.js");

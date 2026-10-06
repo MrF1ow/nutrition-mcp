@@ -19,10 +19,8 @@ import {
 import { isWeightUnit, toGrams, type WeightUnit } from "../domain/units.js";
 import { getWidgetHtml, withWidgetData } from "../widgets.js";
 import {
-    accentColor,
     escapeHtml,
     renderAppShell,
-    resolveAccent,
     resolveTheme,
     type ViewerChrome,
 } from "./shell.js";
@@ -43,15 +41,9 @@ export type NutritionView = {
 export type LogFormResult = { ok: true } | { ok: false; error: string };
 
 export function viewerChromeFromProfile(
-    profile: {
-        theme?: string | null;
-        accent_swatch?: string | null;
-    } | null,
+    profile: { theme?: string | null } | null,
 ): ViewerChrome {
-    return {
-        theme: resolveTheme(profile?.theme),
-        accent: resolveAccent(profile?.accent_swatch),
-    };
+    return { theme: resolveTheme(profile?.theme) };
 }
 
 async function widgetCard(
@@ -61,7 +53,6 @@ async function widgetCard(
 ): Promise<string> {
     const html = withWidgetData(await getWidgetHtml(key), data, {
         theme: chrome.theme,
-        accent: accentColor(chrome.theme, chrome.accent),
     });
     return `<iframe class="widget-frame" title="${escapeHtml(key)}" srcdoc="${escapeHtml(html)}"></iframe>`;
 }
@@ -86,53 +77,58 @@ function mealTypeSelect(): string {
 }
 
 function logForms(): string {
-    return `<form class="fridge-add-supply meal-log" method="post" action="/log-meal">
-            ${mealTypeSelect()}
-            <div class="meal-items" data-meal-items>
-                <p>Foods</p>
-                <div data-meal-item>
-                    <label>Food</label>
-                    <input name="item_name" type="text" autocomplete="off" data-meal-item-name />
-                    <input name="item_food_id" type="hidden" data-meal-item-food-id />
-                    <label>Amount</label>
-                    <input name="item_amount" type="number" min="0" step="any" />
-                    <label>Unit</label>
-                    <select name="item_unit">
-                        <option value="g">g</option>
-                        <option value="each" selected>each</option>
-                        <option value="oz">oz</option>
-                        <option value="ml">ml</option>
-                        <option value="cup">cup</option>
-                    </select>
-                    <ul class="food-picker-results" data-meal-item-results></ul>
-                </div>
-            </div>
-            <button type="button" data-add-meal-item>Add another food</button>
-            <p>Or describe it</p>
-            <label for="log-meal-description">Description</label>
-            <input id="log-meal-description" name="description" type="text" autocomplete="off" />
-            <label for="log-meal-calories">Calories</label>
-            <input id="log-meal-calories" name="calories" type="number" min="0" step="any" />
-            <label for="log-meal-protein">Protein (g)</label>
-            <input id="log-meal-protein" name="protein_g" type="number" min="0" step="any" />
-            <label for="log-meal-carbs">Carbs (g)</label>
-            <input id="log-meal-carbs" name="carbs_g" type="number" min="0" step="any" />
-            <label for="log-meal-fat">Fat (g)</label>
-            <input id="log-meal-fat" name="fat_g" type="number" min="0" step="any" />
-            <button type="submit">Log meal</button>
-        </form>
-        ${mealItemScript()}
-        <form class="fridge-add-supply" method="post" action="/log-water">
-            <label for="log-water-amount">Water (ml)</label>
-            <input id="log-water-amount" name="amount_ml" type="number" step="any" />
-            <button type="submit">Log water</button>
-        </form>
-        <form class="fridge-add-supply" method="post" action="/log-weight">
-            <label for="log-weight-amount">Weight (kg)</label>
-            <input id="log-weight-amount" name="weight" type="number" step="any" />
-            <input type="hidden" name="unit" value="kg" />
-            <button type="submit">Log weight</button>
-        </form>`;
+    return `<section class="panel log-panel" aria-label="Log">
+<details class="more">
+<summary>Log meal</summary>
+<form class="meal-log" method="post" action="/log-meal">
+${mealTypeSelect()}
+<div class="meal-items" data-meal-items>
+<div class="meal-item" data-meal-item>
+<label class="meal-item-name">Food<input name="item_name" type="text" autocomplete="off" data-meal-item-name /></label>
+<ul class="food-picker-results meal-item-results" data-meal-item-results></ul>
+<input name="item_food_id" type="hidden" data-meal-item-food-id />
+<label>Amount<input name="item_amount" type="number" min="0" step="any" inputmode="decimal" /></label>
+<label>Unit<select name="item_unit">
+<option value="g">g</option>
+<option value="each" selected>each</option>
+<option value="oz">oz</option>
+<option value="ml">ml</option>
+<option value="cup">cup</option>
+</select></label>
+</div>
+</div>
+<button type="button" class="btn-sm" data-add-meal-item>Add another food</button>
+<p class="muted">Or describe it</p>
+<label for="log-meal-description">Description</label>
+<input id="log-meal-description" name="description" type="text" autocomplete="off" />
+<div class="field-grid">
+<label>Calories<input id="log-meal-calories" name="calories" type="number" min="0" step="any" inputmode="decimal" /></label>
+<label>Protein (g)<input id="log-meal-protein" name="protein_g" type="number" min="0" step="any" inputmode="decimal" /></label>
+<label>Carbs (g)<input id="log-meal-carbs" name="carbs_g" type="number" min="0" step="any" inputmode="decimal" /></label>
+<label>Fat (g)<input id="log-meal-fat" name="fat_g" type="number" min="0" step="any" inputmode="decimal" /></label>
+</div>
+<button type="submit" class="btn-primary">Log meal</button>
+</form>
+</details>
+<details class="more">
+<summary>Log water</summary>
+<form class="log-water inline-form" method="post" action="/log-water">
+<label for="log-water-amount">Water (ml)</label>
+<input id="log-water-amount" name="amount_ml" type="number" step="any" inputmode="decimal" />
+<button type="submit" class="btn-primary">Log water</button>
+</form>
+</details>
+<details class="more">
+<summary>Log weight</summary>
+<form class="log-weight inline-form" method="post" action="/log-weight">
+<label for="log-weight-amount">Weight (kg)</label>
+<input id="log-weight-amount" name="weight" type="number" step="any" inputmode="decimal" />
+<input type="hidden" name="unit" value="kg" />
+<button type="submit" class="btn-primary">Log weight</button>
+</form>
+</details>
+</section>
+${mealItemScript()}`;
 }
 
 function mealItemScript(): string {
@@ -362,7 +358,6 @@ export async function renderNutritionPage(
         title: "Nutrition",
         active: "nutrition",
         theme: view.chrome.theme,
-        accent: view.chrome.accent,
         body,
     });
 }

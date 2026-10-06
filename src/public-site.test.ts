@@ -113,6 +113,15 @@ describe("runtime surfaces that stay", () => {
         expect(await r.text()).toBe("ok");
     });
 
+    test("GET /app.css serves the assembled app stylesheet", async () => {
+        const r = await app.request("http://x/app.css");
+        expect(r.status).toBe(200);
+        expect(r.headers.get("content-type") ?? "").toContain("text/css");
+        const css = await r.text();
+        expect(css).not.toContain("/*@include");
+        expect(css).toContain(".bottom-nav");
+    });
+
     test("login assets still answer and site.js does not poll /api/stats", async () => {
         const css = await app.request("http://x/styles.css");
         expect(css.status).toBe(200);
@@ -210,6 +219,9 @@ describe("runtime surfaces that stay", () => {
         );
         expect(r.headers.get("content-security-policy") ?? "").not.toContain(
             "googletagmanager",
+        );
+        expect(r.headers.get("content-security-policy") ?? "").toContain(
+            "img-src 'self' data:",
         );
     });
 });
