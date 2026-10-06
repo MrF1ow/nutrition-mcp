@@ -4859,7 +4859,7 @@ describe("authenticated dashboard HTTP", () => {
         expect(html).not.toContain('class="facts"');
         expect(html).toContain('class="bottom-nav"');
         expect(html).toContain('href="/fridge"');
-        expect(html).toContain("--accent:#2f8fd4");
+        expect(html).toContain('href="/app.css"');
     });
 
     test("a member dashboard has no add form", async () => {
@@ -5554,18 +5554,36 @@ describe("authenticated dashboard HTTP", () => {
                 cookie: cookieFor(alice),
                 "content-type": "application/x-www-form-urlencoded",
             },
-            body: "theme=dark&accent_swatch=rose",
+            body: "theme=dark",
         });
         expect(save.status).toBe(302);
         expect(save.headers.get("location")).toBe("/settings");
         expect(db.profile?.theme).toBe("dark");
-        expect(db.profile?.accent_swatch).toBe("rose");
         const r = await siteApp.request("http://x/settings", {
             headers: { cookie: cookieFor(alice) },
         });
         const html = await r.text();
-        expect(html).toContain('data-theme="dark"');
-        expect(html).toContain("--accent:#fb7199");
+        expect(html).toContain('<html lang="en" data-theme="dark">');
+        expect(html).not.toContain("--accent");
+    });
+
+    test("POST /settings with System clears the saved theme", async () => {
+        const save = await siteApp.request("http://x/settings", {
+            method: "POST",
+            headers: {
+                cookie: cookieFor(alice),
+                "content-type": "application/x-www-form-urlencoded",
+            },
+            body: "theme=system",
+        });
+        expect(save.status).toBe(302);
+        expect(db.profile?.theme).toBeNull();
+        const r = await siteApp.request("http://x/settings", {
+            headers: { cookie: cookieFor(alice) },
+        });
+        const html = await r.text();
+        expect(html).toContain('<html lang="en">');
+        expect(html).toContain('name="theme" value="system" checked');
     });
 
     test("?member= shows a household peer read-only", async () => {

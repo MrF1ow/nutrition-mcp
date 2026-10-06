@@ -256,7 +256,6 @@ async function pages(theme: "light" | "dark"): Promise<Record<string, string>> {
         } as never),
         settings: renderSettingsPage({
             chrome,
-            selectedSwatch: null,
             displayName: "Ethan",
             timezone: "America/Los_Angeles",
             weightUnit: "kg",

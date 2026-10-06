@@ -184,7 +184,6 @@ export function renderFridgePage(view: FridgePageView): string {
         title: "Fridge",
         active: "fridge",
         theme: view.chrome.theme,
-        accent: view.chrome.accent,
         body,
     });
 }

@@ -48,7 +48,7 @@ import {
     viewerChromeFromProfile,
     type NutritionView,
 } from "../app/nutrition.js";
-import { isAccentSwatch, escapeHtml } from "../app/shell.js";
+import { escapeHtml } from "../app/shell.js";
 
 function alcoholOf(
     profile: Parameters<typeof alcoholTrackingEnabledFromProfile>[0],
@@ -305,14 +305,10 @@ export async function renderSettingsAccountPage(
     if ("html" in gate) return { status: gate.status, html: gate.html };
     const profile = await getProfile(viewerUserId);
     const chrome = viewerChromeFromProfile(profile);
-    const swatch = isAccentSwatch(profile?.accent_swatch)
-        ? profile.accent_swatch
-        : null;
     return {
         status: 200,
         html: renderSettingsPage({
             chrome,
-            selectedSwatch: swatch,
             displayName: gate.viewer.displayName,
             timezone: profile?.timezone ?? "",
             weightUnit: preferredWeightUnitFromProfile(profile) ?? "",

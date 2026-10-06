@@ -20,7 +20,6 @@ import {
 import { alreadyHaveTag } from "./linking.js";
 import { createGroceryStore, createMemorySettingsStore } from "./settings.js";
 import { renderGroceryPage } from "../web/pages/grocery.js";
-import { ACCENT_SWATCHES } from "../app/shell.js";
 import { addAllergen, createMemoryRulesStore } from "./rules.js";
 
 const HH = "hh-1";
@@ -238,7 +237,7 @@ test("grocery allergen warning uses catalog allergens before the name", async ()
 
 test("grocery page groups by store then section and shows already-have", () => {
     const html = renderGroceryPage({
-        chrome: { theme: "light", accent: ACCENT_SWATCHES.sky },
+        chrome: { theme: "light" },
         stores: [
             {
                 id: "st-1",
@@ -303,7 +302,6 @@ test("grocery page groups by store then section and shows already-have", () => {
 
 const groceryChrome = {
     theme: "light" as const,
-    accent: ACCENT_SWATCHES.sky,
 };
 
 test("owner grocery page has a short add-store form and no add-supply", () => {

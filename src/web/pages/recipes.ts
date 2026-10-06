@@ -114,7 +114,6 @@ export function renderRecipesPage(view: RecipesPageView): string {
         title: "Recipes",
         active: "recipes",
         theme: view.chrome.theme,
-        accent: view.chrome.accent,
         body,
     });
 }
@@ -299,7 +298,6 @@ ${renderMemberMultiSelect(view.members, [view.viewerId])}
         title: view.recipe.name,
         active: "recipes",
         theme: view.chrome.theme,
-        accent: view.chrome.accent,
         body,
     });
 }

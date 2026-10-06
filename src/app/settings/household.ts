@@ -205,7 +205,6 @@ export function renderHouseholdSettingsPage(
         title: "Household",
         active: "settings",
         theme: view.chrome.theme,
-        accent: view.chrome.accent,
         body,
     });
 }

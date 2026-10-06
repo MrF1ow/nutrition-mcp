@@ -1,8 +1,6 @@
 import {
-    ACCENT_SWATCHES,
     escapeHtml,
     renderAppShell,
-    type AccentSwatch,
     type ViewerChrome,
 } from "../../app/shell.js";
 import { DRINK_UNITS, isDrinkUnit, type DrinkUnit } from "../../alcohol.js";
@@ -12,11 +10,8 @@ import {
     type WeightUnit,
 } from "../../domain/units.js";
 
-const SWATCH_ORDER = Object.keys(ACCENT_SWATCHES) as AccentSwatch[];
-
 export type SettingsPageView = {
     chrome: ViewerChrome;
-    selectedSwatch: AccentSwatch | null;
     displayName: string;
     timezone: string;
     weightUnit: WeightUnit | "";
@@ -87,18 +82,16 @@ function optionList(
     return `${blank}${opts}`;
 }
 
+const THEME_CHOICES = [
+    { value: "system", label: "System" },
+    { value: "light", label: "Light" },
+    { value: "dark", label: "Dark" },
+] as const;
+
 export function renderSettingsPage(view: SettingsPageView): string {
-    const themeLight = view.chrome.theme === "light" ? " checked" : "";
-    const themeDark = view.chrome.theme === "dark" ? " checked" : "";
-    const current = view.selectedSwatch ?? "sky";
-    const swatches = SWATCH_ORDER.map((name) => {
-        const checked = name === current ? " checked" : "";
-        const color = ACCENT_SWATCHES[name].light;
-        return `<label class="swatch">
-            <input type="radio" name="accent_swatch" value="${name}"${checked} />
-            <span class="swatch-chip" style="background:${color}"></span>
-            ${escapeHtml(name)}
-        </label>`;
+    const themes = THEME_CHOICES.map(({ value, label }) => {
+        const checked = view.chrome.theme === value ? " checked" : "";
+        return `<label><input type="radio" name="theme" value="${value}"${checked} /> ${label}</label>`;
     }).join("");
     const error = view.error
         ? `<p class="error-banner">${escapeHtml(view.error)}</p>`
@@ -111,43 +104,33 @@ export function renderSettingsPage(view: SettingsPageView): string {
         <p class="settings-lead"><a href="/settings/household">Household</a> · <a href="/settings/foods">Foods</a></p>
         <form method="POST" action="/settings" class="appearance panel">
             <input type="hidden" name="group" value="account" />
-            <fieldset>
-                <legend>Account</legend>
-                <label for="display_name">Display name</label>
-                <input id="display_name" name="display_name" value="${escapeHtml(view.displayName)}" maxlength="80" autocomplete="nickname" />
-            </fieldset>
-            <fieldset>
+            <h2>Account</h2>
+            <label for="display_name">Display name</label>
+            <input id="display_name" name="display_name" value="${escapeHtml(view.displayName)}" maxlength="80" autocomplete="nickname" />
+            <fieldset class="choice-row">
                 <legend>Theme</legend>
-                <label><input type="radio" name="theme" value="light"${themeLight} /> Light</label>
-                <label><input type="radio" name="theme" value="dark"${themeDark} /> Dark</label>
+                ${themes}
             </fieldset>
-            <fieldset>
-                <legend>App color</legend>
-                <div class="swatches">${swatches}</div>
-            </fieldset>
-            <button type="submit">Save account</button>
+            <button type="submit" class="btn-primary">Save account</button>
         </form>
         <form method="POST" action="/settings" class="appearance nutrition-prefs panel">
             <input type="hidden" name="group" value="nutrition" />
-            <fieldset>
-                <legend>Nutrition prefs</legend>
-                <label for="timezone">Timezone</label>
-                <input id="timezone" name="timezone" value="${escapeHtml(view.timezone)}" placeholder="America/Los_Angeles" autocomplete="off" />
-                <label for="preferred_weight_unit">Weight unit</label>
-                <select id="preferred_weight_unit" name="preferred_weight_unit">${optionList(WEIGHT_UNITS, view.weightUnit)}</select>
-                <label><input type="checkbox" name="widgets_enabled" value="true"${widgetsChecked} /> Show in-chat widgets</label>
-                <label><input type="checkbox" name="alcohol_tracking_enabled" value="true"${alcoholChecked} /> Alcohol tracking</label>
-                <label for="preferred_drink_unit">Drink unit</label>
-                <select id="preferred_drink_unit" name="preferred_drink_unit">${optionList(DRINK_UNITS, view.drinkUnit, { us: "US drinks", uk: "UK units" })}</select>
-            </fieldset>
-            <button type="submit">Save nutrition prefs</button>
+            <h2>Nutrition prefs</h2>
+            <label for="timezone">Timezone</label>
+            <input id="timezone" name="timezone" value="${escapeHtml(view.timezone)}" placeholder="America/Los_Angeles" autocomplete="off" />
+            <label for="preferred_weight_unit">Weight unit</label>
+            <select id="preferred_weight_unit" name="preferred_weight_unit">${optionList(WEIGHT_UNITS, view.weightUnit)}</select>
+            <label><input type="checkbox" name="widgets_enabled" value="true"${widgetsChecked} /> Show in-chat widgets</label>
+            <label><input type="checkbox" name="alcohol_tracking_enabled" value="true"${alcoholChecked} /> Alcohol tracking</label>
+            <label for="preferred_drink_unit">Drink unit</label>
+            <select id="preferred_drink_unit" name="preferred_drink_unit">${optionList(DRINK_UNITS, view.drinkUnit, { us: "US drinks", uk: "UK units" })}</select>
+            <button type="submit" class="btn-primary">Save nutrition prefs</button>
         </form>
     `;
     return renderAppShell({
         title: "Settings",
         active: "settings",
         theme: view.chrome.theme,
-        accent: view.chrome.accent,
         body,
     });
 }

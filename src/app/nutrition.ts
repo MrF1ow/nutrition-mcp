@@ -19,10 +19,8 @@ import {
 import { isWeightUnit, toGrams, type WeightUnit } from "../domain/units.js";
 import { getWidgetHtml, withWidgetData } from "../widgets.js";
 import {
-    accentColor,
     escapeHtml,
     renderAppShell,
-    resolveAccent,
     resolveTheme,
     type ViewerChrome,
 } from "./shell.js";
@@ -43,15 +41,9 @@ export type NutritionView = {
 export type LogFormResult = { ok: true } | { ok: false; error: string };
 
 export function viewerChromeFromProfile(
-    profile: {
-        theme?: string | null;
-        accent_swatch?: string | null;
-    } | null,
+    profile: { theme?: string | null } | null,
 ): ViewerChrome {
-    return {
-        theme: resolveTheme(profile?.theme),
-        accent: resolveAccent(profile?.accent_swatch),
-    };
+    return { theme: resolveTheme(profile?.theme) };
 }
 
 async function widgetCard(
@@ -61,7 +53,6 @@ async function widgetCard(
 ): Promise<string> {
     const html = withWidgetData(await getWidgetHtml(key), data, {
         theme: chrome.theme,
-        accent: accentColor(chrome.theme, chrome.accent),
     });
     return `<iframe class="widget-frame" title="${escapeHtml(key)}" srcdoc="${escapeHtml(html)}"></iframe>`;
 }
@@ -362,7 +353,6 @@ export async function renderNutritionPage(
         title: "Nutrition",
         active: "nutrition",
         theme: view.chrome.theme,
-        accent: view.chrome.accent,
         body,
     });
 }

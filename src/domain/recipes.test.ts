@@ -35,7 +35,6 @@ import {
     renderRecipeDetailPage,
     renderRecipesPage,
 } from "../web/pages/recipes.js";
-import { ACCENT_SWATCHES } from "../app/shell.js";
 import type { FoodResult } from "../foods.js";
 
 const HH = "hh-1";
@@ -412,7 +411,7 @@ test("create recipe requires a name and a positive yield", async () => {
 
 test("recipes list page is not a stub and detail reuses shared picker", () => {
     const list = renderRecipesPage({
-        chrome: { theme: "light", accent: ACCENT_SWATCHES.sky },
+        chrome: { theme: "light" },
         recipes: [
             {
                 id: "r1",
@@ -438,7 +437,7 @@ test("recipes list page is not a stub and detail reuses shared picker", () => {
     expect(list).toContain('action="/recipes"');
 
     const detail = renderRecipeDetailPage({
-        chrome: { theme: "light", accent: ACCENT_SWATCHES.sky },
+        chrome: { theme: "light" },
         recipe: {
             id: "r1",
             householdId: HH,

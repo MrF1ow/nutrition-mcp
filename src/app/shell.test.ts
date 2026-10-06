@@ -4,7 +4,6 @@ import {
     bottomNav,
     comingSoonPage,
     parseAppearanceInput,
-    resolveAccent,
     resolveTheme,
 } from "./shell.js";
 
@@ -54,17 +53,11 @@ test("bottom nav hrefs and tab order", () => {
     expect(inner.replace(/<[^>]+>/g, "").trim()).toBe("");
 });
 
-test("null accent resolves to sky", () => {
-    expect(resolveAccent(null)).toEqual({
-        light: "#2f8fd4",
-        dark: "#5eb8f0",
-    });
-    expect(resolveAccent("rose").light).toBe("#e25d8a");
-});
-
-test("unset theme is light", () => {
-    expect(resolveTheme(null)).toBe("light");
+test("unset theme follows the system", () => {
+    expect(resolveTheme(null)).toBe("system");
+    expect(resolveTheme("nope")).toBe("system");
     expect(resolveTheme("dark")).toBe("dark");
+    expect(resolveTheme("light")).toBe("light");
 });
 
 test("fridge stub uses the shell and marks Fridge active", () => {
@@ -72,28 +65,34 @@ test("fridge stub uses the shell and marks Fridge active", () => {
     expect(html).toContain("<h1>Fridge</h1>");
     expect(html).toContain("Coming soon.");
     expect(html).toContain('href="/fridge" aria-current="page"');
-    expect(html).toContain('data-theme="light"');
-    expect(html).toContain("--accent:#2f8fd4");
-    expect(html).toContain('html[data-theme="light"]{--accent:#2f8fd4');
     expect(html).toContain('href="/logout"');
+    expect(html).toContain('<link rel="stylesheet" href="/app.css" />');
 });
 
-test("dark viewer swatch beats app.css sky tokens", () => {
-    const html = comingSoonPage("settings", {
-        theme: "dark",
-        accent: resolveAccent("rose"),
-    });
-    expect(html).toContain('data-theme="dark"');
+test("system theme leaves data-theme off and offers both theme colors", () => {
+    const html = comingSoonPage("fridge");
+    expect(html).toContain('<html lang="en">');
+    expect(html).not.toContain("data-theme");
     expect(html).toContain(
-        'html[data-theme="dark"]{--accent:#fb7199;--accent-ink:#0b1220}',
+        '<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />',
     );
+    expect(html).not.toContain("--accent");
 });
 
-test("appearance form values coerce to theme and allowlisted swatch", () => {
-    expect(
-        parseAppearanceInput({ theme: "dark", accent_swatch: "rose" }),
-    ).toEqual({ theme: "dark", accent_swatch: "rose" });
-    expect(
-        parseAppearanceInput({ theme: "nope", accent_swatch: "chartreuse" }),
-    ).toEqual({ theme: "light", accent_swatch: null });
+test("an explicit theme stamps data-theme on html", () => {
+    const html = comingSoonPage("settings", { theme: "dark" });
+    expect(html).toContain('<html lang="en" data-theme="dark">');
+    expect(html).toContain('<meta name="theme-color" content="#000000" />');
+    expect(html).not.toContain("--accent");
+});
+
+test("the appearance form maps System to a cleared preference", () => {
+    expect(parseAppearanceInput({ theme: "dark" })).toEqual({ theme: "dark" });
+    expect(parseAppearanceInput({ theme: "light" })).toEqual({
+        theme: "light",
+    });
+    expect(parseAppearanceInput({ theme: "system" })).toEqual({ theme: null });
+    expect(parseAppearanceInput({ theme: "chartreuse" })).toEqual({
+        theme: null,
+    });
 });

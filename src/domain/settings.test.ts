@@ -8,7 +8,6 @@ import {
 } from "./settings.js";
 import { renderSettingsPage } from "../web/pages/settings.js";
 import { renderHouseholdSettingsPage } from "../app/settings/household.js";
-import { ACCENT_SWATCHES } from "../app/shell.js";
 import type { HouseholdMember } from "../household.js";
 
 const HH = "hh-1";
@@ -26,12 +25,11 @@ const bob: HouseholdMember = {
     displayName: "Bob",
 };
 
-const chrome = { theme: "light" as const, accent: ACCENT_SWATCHES.sky };
+const chrome = { theme: "light" as const };
 
 test("theme save form posts account fields to /settings", () => {
     const html = renderSettingsPage({
-        chrome: { theme: "dark", accent: ACCENT_SWATCHES.rose },
-        selectedSwatch: "rose",
+        chrome: { theme: "dark" },
         displayName: "Alice",
         timezone: "America/Los_Angeles",
         weightUnit: "lb",
@@ -43,10 +41,25 @@ test("theme save form posts account fields to /settings", () => {
     expect(html).toContain('href="/settings/household"');
     expect(html).toContain('href="/settings/foods"');
     expect(html).toContain('name="theme" value="dark" checked');
-    expect(html).toContain('value="rose" checked');
-    expect(html).toContain('data-theme="dark"');
-    expect(html).toContain("--accent:#fb7199");
+    expect(html).toContain('name="theme" value="system"');
+    expect(html).toContain('name="theme" value="light"');
+    expect(html).not.toContain('name="accent_swatch"');
+    expect(html).toContain('<html lang="en" data-theme="dark">');
     expect(html).not.toContain("coming-soon");
+});
+
+test("a cleared theme preference checks System", () => {
+    const html = renderSettingsPage({
+        chrome: { theme: "system" },
+        displayName: "Alice",
+        timezone: "",
+        weightUnit: "",
+        widgetsEnabled: true,
+        alcoholTrackingEnabled: false,
+        drinkUnit: "",
+    });
+    expect(html).toContain('name="theme" value="system" checked');
+    expect(html).not.toContain("data-theme");
 });
 
 test("creating a store seeds default sections including Other", async () => {

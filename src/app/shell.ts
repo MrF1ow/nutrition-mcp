@@ -10,27 +10,13 @@ export const APP_TABS = [
 
 export type AppTabId = (typeof APP_TABS)[number]["id"];
 
-export type Theme = "light" | "dark";
-
-export const ACCENT_SWATCHES = {
-    sky: { light: "#2f8fd4", dark: "#5eb8f0" },
-    violet: { light: "#7c6af0", dark: "#a78bfa" },
-    teal: { light: "#0f9d91", dark: "#2dd4bf" },
-    rose: { light: "#e25d8a", dark: "#fb7199" },
-    amber: { light: "#d97706", dark: "#fbbf24" },
-    slate: { light: "#64748b", dark: "#94a3b8" },
-} as const;
-
-export type AccentSwatch = keyof typeof ACCENT_SWATCHES;
-
-export type AccentTokens = {
-    light: string;
-    dark: string;
-};
+/** The viewer's saved theme. "system" is a null `profiles.theme` and follows
+ *  the OS through prefers-color-scheme. There is no accent preference: the
+ *  app, the login page and the widgets share one brand green (tokens.css). */
+export type ThemePref = "light" | "dark" | "system";
 
 export type ViewerChrome = {
-    theme: Theme;
-    accent: AccentTokens;
+    theme: ThemePref;
 };
 
 export type AppChrome = ViewerChrome & {
@@ -39,31 +25,12 @@ export type AppChrome = ViewerChrome & {
     body: string;
 };
 
-const SWATCH_NAMES = new Set<string>(Object.keys(ACCENT_SWATCHES));
+// The page background (--bg in public/widgets/src/shared/tokens.css), so the
+// mobile browser bar blends into the page.
+const THEME_COLOR = { light: "#f5f5f7", dark: "#000000" } as const;
 
-export function isAccentSwatch(
-    value: string | null | undefined,
-): value is AccentSwatch {
-    return value != null && SWATCH_NAMES.has(value);
-}
-
-export function resolveAccent(swatch: string | null | undefined): AccentTokens {
-    if (isAccentSwatch(swatch)) return ACCENT_SWATCHES[swatch];
-    return ACCENT_SWATCHES.sky;
-}
-
-export function resolveTheme(theme: string | null | undefined): Theme {
-    return theme === "dark" ? "dark" : "light";
-}
-
-export function accentColor(theme: Theme, accent: AccentTokens): string {
-    return theme === "dark" ? accent.dark : accent.light;
-}
-
-export function accentCssVars(theme: Theme, accent: AccentTokens): string {
-    const color = accentColor(theme, accent);
-    const ink = theme === "dark" ? "#0b1220" : "#ffffff";
-    return `--accent:${color};--accent-ink:${ink}`;
+export function resolveTheme(theme: string | null | undefined): ThemePref {
+    return theme === "light" || theme === "dark" ? theme : "system";
 }
 
 export function escapeHtml(str: string): string {
@@ -83,23 +50,36 @@ export function bottomNav(active: AppTabId): string {
     return `<nav class="bottom-nav" aria-label="App">${links}</nav>`;
 }
 
-export function appHead(
-    title: string,
-    theme: Theme,
-    accent: AccentTokens,
-): string {
+/** The `<html>` opener. An explicit theme stamps data-theme, which the token
+ *  blocks in tokens.css prefer over prefers-color-scheme in both directions;
+ *  "system" leaves it off so the media query decides. */
+export function htmlOpen(theme: ThemePref): string {
+    const attr = theme === "system" ? "" : ` data-theme="${theme}"`;
+    return `<html lang="en"${attr}>`;
+}
+
+function themeColorMeta(theme: ThemePref): string {
+    if (theme !== "system") {
+        return `<meta name="theme-color" content="${THEME_COLOR[theme]}" />`;
+    }
+    return `<meta name="theme-color" content="${THEME_COLOR.light}" media="(prefers-color-scheme: light)" />
+<meta name="theme-color" content="${THEME_COLOR.dark}" media="(prefers-color-scheme: dark)" />`;
+}
+
+export function appHead(title: string, theme: ThemePref): string {
     return `<meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+${themeColorMeta(theme)}
 <title>${escapeHtml(title)}</title>
-<link rel="stylesheet" href="/app.css" />
-<style>html[data-theme="${theme}"]{${accentCssVars(theme, accent)}}</style>`;
+<link rel="icon" href="/favicon.ico" />
+<link rel="stylesheet" href="/app.css" />`;
 }
 
 export function renderAppShell(chrome: AppChrome): string {
     return `<!doctype html>
-<html lang="en" data-theme="${chrome.theme}">
+${htmlOpen(chrome.theme)}
 <head>
-${appHead(chrome.title, chrome.theme, chrome.accent)}
+${appHead(chrome.title, chrome.theme)}
 </head>
 <body>
 <header class="app-bar"><a href="/logout">Log out</a></header>
@@ -128,32 +108,28 @@ document.querySelectorAll(".widget-frame").forEach((frame) => {
 </html>`;
 }
 
-export function parseAppearanceInput(input: {
-    theme?: unknown;
-    accent_swatch?: unknown;
-}): { theme: Theme; accent_swatch: AccentSwatch | null } {
-    const theme = input.theme === "dark" ? "dark" : "light";
-    const raw =
-        typeof input.accent_swatch === "string" ? input.accent_swatch : "";
+/** The settings form posts theme=system|light|dark. System, or anything
+ *  unrecognised, clears the preference (null) rather than pinning light. */
+export function parseAppearanceInput(input: { theme?: unknown }): {
+    theme: "light" | "dark" | null;
+} {
     return {
-        theme,
-        accent_swatch: isAccentSwatch(raw) ? raw : null,
+        theme:
+            input.theme === "light" || input.theme === "dark"
+                ? input.theme
+                : null,
     };
 }
 
 export function comingSoonPage(
     tab: Exclude<AppTabId, "nutrition">,
-    chrome: ViewerChrome = {
-        theme: "light",
-        accent: ACCENT_SWATCHES.sky,
-    },
+    chrome: ViewerChrome = { theme: "system" },
 ): string {
     const label = APP_TABS.find((t) => t.id === tab)!.label;
     return renderAppShell({
         title: label,
         active: tab,
         theme: chrome.theme,
-        accent: chrome.accent,
         body: `<h1>${escapeHtml(label)}</h1><p class="coming-soon">Coming soon.</p>`,
     });
 }

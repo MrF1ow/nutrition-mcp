@@ -361,3 +361,13 @@ body {
     margin: 0;
     border: 0;
 }
+
+/* A row of radio or checkbox choices under one legend. */
+.choice-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 18px;
+}
+.choice-row legend {
+    width: 100%;
+}

@@ -203,7 +203,6 @@ export function renderGroceryPage(view: GroceryPageView): string {
         title: "Groceries",
         active: "grocery",
         theme: view.chrome.theme,
-        accent: view.chrome.accent,
         body,
     });
 }

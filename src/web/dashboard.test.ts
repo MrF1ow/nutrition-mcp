@@ -1,7 +1,6 @@
 import { test, expect } from "bun:test";
 import { withWidgetData } from "../widgets.js";
 import { createHouseholdFormHtml, renderDashboardHtml } from "./dashboard.js";
-import { ACCENT_SWATCHES } from "../app/shell.js";
 import type { HouseholdMember } from "../household.js";
 
 const alice: HouseholdMember = {
@@ -17,10 +16,7 @@ const bob: HouseholdMember = {
     displayName: "Bob",
 };
 
-const skyChrome = {
-    theme: "light" as const,
-    accent: ACCENT_SWATCHES.sky,
-};
+const lightChrome = { theme: "light" as const };
 
 test("withWidgetData seeds the existing script, not a second tag", () => {
     const html = "<html><script>initWidget({})</script></html>";
@@ -30,20 +26,17 @@ test("withWidgetData seeds the existing script, not a second tag", () => {
     expect(out).toContain('"locale":"en"');
 });
 
-test("withWidgetData injects viewer accent after widget tokens", () => {
-    const html = "<html><head></head><script>initWidget({})</script></html>";
-    const out = withWidgetData(
-        html,
-        { locale: "en" },
-        {
-            theme: "light",
-            accent: "#e25d8a",
-        },
-    );
-    expect(out).toContain('data-theme="light"');
-    expect(out).toContain('id="viewer-accent"');
-    expect(out).toContain("--accent:#e25d8a");
-    expect(out.indexOf("viewer-accent")).toBeLessThan(out.indexOf("</head>"));
+test("withWidgetData stamps an explicit viewer theme and never overrides the accent", () => {
+    const html =
+        '<html data-theme="light"><head></head><script>initWidget({})</script></html>';
+    const dark = withWidgetData(html, { locale: "en" }, { theme: "dark" });
+    expect(dark).toContain('<html data-theme="dark">');
+    expect(dark).not.toContain("viewer-accent");
+    expect(dark).not.toContain("--accent");
+
+    const system = withWidgetData(html, { locale: "en" }, { theme: "system" });
+    expect(system).toContain("<html>");
+    expect(system).not.toContain("data-theme");
 });
 
 test("self dashboard reuses widget iframes and has no household facts", async () => {
@@ -54,7 +47,7 @@ test("self dashboard reuses widget iframes and has no household facts", async ()
         goals: { locale: "en" },
         trends: { locale: "en" },
         weight: { locale: "en", unit: "kg" },
-        chrome: skyChrome,
+        chrome: lightChrome,
     });
     expect(html).toContain("<h1>Alice</h1>");
     expect(html).not.toContain('class="peer-note"');
@@ -70,7 +63,6 @@ test("self dashboard reuses widget iframes and has no household facts", async ()
     expect(html).toContain(`href="/?member=${bob.userId}"`);
     expect(html).toContain('class="bottom-nav"');
     expect(html).toContain('href="/" aria-current="page"');
-    expect(html).toContain("--accent:#2f8fd4");
     expect(html).toContain('action="/log-meal"');
     expect(html).toContain('action="/log-water"');
     expect(html).toContain('action="/log-weight"');
@@ -85,7 +77,7 @@ test("owner self dashboard has no add-member form", async () => {
         goals: { locale: "en" },
         trends: { locale: "en" },
         weight: { locale: "en" },
-        chrome: skyChrome,
+        chrome: lightChrome,
     });
     expect(html).not.toContain('action="/add-household-member"');
     expect(html).not.toContain("Add household member");
@@ -100,14 +92,14 @@ test("member self dashboard has no add form", async () => {
         goals: { locale: "en" },
         trends: { locale: "en" },
         weight: { locale: "en" },
-        chrome: skyChrome,
+        chrome: lightChrome,
     });
     expect(html).toContain("<h1>Bob</h1>");
     expect(html).not.toContain('action="/add-household-member"');
     expect(html).not.toContain("Add household member");
 });
 
-test("peer dashboard is read-only and uses the viewer accent", async () => {
+test("peer dashboard is read-only", async () => {
     const html = await renderDashboardHtml({
         access: { ok: true, mode: "peer", viewer: alice, subject: bob },
         members: [alice, bob],
@@ -115,7 +107,7 @@ test("peer dashboard is read-only and uses the viewer accent", async () => {
         goals: { locale: "en" },
         trends: { locale: "en" },
         weight: { locale: "en" },
-        chrome: { theme: "light", accent: ACCENT_SWATCHES.rose },
+        chrome: lightChrome,
     });
     expect(html).toContain("<h1>Bob</h1>");
     expect(html).toContain("Viewing Bob");
@@ -125,7 +117,6 @@ test("peer dashboard is read-only and uses the viewer accent", async () => {
     expect(html).not.toContain('action="/approve"');
     expect(html).not.toContain('action="/add-household-member"');
     expect(html).not.toContain('class="facts"');
-    expect(html).toContain("--accent:#e25d8a");
     expect(html).not.toContain('action="/log-meal"');
     expect(html).not.toContain('action="/log-water"');
     expect(html).not.toContain('action="/log-weight"');

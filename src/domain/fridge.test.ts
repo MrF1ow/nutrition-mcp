@@ -12,7 +12,6 @@ import {
 } from "./fridge.js";
 import { createMemoryFoodsStore } from "./foods.js";
 import { renderFridgePage } from "../web/pages/fridge.js";
-import { ACCENT_SWATCHES } from "../app/shell.js";
 
 const HH = "hh-1";
 
@@ -182,7 +181,7 @@ test("empty fridge page prompts add location then add item", () => {
     const html = renderFridgePage({
         locations: [],
         items: [],
-        chrome: { theme: "light", accent: ACCENT_SWATCHES.sky },
+        chrome: { theme: "light" },
     });
     expect(html).toContain("<h1>Fridge</h1>");
     expect(html).not.toContain("Coming soon.");
@@ -234,7 +233,7 @@ test("fridge page reuses quantity field and food picker", () => {
                 foodId: null,
             },
         ],
-        chrome: { theme: "light", accent: ACCENT_SWATCHES.sky },
+        chrome: { theme: "light" },
     });
     expect(html).toContain('class="quantity-field"');
     expect(html).toContain('class="food-picker"');

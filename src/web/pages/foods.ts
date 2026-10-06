@@ -94,7 +94,6 @@ export function renderFoodsSettingsPage(view: FoodsSettingsView): string {
         title: "Foods",
         active: "settings",
         theme: view.chrome.theme,
-        accent: view.chrome.accent,
         body,
     });
 }

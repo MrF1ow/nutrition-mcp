@@ -12,7 +12,6 @@ import {
 import { renderFridgePage } from "../pages/fridge.js";
 import { renderGroceryPage } from "../pages/grocery.js";
 import { renderRecipeDetailPage, renderRecipesPage } from "../pages/recipes.js";
-import { ACCENT_SWATCHES } from "../../app/shell.js";
 import { renderMemberMultiSelect } from "./member-multi-select.js";
 import { renderStoreSectionList } from "./store-section-list.js";
 import type { FoodResult } from "../../foods.js";
@@ -76,10 +75,10 @@ test("fridge page and grocery page import the same quantity-field and food-picke
             },
         ],
         items: [],
-        chrome: { theme: "light", accent: ACCENT_SWATCHES.sky },
+        chrome: { theme: "light" },
     });
     const grocery = renderGroceryPage({
-        chrome: { theme: "light", accent: ACCENT_SWATCHES.sky },
+        chrome: { theme: "light" },
         stores: [
             {
                 id: "st-1",
@@ -113,7 +112,7 @@ test("fridge page and grocery page import the same quantity-field and food-picke
     expect(fridge).toContain("<h3>Add supply</h3>");
     expect(fridge).toContain("fridge-add-supply");
     const recipes = renderRecipeDetailPage({
-        chrome: { theme: "light", accent: ACCENT_SWATCHES.sky },
+        chrome: { theme: "light" },
         recipe: {
             id: "r1",
             householdId: "hh-1",
@@ -209,7 +208,7 @@ test("household pages call shared markup helpers for banners, empty states, and 
                 foodId: null,
             },
         ],
-        chrome: { theme: "light", accent: ACCENT_SWATCHES.sky },
+        chrome: { theme: "light" },
         error: "Enter a location name.",
     });
     expect(fridge).toContain('class="error-banner"');
@@ -221,14 +220,14 @@ test("household pages call shared markup helpers for banners, empty states, and 
     const emptyFridge = renderFridgePage({
         locations: [],
         items: [],
-        chrome: { theme: "light", accent: ACCENT_SWATCHES.sky },
+        chrome: { theme: "light" },
     });
     expect(emptyFridge).toContain(
         '<p class="empty-fridge">Add a location, then add an item.</p>',
     );
 
     const grocery = renderGroceryPage({
-        chrome: { theme: "light", accent: ACCENT_SWATCHES.sky },
+        chrome: { theme: "light" },
         stores: [],
         isOwner: true,
         error: "Enter a store name.",
@@ -242,7 +241,7 @@ test("household pages call shared markup helpers for banners, empty states, and 
     expect(grocery).not.toContain("<h3>Add supply</h3>");
 
     const groceryWithLine = renderGroceryPage({
-        chrome: { theme: "light", accent: ACCENT_SWATCHES.sky },
+        chrome: { theme: "light" },
         stores: [
             {
                 id: "st-1",
@@ -288,7 +287,7 @@ test("household pages call shared markup helpers for banners, empty states, and 
     expect(groceryWithLine).toContain("Cottage Cheese");
 
     const recipes = renderRecipesPage({
-        chrome: { theme: "light", accent: ACCENT_SWATCHES.sky },
+        chrome: { theme: "light" },
         recipes: [],
         members: [],
         viewerId: "11111111-1111-4111-8111-111111111111",
@@ -491,7 +490,7 @@ test("member multi-select, already-have, and store sections still render", () =>
     expect(members).toContain("Alice");
     expect(members).toContain("Bob");
     const grocery = renderGroceryPage({
-        chrome: { theme: "light", accent: ACCENT_SWATCHES.sky },
+        chrome: { theme: "light" },
         stores: [
             {
                 id: "st-1",
