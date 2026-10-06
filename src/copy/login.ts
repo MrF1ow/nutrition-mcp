@@ -18,6 +18,8 @@ export interface LoginDoc {
     privacyLinkText: string;
     newHereNote: string;
     afterConnectNote: string;
+    /** One line under the card. */
+    footerNote: string;
 }
 
 export interface LoginErrors {
@@ -37,6 +39,8 @@ export const LOGIN: LoginDoc = {
     newHereNote: "Sign in with the email and password for this household.",
     afterConnectNote:
         "After successful connection in your client, save your password somewhere and close this browser tab.",
+    footerNote:
+        "Free and open source. Nutrition figures are estimates, not medical advice.",
 };
 
 export const LOGIN_ERRORS: LoginErrors = {

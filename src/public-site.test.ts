@@ -74,8 +74,7 @@ describe("marketing HTTP is gone", () => {
         expect(body).not.toContain("/authorize/google");
         expect(body).not.toContain("Continue with Google");
         expect(body).not.toContain("created automatically");
-        expect(body).toContain("--accent: #2f8fd4");
-        expect(body).not.toContain("#3b7a4f");
+        expect(body).toContain('<link rel="stylesheet" href="/app.css" />');
         expect(body).not.toContain("/?locale=");
         expect(body).not.toContain("gtag");
         expect(body).not.toContain("googletagmanager");
@@ -122,16 +121,23 @@ describe("runtime surfaces that stay", () => {
         expect(css).toContain(".bottom-nav");
     });
 
-    test("login assets still answer and site.js does not poll /api/stats", async () => {
-        const css = await app.request("http://x/styles.css");
-        expect(css.status).toBe(200);
-        const cssText = await css.text();
-        expect(cssText).toContain("--accent: #3b7a4f");
-        const js = await app.request("http://x/site.js");
-        expect(js.status).toBe(200);
-        const siteJs = await js.text();
-        expect(siteJs).not.toContain("/api/stats");
-        expect(siteJs).not.toContain("data-live-badge");
+    test("the marketing stylesheet, site script and web fonts are gone", async () => {
+        for (const path of [
+            "/styles.css",
+            "/site.js",
+            "/fonts/bricolage-grotesque-latin.woff2",
+        ]) {
+            const r = await app.request(`http://x${path}`);
+            expect(r.status, path).toBe(404);
+        }
+        for (const file of [
+            "public/styles.css",
+            "public/site.js",
+            "public/fonts/bricolage-grotesque-latin.woff2",
+            "src/copy/chrome.ts",
+        ]) {
+            expect(await Bun.file(file).exists(), file).toBe(false);
+        }
     });
 
     test("GET /robots.txt disallows crawlers", async () => {
@@ -192,21 +198,15 @@ describe("runtime surfaces that stay", () => {
         expect(html).not.toContain('href="/terms"');
         expect(html).not.toContain('href="/privacy"');
         expect(html).not.toMatch(/<a class="brand"[^>]*href="\/"/);
-        expect(html).toContain("--accent: #2f8fd4");
-        expect(html).not.toContain("#3b7a4f");
+        expect(html).toContain('<link rel="stylesheet" href="/app.css" />');
         expect(html).not.toContain("gtag");
         expect(html).not.toContain("fonts.googleapis.com");
         expect(html).not.toContain("fonts.gstatic.com");
         expect(html).not.toContain("cdn.jsdelivr.net");
-        expect(html).toContain("/fonts/bricolage-grotesque-latin.woff2");
+        expect(html).not.toContain("/fonts/");
     });
 
-    test("self-hosted login fonts are served and CSP has no third-party font hosts", async () => {
-        const font = await app.request(
-            "http://x/fonts/bricolage-grotesque-latin.woff2",
-        );
-        expect(font.status).toBe(200);
-        expect(font.headers.get("content-type")).toContain("font/woff2");
+    test("CSP has no third-party hosts", async () => {
         const r = await app.request("http://x/health");
         expect(r.headers.get("content-security-policy") ?? "").not.toContain(
             "fonts.googleapis.com",

@@ -700,3 +700,61 @@ details.more > summary > :is(h2, h3) {
     padding-top: 4px;
     padding-bottom: 4px;
 }
+
+/* ---- login (/authorize, scripts/gen-login.ts) ---- */
+
+.auth-stage {
+    flex: 1;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 16px;
+    padding: clamp(24px, 8vw, 64px) 16px;
+}
+.auth-card {
+    width: 100%;
+    max-width: 400px;
+    padding: 24px 22px;
+    gap: 14px;
+}
+.auth-head {
+    display: grid;
+    justify-items: center;
+    gap: 6px;
+    text-align: center;
+}
+.auth-mark {
+    display: grid;
+    place-items: center;
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+    font-size: 28px;
+}
+.auth-title {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+}
+.auth-sub {
+    margin: 0;
+    color: var(--text-dim);
+    font-size: 14px;
+}
+.auth-form .btn-primary {
+    margin-top: 6px;
+}
+.auth-note,
+.auth-foot {
+    margin: 0;
+    color: var(--text-dim);
+    font-size: 12.5px;
+    line-height: 1.5;
+    text-align: center;
+}
+.auth-foot {
+    max-width: 400px;
+    font-size: 12px;
+}

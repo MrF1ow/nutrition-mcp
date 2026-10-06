@@ -23,7 +23,7 @@ These are the rules in `docs/handoff/foodable-architecture-plan.md`. Follow them
 
 Layout: `src/db/` is one Supabase adapter per domain, `src/domain/` the pure modules, `src/mcp/` the agent surface, and `src/web/` the household app (`routes/` one Hono sub-app per tab, `pages/`, `components/`, `middleware.ts` for the site actor, `form.ts` for form parsing). Auth, OAuth, rate limiting and analytics still sit at the top of `src/`.
 
-Host-agnostic config: optional `PUBLIC_ORIGIN` (see `.env.example` and `docs/self-hosting.md`). Docker keeps `--smol`. English only; do not restore locale switchers, `set_language`, or `src/copy/*.<locale>.ts`. Do not add a Foodable logo until one exists; keep the current favicon and the sky login accent.
+Host-agnostic config: optional `PUBLIC_ORIGIN` (see `.env.example` and `docs/self-hosting.md`). Docker keeps `--smol`. English only; do not restore locale switchers, `set_language`, or `src/copy/*.<locale>.ts`. Do not add a Foodable logo until one exists; keep the current favicon. There is one accent, the widget green in `public/widgets/src/shared/tokens.css`, on the app, the login page and the widgets alike.
 
 ## Household data model
 
@@ -174,13 +174,13 @@ Generated public HTML is the OAuth login template: `public/login.html`, written 
 
 ### Chrome and assets
 
-`scripts/site-partials.ts` `nav()` / `footer()` are login-only: brand (not a marketing site), theme. Consent `{terms}` / `{privacy}` render as plain text, not anchors to `/terms` or `/privacy`. There is no locale switcher.
+Login is a single card styled by `/app.css`, the household app's stylesheet. It follows the OS theme and has no header, theme toggle or web fonts. Consent `{terms}` / `{privacy}` render as plain text, not anchors.
 
-Shared assets still served: `/styles.css`, `/app.css`, `/site.js`, `/favicon.ico`, self-hosted fonts under `/fonts/`. `site.js` owns the theme toggle. It must not poll `/api/stats`. Keep the pre-paint theme script right after `<body>` so dark-mode visitors do not flash light. Login chrome uses the sky accent; do not change it to a Foodable logo until one exists.
+Static assets served: `/app.css` (assembled, see "Household app styling"), `/favicon.ico`, `/robots.txt`. `public/styles.css`, `public/site.js` and `public/fonts/` were marketing leftovers and are deleted; `src/public-site.test.ts` fails if they come back.
 
 `src/copy/tools.ts` `TOOLS` is the MCP catalog for `mcp.test.ts`, not a page.
 
-Re-run `bun run gen:all` after editing login copy or `site-partials.ts`. The generated file is still a template: `{{SESSION_ID}}` and `{{ERROR}}` are filled per request.
+Re-run `bun run gen:all` after editing login copy, `site-partials.ts` or `gen-login.ts`. The generated file is still a template: `{{SESSION_ID}}` and `{{ERROR}}` are filled per request.
 
 The first-user / closed-household flow is documented in `docs/self-hosting.md` and `docs/handoff/closed-household-plan.md`.
 
