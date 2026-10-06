@@ -25,6 +25,19 @@
 - Commits end with:
   `Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>`
 
+## Status (2026-10-06)
+
+**Tasks 1–9 are merged** in #52 (`fb53e90`). **Tasks 10–11 remain**, tracked by the draft PR on branch `unified-styling-login`.
+
+What changed on `main` relative to the task text below. Read this before running Task 10 or 11:
+
+- `public/app/app.css` puts page element defaults at element-only specificity: `:where(.app-main) h1 | h2 | h3 | p | a`, not `.app-main p`. The old form beat `.row-meta { margin-left: auto }`. `src/app-css.test.ts` pins this. New login and bare-page rules must not reintroduce `.app-main <element>` selectors.
+- `app.css` ends with a `/* ---- polish ---- */` block: nested-label fields at weight 400, single-button forms (`.grocery-clear-checked`, `.rotate-token`, `.recipe-delete`) at natural width, `.inline-form > button` at 44px, `.row-actions select` at 34px. Append Task 10's login section after it.
+- The `form.css` header comment no longer contains the literal text `` `.native button` ``: it tripped the Task 2 guard regex, so it now says ".native…button selector (without :where)". Do not reword it back.
+- The shell's widget-frame script, `htmlOpen`, `appHead`, `ThemePref` and the System / Light / Dark settings form are in place exactly as Task 3 describes. `renderBare` in `src/web/dashboard.ts` still links `/styles.css` and carries an inline `<style>` block (Task 11 fixes it).
+- The `remove-oauth` work that once rewrote the login files is not on `main`, and its branch no longer exists. Task 10 as written matches `main` (`src/oauth.ts`, `src/oauth.test.ts`, `scripts/gen-login.ts`, `scripts/site-partials.ts`, `src/copy/login.ts`, `src/copy/chrome.ts`). If OAuth removal lands on `main` first, re-target Task 10 at whatever then renders the login page; the deliverable is the same.
+- Verify visually with `bun run preview:app --shots`. Task 10 adds its own login screenshots (Step 10).
+
 ## Shipping
 
 Four PRs, each independently mergeable:
