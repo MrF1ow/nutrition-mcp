@@ -12,16 +12,7 @@
  */
 
 import { HTML_LANG } from "../src/routes.js";
-import {
-    esc,
-    footer,
-    generatedBanner,
-    nav,
-    HEAD_ASSETS,
-    LOGIN_SKY_TOKENS,
-    SITE_SCRIPT,
-    THEME_PREPAINT,
-} from "./site-partials.js";
+import { esc, generatedBanner } from "./site-partials.js";
 import { LOGIN, type LoginDoc } from "../src/copy/login.js";
 import { rm } from "node:fs/promises";
 
@@ -61,56 +52,6 @@ async function removeStaleMarketingHtml(): Promise<void> {
 
 await removeStaleMarketingHtml();
 
-// Page-layout CSS, unchanged from the previous hand-authored login.html.
-const LOGIN_STYLE = `        <style>
-            /* Sky widget chrome on login /authorize only. styles.css keeps
-               FDA green for leftover marketing CSS. */
-${LOGIN_SKY_TOKENS}
-            /* Page layout: sticky header, centred stage, footer at the foot.
-               body.auth in styles.css is flex-centred for the old standalone
-               card; here the stage does the centring instead. */
-            body.auth {
-                display: flex;
-                flex-direction: column;
-                align-items: stretch;
-                justify-content: flex-start;
-                padding: 0;
-            }
-            body.auth > main {
-                flex: 1;
-                display: flex;
-                flex-direction: column;
-            }
-            .auth-stage {
-                flex: 1;
-                display: grid;
-                place-items: center;
-                padding: clamp(2rem, 6vw, 4rem) 1rem;
-            }
-            /* The sign-in card takes the shared .card surface; the old
-               standalone shadow + entrance animation go. */
-            body.auth .auth-card {
-                border-radius: var(--radius-lg);
-                box-shadow: var(--shadow-card);
-                animation: none;
-            }
-            body.auth .auth-title {
-                font-size: clamp(1.7rem, 4vw, 2.1rem);
-            }
-            body.auth .auth-sub {
-                margin-top: 0.45rem;
-            }
-            body.auth .auth-field label {
-                font-family: var(--font-mono);
-                font-size: 0.72rem;
-                letter-spacing: 0.08em;
-            }
-            body.auth .auth-field input,
-            body.auth .auth-btn {
-                border-radius: 10px;
-            }
-        </style>`;
-
 function renderDoc(doc: LoginDoc): string {
     const title = `${esc(doc.title)} — ${esc(doc.subtitle)}`;
 
@@ -120,88 +61,51 @@ function renderDoc(doc: LoginDoc): string {
         .replace("{terms}", esc(doc.termsLinkText))
         .replace("{privacy}", esc(doc.privacyLinkText));
 
+    // Styled by /app.css, the household app's stylesheet. No data-theme on
+    // <html>: login always follows the OS theme.
     return `<!doctype html>
 <html lang="${HTML_LANG.en}">
     <head>
-        <title>${title}</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>${title}</title>
         <link rel="icon" href="/favicon.ico" />
-        <meta name="theme-color" content="#f5f5f7" />
+        <meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)" />
+        <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
         <!-- No canonical/hreflang: this page has no fixed URL (rendered
              per in-flight OAuth session via GET /authorize, not routed by
-             path — see src/copy/login.ts) and isn't in the sitemap. noindex
-             is a defensive belt-and-suspenders in case a stray link to
-             /authorize is ever crawled. -->
+             path — see src/copy/login.ts). noindex is a defensive
+             belt-and-suspenders in case a stray link to /authorize is ever
+             crawled. -->
         <meta name="robots" content="noindex, nofollow" />
-${HEAD_ASSETS}
-${LOGIN_STYLE}
+        <link rel="stylesheet" href="/app.css" />
     </head>
     <body class="auth">
 ${generatedBanner("scripts/gen-login.ts")}
-${THEME_PREPAINT}
-
-${nav("en")}
-
-        <main id="main">
-            <div class="auth-stage">
-                <div class="auth-wrap">
-                    <div class="auth-card card">
-                        <div class="auth-head">
-                            <span class="auth-mark" aria-hidden="true">🍏</span>
-                            <h1 class="auth-title">${esc(doc.title)}</h1>
-                            <p class="auth-sub">${esc(doc.subtitle)}</p>
-                        </div>
-
-                        {{ERROR}}
-
-                        <form method="POST" action="/approve" class="auth-form">
-                            <input
-                                type="hidden"
-                                name="session_id"
-                                value="{{SESSION_ID}}"
-                            />
-                            <div class="auth-field">
-                                <label for="email">${esc(doc.emailLabel)}</label>
-                                <input
-                                    type="email"
-                                    id="email"
-                                    name="email"
-                                    required
-                                    autocomplete="email"
-                                />
-                            </div>
-                            <div class="auth-field">
-                                <label for="password">${esc(doc.passwordLabel)}</label>
-                                <input
-                                    type="password"
-                                    id="password"
-                                    name="password"
-                                    required
-                                    minlength="6"
-                                    autocomplete="current-password"
-                                />
-                            </div>
-                            <button
-                                type="submit"
-                                name="action"
-                                value="login"
-                                class="auth-btn"
-                            >
-                                ${esc(doc.continueButton)}
-                            </button>
-                            <p class="auth-note">${consent}</p>
-                            <p class="auth-note">${esc(doc.newHereNote)}</p>
-                            <p class="auth-note">${esc(doc.afterConnectNote)}</p>
-                        </form>
-                    </div>
+        <main id="main" class="auth-stage native">
+            <div class="auth-card panel">
+                <div class="auth-head">
+                    <span class="auth-mark" aria-hidden="true">🍏</span>
+                    <h1 class="auth-title">${esc(doc.title)}</h1>
+                    <p class="auth-sub">${esc(doc.subtitle)}</p>
                 </div>
+
+                {{ERROR}}
+
+                <form method="POST" action="/approve" class="auth-form">
+                    <input type="hidden" name="session_id" value="{{SESSION_ID}}" />
+                    <label for="email">${esc(doc.emailLabel)}</label>
+                    <input type="email" id="email" name="email" required autocomplete="email" />
+                    <label for="password">${esc(doc.passwordLabel)}</label>
+                    <input type="password" id="password" name="password" required minlength="6" autocomplete="current-password" />
+                    <button type="submit" name="action" value="login" class="btn-primary">${esc(doc.continueButton)}</button>
+                    <p class="auth-note">${consent}</p>
+                    <p class="auth-note">${esc(doc.newHereNote)}</p>
+                    <p class="auth-note">${esc(doc.afterConnectNote)}</p>
+                </form>
             </div>
+            <p class="auth-foot">${esc(doc.footerNote)}</p>
         </main>
-
-${footer("en")}
-
-${SITE_SCRIPT}
     </body>
 </html>
 `;

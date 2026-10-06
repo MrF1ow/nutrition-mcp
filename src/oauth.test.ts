@@ -58,20 +58,16 @@ test("renderLoginPage has no language switcher or translation notice", async () 
     expect(html).toContain('<html lang="en">');
 });
 
-test("generated login uses sky accent tokens, not FDA green", async () => {
+test("generated login uses the shared app stylesheet and no web fonts", async () => {
     const html = await renderLoginPage("s1", fakeSession());
-    expect(html).toContain("--accent: #2f8fd4");
-    expect(html).toContain("--accent: #5eb8f0");
-    expect(html).not.toContain("#3b7a4f");
-    expect(html).not.toContain("#79c28c");
-    expect(html).toContain('class="auth-btn"');
-    expect(html).not.toContain("auth-btn-secondary");
-    const bodyIdx = html.indexOf("<body");
-    const prepaintIdx = html.indexOf('localStorage.getItem("theme")');
-    const mainIdx = html.indexOf("<main");
-    expect(bodyIdx).toBeGreaterThan(-1);
-    expect(prepaintIdx).toBeGreaterThan(bodyIdx);
-    expect(mainIdx).toBeGreaterThan(prepaintIdx);
+    expect(html).toContain('<link rel="stylesheet" href="/app.css" />');
+    expect(html).toContain('class="auth-stage native"');
+    expect(html).toContain('class="btn-primary"');
+    expect(html).not.toContain("/styles.css");
+    expect(html).not.toContain("/site.js");
+    expect(html).not.toContain("/fonts/");
+    expect(html).not.toContain("#2f8fd4");
+    expect(html).not.toContain("auth-btn");
 });
 
 test("first Auth user may sign up after a failed sign-in", async () => {

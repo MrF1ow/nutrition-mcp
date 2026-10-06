@@ -207,27 +207,18 @@ app.get("/logout", (c) => {
     return c.redirect("/");
 });
 
-// Login assets. Marketing HTML, sitemap, llms.txt, and landing APIs are
-// gone; leftover files on disk must not become routes (a registered path
-// that reads a missing file 500s).
+// Static assets. Login and the household app share /app.css (assembled from
+// the widget partials, src/widgets.ts). Marketing HTML, its stylesheet, site.js
+// and the web fonts are gone; leftover files on disk must not become routes (a
+// registered path that reads a missing file 500s).
 app.get("/robots.txt", async (c) => {
     return c.body(await Bun.file("./public/robots.txt").text(), 200, {
         "Content-Type": "text/plain",
     });
 });
-app.get("/styles.css", async (c) => {
-    const file = Bun.file("./public/styles.css");
-    return c.body(await file.text(), 200, { "Content-Type": "text/css" });
-});
 app.get("/app.css", async (c) => {
     return c.body(await getAppCss(), 200, {
         "Content-Type": "text/css; charset=utf-8",
-    });
-});
-app.get("/site.js", async (c) => {
-    const file = Bun.file("./public/site.js");
-    return c.body(await file.text(), 200, {
-        "Content-Type": "text/javascript; charset=utf-8",
     });
 });
 app.get("/favicon.ico", async (c) => {
@@ -239,16 +230,6 @@ app.get("/favicon.ico", async (c) => {
     } catch {
         return c.notFound();
     }
-});
-app.get("/fonts/:file", async (c) => {
-    const file = c.req.param("file");
-    if (!/^[a-z0-9.-]+\.woff2$/i.test(file)) return c.notFound();
-    const bunFile = Bun.file(`./public/fonts/${file}`);
-    if (!(await bunFile.exists())) return c.notFound();
-    return c.body(await bunFile.arrayBuffer(), 200, {
-        "Content-Type": "font/woff2",
-        "Cache-Control": "public, max-age=31536000, immutable",
-    });
 });
 
 // Health check

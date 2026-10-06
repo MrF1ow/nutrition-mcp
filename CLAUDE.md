@@ -23,7 +23,7 @@ These are the rules in `docs/handoff/foodable-architecture-plan.md`. Follow them
 
 Layout: `src/db/` is one Supabase adapter per domain, `src/domain/` the pure modules, `src/mcp/` the agent surface, and `src/web/` the household app (`routes/` one Hono sub-app per tab, `pages/`, `components/`, `middleware.ts` for the site actor, `form.ts` for form parsing). Auth, OAuth, rate limiting and analytics still sit at the top of `src/`.
 
-Host-agnostic config: optional `PUBLIC_ORIGIN` (see `.env.example` and `docs/self-hosting.md`). Docker keeps `--smol`. English only; do not restore locale switchers, `set_language`, or `src/copy/*.<locale>.ts`. Do not add a Foodable logo until one exists; keep the current favicon and the sky login accent.
+Host-agnostic config: optional `PUBLIC_ORIGIN` (see `.env.example` and `docs/self-hosting.md`). Docker keeps `--smol`. English only; do not restore locale switchers, `set_language`, or `src/copy/*.<locale>.ts`. Do not add a Foodable logo until one exists; keep the current favicon. There is one accent, the widget green in `public/widgets/src/shared/tokens.css`, on the app, the login page and the widgets alike.
 
 ## Household data model
 
@@ -174,15 +174,28 @@ Generated public HTML is the OAuth login template: `public/login.html`, written 
 
 ### Chrome and assets
 
-`scripts/site-partials.ts` `nav()` / `footer()` are login-only: brand (not a marketing site), theme. Consent `{terms}` / `{privacy}` render as plain text, not anchors to `/terms` or `/privacy`. There is no locale switcher.
+Login is a single card styled by `/app.css`, the household app's stylesheet. It follows the OS theme and has no header, theme toggle or web fonts. Consent `{terms}` / `{privacy}` render as plain text, not anchors.
 
-Shared assets still served: `/styles.css`, `/app.css`, `/site.js`, `/favicon.ico`, self-hosted fonts under `/fonts/`. `site.js` owns the theme toggle. It must not poll `/api/stats`. Keep the pre-paint theme script right after `<body>` so dark-mode visitors do not flash light. Login chrome uses the sky accent; do not change it to a Foodable logo until one exists.
+Static assets served: `/app.css` (assembled, see "Household app styling"), `/favicon.ico`, `/robots.txt`. `public/styles.css`, `public/site.js` and `public/fonts/` were marketing leftovers and are deleted; `src/public-site.test.ts` fails if they come back.
 
 `src/copy/tools.ts` `TOOLS` is the MCP catalog for `mcp.test.ts`, not a page.
 
-Re-run `bun run gen:all` after editing login copy or `site-partials.ts`. The generated file is still a template: `{{SESSION_ID}}` and `{{ERROR}}` are filled per request.
+Re-run `bun run gen:all` after editing login copy, `site-partials.ts` or `gen-login.ts`. The generated file is still a template: `{{SESSION_ID}}` and `{{ERROR}}` are filled per request.
 
 The first-user / closed-household flow is documented in `docs/self-hosting.md` and `docs/handoff/closed-household-plan.md`.
+
+---
+
+## Household app styling
+
+One design system. The widget partials in `public/widgets/src/shared/` (`tokens.css`, `base.css`, `form.css`, `table.css`, `seg.css`) are the source of truth for the in-chat widgets, the household app and the login page. `public/app/app.css` `@include`s them and adds only app layout. `getAppCss()` in `src/widgets.ts` assembles it with the widget resolver, caches it, warms it at boot and serves it at `/app.css`. Editing a partial changes the widgets and the app together; check both (`bun run harness`, `bun run preview:app --shots`).
+
+- **Plain markup inside `.native`.** App pages render inside `<main class="app-main native">`. `form.css` styles native `input` / `select` / `textarea` / `button` there through `:where(.native …)`, which has zero specificity, so a component class on the same element always wins. Never add a bare `.native button` rule: it outranks `.btn-primary`. App-layer rules in `app.css` follow the same convention.
+- **The vocabulary.** Sections are `.panel` (sub-blocks `.psec`). Lists are `ul.list` of rows: `.row` holding `.row-title` and a right-aligned `.row-meta`, then `.row-actions` (each action is its own POST form, `display: contents`). Secondary forms (edit, add, filter) go behind `<details class="more"><summary>…</summary>`. Buttons: plain = neutral, `.btn-primary` = the one main action, `.btn-danger` = destructive, `.btn-sm` = in-row. Two-column fields: `.field-grid` with `<label>Text<input></label>`. Label + control + button on one line: `.inline-form`. Picker tabs are `.seg` / `.seg-btn` with `aria-selected`.
+- **One accent, three themes.** The accent is `--accent` from `tokens.css` and nothing overrides it: no swatch picker and no inline accent. `profiles.theme` is `light`, `dark` or null (System). Explicit themes stamp `data-theme` on `<html>` (`htmlOpen` in `src/app/shell.ts`); System leaves it off so the media query decides. Embedded widgets get the same treatment (`withWidgetData`). `profiles.accent_swatch` is unused, pending a contract migration.
+- **`[hidden]` is `display: none !important`** in `app.css`. Component `display` rules used to override the attribute.
+- **Embedded widgets.** `.widget-frame` is pulled out by the widget's own 12–14px gutter so cards line up with page panels, and `bridge.js` skips its chat-only footer when `window.__WIDGET_DATA__` seeded the paint.
+- **Test-pinned class names.** Some classes are asserted exactly by tests (see `src/web/components/shared-import.test.ts`, `src/domain/*.test.ts`). Style those by name in `app.css` rather than appending classes in markup.
 
 ---
 
