@@ -23,7 +23,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 beforeEach(() => {
-    process.env.OFF_USER_AGENT = "nutrition-mcp-test (test@example.com)";
+    process.env.OFF_USER_AGENT = "foodable-test (test@example.com)";
 });
 
 afterEach(() => {
@@ -434,7 +434,7 @@ describe("fetchProductFromOFF alcohol (ABV, not grams)", () => {
         ) as unknown as typeof fetch;
 
         await fetchProductFromOFF("737628064502");
-        expect(seen.ua).toBe("nutrition-mcp-test (test@example.com)");
+        expect(seen.ua).toBe("foodable-test (test@example.com)");
 
         delete process.env.OFF_USER_AGENT;
         expect(fetchProductFromOFF("737628064502")).rejects.toThrow(
@@ -537,7 +537,7 @@ describe("fetchProductsByNameFromOFF", () => {
         ) as unknown as typeof fetch;
 
         const hits = await fetchProductsByNameFromOFF("cottage");
-        expect(seen.ua).toBe("nutrition-mcp-test (test@example.com)");
+        expect(seen.ua).toBe("foodable-test (test@example.com)");
         expect(seen.url).toContain("cgi/search.pl");
         expect(seen.url).toContain("search_terms=cottage");
         expect(hits).toHaveLength(1);

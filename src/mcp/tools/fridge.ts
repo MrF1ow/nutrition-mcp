@@ -6,22 +6,24 @@ import { liveStockStore } from "../../db/stock.js";
 import { withAnalytics } from "../../analytics.js";
 import { lookupBarcode } from "../../foods.js";
 import {
-    addFoodByBarcode,
-    addFoodById,
     addLocation,
-    addManualFood,
-    addSupply,
-    deleteItem,
     deleteLocation,
+    FridgeInputError,
     listFridge,
     moveItem,
-    updateItemQuantity,
+    prepareAddFoodByBarcode,
+    prepareAddFoodById,
+    prepareAddManualFood,
+    prepareAddSupply,
 } from "../../domain/fridge.js";
 import {
+    addFridgeItemAdjust,
+    deleteFridgeItemAdjust,
     discardFridgeItem,
     eatFridgeItem,
     listExpiring,
     StockInputError,
+    updateFridgeItemQuantityAdjust,
 } from "../../domain/stock.js";
 import {
     descriptionFromItems,
@@ -301,58 +303,84 @@ export function registerFridgeTools(server: McpServer, ctx: ToolContext) {
                     const householdId = await callerHouseholdId();
                     const store = liveFridgeStore();
                     const foods = liveFoodsStore();
-                    const item =
-                        args.kind === "supply"
-                            ? await addSupply(store, foods, {
-                                  householdId,
-                                  locationId: args.location_id,
-                                  name: args.name ?? "",
-                                  amount: args.amount,
-                                  unit: args.unit ?? "",
-                                  foodId: args.food_id,
-                              })
-                            : args.food_id
-                              ? await addFoodById(store, foods, {
-                                    householdId,
-                                    locationId: args.location_id,
-                                    foodId: args.food_id,
-                                    amount: args.amount,
-                                    unit: args.unit,
-                                })
-                              : args.barcode
-                                ? await addFoodByBarcode(
-                                      store,
-                                      foods,
-                                      {
-                                          householdId,
-                                          locationId: args.location_id,
-                                          barcode: args.barcode,
-                                          amount: args.amount,
-                                          unit: args.unit,
-                                      },
-                                      { lookup: lookupBarcode },
-                                  )
-                                : await addManualFood(store, foods, {
+                    try {
+                        const prepared =
+                            args.kind === "supply"
+                                ? await prepareAddSupply(store, foods, {
                                       householdId,
                                       locationId: args.location_id,
                                       name: args.name ?? "",
                                       amount: args.amount,
-                                      unit: args.unit,
-                                  });
-                    return {
-                        content: [
+                                      unit: args.unit ?? "",
+                                      foodId: args.food_id,
+                                  })
+                                : args.food_id
+                                  ? await prepareAddFoodById(store, foods, {
+                                        householdId,
+                                        locationId: args.location_id,
+                                        foodId: args.food_id,
+                                        amount: args.amount,
+                                        unit: args.unit,
+                                    })
+                                  : args.barcode
+                                    ? await prepareAddFoodByBarcode(
+                                          store,
+                                          foods,
+                                          {
+                                              householdId,
+                                              locationId: args.location_id,
+                                              barcode: args.barcode,
+                                              amount: args.amount,
+                                              unit: args.unit,
+                                          },
+                                          { lookup: lookupBarcode },
+                                      )
+                                    : await prepareAddManualFood(store, foods, {
+                                          householdId,
+                                          locationId: args.location_id,
+                                          name: args.name ?? "",
+                                          amount: args.amount,
+                                          unit: args.unit,
+                                      });
+                        const added = await addFridgeItemAdjust(
+                            store,
+                            liveStockStore(),
+                            foods,
                             {
-                                type: "text",
-                                text: `Added ${item.displayName} ${item.quantity.amount} ${item.quantity.unit} ${item.id}`,
+                                householdId: prepared.householdId,
+                                foodId: prepared.food.id,
+                                amount: prepared.amount,
+                                unit: prepared.unit,
+                                locationId: prepared.locationId,
                             },
-                        ],
-                        structuredContent: {
-                            id: item.id,
-                            display_name: item.displayName,
-                            amount: item.quantity.amount,
-                            unit: item.quantity.unit,
-                        },
-                    };
+                        );
+                        const item = added.item;
+                        if (!item) {
+                            throw new Error("Could not add fridge item.");
+                        }
+                        return {
+                            content: [
+                                {
+                                    type: "text",
+                                    text: `Added ${item.displayName} ${item.quantity.amount} ${item.quantity.unit} ${item.id}`,
+                                },
+                            ],
+                            structuredContent: {
+                                id: item.id,
+                                display_name: item.displayName,
+                                amount: item.quantity.amount,
+                                unit: item.quantity.unit,
+                            },
+                        };
+                    } catch (err) {
+                        if (
+                            err instanceof FridgeInputError ||
+                            err instanceof StockInputError
+                        ) {
+                            throw new Error(err.message);
+                        }
+                        throw err;
+                    }
                 },
                 analytics,
             ),
@@ -383,43 +411,59 @@ export function registerFridgeTools(server: McpServer, ctx: ToolContext) {
                 async () => {
                     const householdId = await callerHouseholdId();
                     const store = liveFridgeStore();
-                    if (args.amount != null) {
-                        const updated = await updateItemQuantity(
-                            store,
-                            householdId,
-                            args.id,
-                            { amount: args.amount, unit: args.unit ?? "g" },
-                        );
-                        if (!updated) {
-                            throw new Error(
-                                `No fridge item found with id ${args.id}.`,
-                            );
+                    try {
+                        if (args.amount != null) {
+                            const updated =
+                                await updateFridgeItemQuantityAdjust(
+                                    store,
+                                    liveStockStore(),
+                                    liveFoodsStore(),
+                                    {
+                                        householdId,
+                                        itemId: args.id,
+                                        amount: args.amount,
+                                        unit: args.unit,
+                                    },
+                                );
+                            if (!updated) {
+                                throw new Error(
+                                    `No fridge item found with id ${args.id}.`,
+                                );
+                            }
                         }
-                    }
-                    if (args.location_id != null) {
-                        const moved = await moveItem(
-                            store,
-                            householdId,
-                            args.id,
-                            args.location_id,
-                        );
-                        if (!moved) {
-                            throw new Error(
-                                `No fridge item found with id ${args.id}.`,
+                        if (args.location_id != null) {
+                            const moved = await moveItem(
+                                store,
+                                householdId,
+                                args.id,
+                                args.location_id,
                             );
+                            if (!moved) {
+                                throw new Error(
+                                    `No fridge item found with id ${args.id}.`,
+                                );
+                            }
                         }
+                        if (args.amount == null && args.location_id == null) {
+                            throw new Error("Pass amount and/or location_id.");
+                        }
+                        return {
+                            content: [
+                                {
+                                    type: "text",
+                                    text: `Updated fridge item ${args.id}.`,
+                                },
+                            ],
+                        };
+                    } catch (err) {
+                        if (
+                            err instanceof FridgeInputError ||
+                            err instanceof StockInputError
+                        ) {
+                            throw new Error(err.message);
+                        }
+                        throw err;
                     }
-                    if (args.amount == null && args.location_id == null) {
-                        throw new Error("Pass amount and/or location_id.");
-                    }
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: `Updated fridge item ${args.id}.`,
-                            },
-                        ],
-                    };
                 },
                 analytics,
             ),
@@ -445,21 +489,35 @@ export function registerFridgeTools(server: McpServer, ctx: ToolContext) {
                 "delete_fridge_item",
                 async () => {
                     const householdId = await callerHouseholdId();
-                    const deleted = await deleteItem(
-                        liveFridgeStore(),
-                        householdId,
-                        args.id,
-                    );
-                    return {
-                        content: [
+                    try {
+                        const deleted = await deleteFridgeItemAdjust(
+                            liveFridgeStore(),
+                            liveStockStore(),
+                            liveFoodsStore(),
                             {
-                                type: "text",
-                                text: deleted
-                                    ? `Deleted fridge item ${args.id}.`
-                                    : `No fridge item found with id ${args.id}.`,
+                                householdId,
+                                itemId: args.id,
                             },
-                        ],
-                    };
+                        );
+                        return {
+                            content: [
+                                {
+                                    type: "text",
+                                    text: deleted
+                                        ? `Deleted fridge item ${args.id}.`
+                                        : `No fridge item found with id ${args.id}.`,
+                                },
+                            ],
+                        };
+                    } catch (err) {
+                        if (
+                            err instanceof FridgeInputError ||
+                            err instanceof StockInputError
+                        ) {
+                            throw new Error(err.message);
+                        }
+                        throw err;
+                    }
                 },
                 analytics,
             ),

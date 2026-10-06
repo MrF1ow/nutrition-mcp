@@ -432,7 +432,7 @@ export async function applyMovement(
         id: crypto.randomUUID(),
         householdId: input.householdId,
         foodId: food.id,
-        fridgeItemId: changed.item?.id ?? input.fridgeItemId ?? null,
+        fridgeItemId: changed.item?.id ?? null,
         delta: appliedSigned,
         unit: changed.unit,
         reason: input.reason,
@@ -663,6 +663,134 @@ export async function eatFridgeItem(
         actorUserId: input.actorUserId,
     });
     return { ...result, itemBefore: current };
+}
+
+export async function addFridgeItemAdjust(
+    fridge: FridgeStore,
+    stock: StockStore,
+    foods: FoodsStore,
+    input: {
+        householdId: string;
+        foodId: string;
+        amount: number;
+        unit: string;
+        locationId: string;
+        actorUserId?: string | null;
+        purchasedOn?: string | null;
+        openedOn?: string | null;
+        expiresOn?: string | null;
+    },
+): Promise<ApplyMovementResult> {
+    return applyMovement(fridge, stock, foods, {
+        householdId: input.householdId,
+        foodId: input.foodId,
+        delta: input.amount,
+        unit: input.unit,
+        reason: "adjust",
+        locationId: input.locationId,
+        actorUserId: input.actorUserId,
+        purchasedOn: input.purchasedOn,
+        openedOn: input.openedOn,
+        expiresOn: input.expiresOn,
+    });
+}
+
+export async function updateFridgeItemQuantityAdjust(
+    fridge: FridgeStore,
+    stock: StockStore,
+    foods: FoodsStore,
+    input: {
+        householdId: string;
+        itemId: string;
+        amount: number;
+        unit?: string;
+        actorUserId?: string | null;
+    },
+): Promise<FridgeItem | null> {
+    const items = await fridge.listItems(input.householdId);
+    const current = items.find((item) => item.id === input.itemId);
+    if (!current) return null;
+    if (!current.foodId) {
+        throw new StockInputError(
+            `${current.displayName} is not linked to a food.`,
+        );
+    }
+    if (!Number.isFinite(input.amount) || input.amount <= 0) {
+        throw new StockInputError("Enter an amount greater than zero.");
+    }
+    const unit = input.unit?.trim() || current.quantity.unit;
+    if (!unit) throw new StockInputError("Enter a unit.");
+    let food: Food;
+    try {
+        food = await findFoodById(foods, input.householdId, current.foodId);
+    } catch (err) {
+        wrapFoodsError(err);
+    }
+    const currentInUnit = convertStockAmount(
+        current.quantity.amount,
+        current.quantity.unit,
+        unit,
+        food,
+    );
+    if (currentInUnit == null) {
+        throw new StockInputError(
+            "That amount cannot be merged into the existing item.",
+        );
+    }
+    const delta = roundAmount(input.amount - currentInUnit);
+    if (delta === 0) {
+        if (
+            unit === current.quantity.unit &&
+            current.quantity.amount === roundAmount(input.amount)
+        ) {
+            return current;
+        }
+        return fridge.updateItem({
+            ...current,
+            ...datesOf(current),
+            quantity: { amount: roundAmount(input.amount), unit },
+        });
+    }
+    const result = await applyMovement(fridge, stock, foods, {
+        householdId: input.householdId,
+        foodId: current.foodId,
+        delta,
+        unit,
+        reason: "adjust",
+        fridgeItemId: current.id,
+        actorUserId: input.actorUserId,
+    });
+    return result.item;
+}
+
+export async function deleteFridgeItemAdjust(
+    fridge: FridgeStore,
+    stock: StockStore,
+    foods: FoodsStore,
+    input: {
+        householdId: string;
+        itemId: string;
+        actorUserId?: string | null;
+    },
+): Promise<boolean> {
+    const items = await fridge.listItems(input.householdId);
+    const current = items.find((item) => item.id === input.itemId);
+    if (!current) return false;
+    if (!current.foodId) {
+        throw new StockInputError(
+            `${current.displayName} is not linked to a food.`,
+        );
+    }
+    await applyMovement(fridge, stock, foods, {
+        householdId: input.householdId,
+        foodId: current.foodId,
+        delta: -current.quantity.amount,
+        unit: current.quantity.unit,
+        reason: "adjust",
+        fridgeItemId: current.id,
+        actorUserId: input.actorUserId,
+    });
+    return true;
 }
 
 export async function discardFridgeItem(

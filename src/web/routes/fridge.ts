@@ -4,21 +4,22 @@ import { formAmount, formText } from "../form.js";
 import { requireMember, requireSiteUser, siteMember } from "../middleware.js";
 import { lookupBarcode } from "../../foods.js";
 import {
-    addFoodByBarcode,
-    addFoodById,
     addLocation,
-    addManualFood,
-    addSupply,
-    deleteItem,
     deleteLocation,
     FridgeInputError,
     moveItem,
-    updateItemQuantity,
+    prepareAddFoodByBarcode,
+    prepareAddFoodById,
+    prepareAddManualFood,
+    prepareAddSupply,
 } from "../../domain/fridge.js";
 import {
+    addFridgeItemAdjust,
+    deleteFridgeItemAdjust,
     discardFridgeItem,
     eatFridgeItem,
     StockInputError,
+    updateFridgeItemQuantityAdjust,
 } from "../../domain/stock.js";
 import { liveFridgeStore } from "../../db/fridge.js";
 import { liveFoodsStore } from "../../db/foods.js";
@@ -99,45 +100,52 @@ fridgeRoutes.post("/fridge/items", requireMember, async (c) => {
     const kind = formText(body, "kind");
     const amount = formAmount(body, "qty_amount");
     try {
-        if (kind === "supply") {
-            await addSupply(store, foods, {
-                householdId: member.householdId,
-                locationId,
-                name: formText(body, "name"),
-                amount,
-                unit: formText(body, "qty_unit"),
-                foodId: formText(body, "food_id") || undefined,
-            });
-        } else if (formText(body, "food_id")) {
-            await addFoodById(store, foods, {
-                householdId: member.householdId,
-                locationId,
-                foodId: formText(body, "food_id"),
-                amount,
-                unit: formText(body, "qty_unit"),
-            });
-        } else if (formText(body, "barcode")) {
-            await addFoodByBarcode(
-                store,
-                foods,
-                {
-                    householdId: member.householdId,
-                    locationId,
-                    barcode: formText(body, "barcode"),
-                    amount,
-                    unit: formText(body, "qty_unit"),
-                },
-                { lookup: fridgeBarcodeLookup },
-            );
-        } else {
-            await addManualFood(store, foods, {
-                householdId: member.householdId,
-                locationId,
-                name: formText(body, "food_name"),
-                amount,
-                unit: formText(body, "qty_unit"),
-            });
-        }
+        const prepared =
+            kind === "supply"
+                ? await prepareAddSupply(store, foods, {
+                      householdId: member.householdId,
+                      locationId,
+                      name: formText(body, "name"),
+                      amount,
+                      unit: formText(body, "qty_unit"),
+                      foodId: formText(body, "food_id") || undefined,
+                  })
+                : formText(body, "food_id")
+                  ? await prepareAddFoodById(store, foods, {
+                        householdId: member.householdId,
+                        locationId,
+                        foodId: formText(body, "food_id"),
+                        amount,
+                        unit: formText(body, "qty_unit"),
+                    })
+                  : formText(body, "barcode")
+                    ? await prepareAddFoodByBarcode(
+                          store,
+                          foods,
+                          {
+                              householdId: member.householdId,
+                              locationId,
+                              barcode: formText(body, "barcode"),
+                              amount,
+                              unit: formText(body, "qty_unit"),
+                          },
+                          { lookup: fridgeBarcodeLookup },
+                      )
+                    : await prepareAddManualFood(store, foods, {
+                          householdId: member.householdId,
+                          locationId,
+                          name: formText(body, "food_name"),
+                          amount,
+                          unit: formText(body, "qty_unit"),
+                      });
+        await addFridgeItemAdjust(store, liveStockStore(), foods, {
+            householdId: prepared.householdId,
+            foodId: prepared.food.id,
+            amount: prepared.amount,
+            unit: prepared.unit,
+            locationId: prepared.locationId,
+            actorUserId: userId,
+        });
     } catch (err) {
         const page = await fridgeFormError(userId, err);
         return c.html(page.html, page.status);
@@ -146,8 +154,23 @@ fridgeRoutes.post("/fridge/items", requireMember, async (c) => {
 });
 
 fridgeRoutes.post("/fridge/items/:id/delete", requireMember, async (c) => {
+    const userId = c.get("userId");
     const member = siteMember(c);
-    await deleteItem(liveFridgeStore(), member.householdId, c.req.param("id"));
+    try {
+        await deleteFridgeItemAdjust(
+            liveFridgeStore(),
+            liveStockStore(),
+            liveFoodsStore(),
+            {
+                householdId: member.householdId,
+                itemId: c.req.param("id"),
+                actorUserId: userId,
+            },
+        );
+    } catch (err) {
+        const page = await fridgeFormError(userId, err);
+        return c.html(page.html, page.status);
+    }
     return c.redirect("/fridge");
 });
 
@@ -158,10 +181,18 @@ fridgeRoutes.post("/fridge/items/:id", requireMember, async (c) => {
     const store = liveFridgeStore();
     const itemId = c.req.param("id");
     try {
-        await updateItemQuantity(store, member.householdId, itemId, {
-            amount: formAmount(body, "qty_amount"),
-            unit: formText(body, "qty_unit"),
-        });
+        await updateFridgeItemQuantityAdjust(
+            store,
+            liveStockStore(),
+            liveFoodsStore(),
+            {
+                householdId: member.householdId,
+                itemId,
+                amount: formAmount(body, "qty_amount"),
+                unit: formText(body, "qty_unit"),
+                actorUserId: userId,
+            },
+        );
         const locationId = formText(body, "location_id");
         if (locationId) {
             await moveItem(store, member.householdId, itemId, locationId);
