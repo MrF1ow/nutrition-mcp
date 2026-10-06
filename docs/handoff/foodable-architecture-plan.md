@@ -1,6 +1,6 @@
 # Foodable architecture plan
 
-Status: Phases 0 to 7 are merged (`3687f53`, PRs #31 to #44). Their migrations are not yet applied to production. Phase 8 is not started. Written 2026-10-04 from a full walkthrough of the codebase at `47da66f`. Status and checkboxes updated 2026-10-05 after an audit of `main`.
+Status: Phases 0 to 7 are merged (`3687f53`, PRs #31 to #44). Phase 8 is not started. As of 2026-10-05, all 39 migrations are applied to the new Supabase project (`dapbxswqfiqvxutsobhr`), and on 2026-10-06 the live schema was checked identical to them; the household is not live on Railway yet. Written 2026-10-04 from a full walkthrough of the codebase at `47da66f`. Status and checkboxes updated 2026-10-05 after launch prep on `main`.
 
 Foodable is a self-hosted MCP platform for one household. People use it through their AI agents and a small web app. It has five pillars: Fridge, Groceries, Nutrition, Recipes, and Settings. It is a fork of `akutishevsky/nutrition-mcp`. The fork is personal and open source. It is not a public hosted service. The deploy target and the domain are not decided yet.
 
@@ -8,9 +8,23 @@ The goal is one cohesive system. Every pillar refers to the same foods. Buying, 
 
 ## Status at handoff (2026-10-05)
 
-`main` passes 1057 tests, `bun run typecheck` and `bun run format:check`. A checked box below means the code is on `main` and was checked against it. It does not mean the item has run in production. Nothing from Phase 2 on has.
+`main` passes 1062 tests, `bun run typecheck` and `bun run format:check`. A checked box below means the code is on `main` and was checked against it. It does not mean the item has run in production for the household.
 
-**Before production:** superseded on 2026-10-05. The user chose to start fresh on a new Supabase project hosted on Railway, with no data carried over. Follow `docs/handoff/foodable-launch-handoff.md`. The list below was the in-place upgrade path and is kept for reference.
+**Launch progress (2026-10-05).** The user chose to start fresh on a new Supabase project hosted on Railway, with no data carried over. Follow `docs/handoff/foodable-launch-handoff.md` for the step list.
+
+| Step                                                                                                                                                                  | Status                                                     |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Preflight at `ee7f06f` (tests, typecheck, format:check, gen:all, db dry run)                                                                                          | Done                                                       |
+| New Supabase project `dapbxswqfiqvxutsobhr` (`us-east-1`, name Foodable): 39 migrations, 31 `public` tables, `exports` bucket, email/password auth, confirm email off | Done; no data copied; old project and old server untouched |
+| Local smoke against that project (`/health`, sign-in page, OAuth on `127.0.0.1`, `PUBLIC_ORIGIN` unset); server then stopped                                          | Done; not running                                          |
+| Live schema checked against the 39 committed files (2026-10-06): applied SQL identical, no schema drift                                                               | Done                                                       |
+| Ledger gap (#50), old-name leftovers (#49), `railway.toml` (#48)                                                                                                      | Merged 2026-10-06                                          |
+| Railway service, variables, `PUBLIC_ORIGIN`, household sign-in, AI clients, walk, retire old deploy                                                                   | Not done                                                   |
+| Phase 8                                                                                                                                                               | Not started                                                |
+
+Deploy day is still ahead. Repo name `MrF1ow/nutrition-mcp`, sky accent, and version `0.1.0` stay until gated decisions say otherwise.
+
+**Before production (in-place upgrade):** superseded on 2026-10-05 by the fresh-start path above. The list below was the in-place upgrade path and is kept for reference.
 
 1. Back up: a dashboard backup or `pg_dump`, plus `export_all_data` for each member.
 2. `bun run db:dryrun --data prod-data.sql` against a data-only dump of production. See `docs/self-hosting.md`, "Upgrading an existing deploy".
@@ -21,12 +35,12 @@ The pre-push dry run caught two bugs in the unapplied migrations, and both were 
 
 **Open items and deviations:**
 
-- **Manual fridge edits skip the ledger.** `add_fridge_item`, `update_fridge_item`, `delete_fridge_item` and their web forms change `fridge_items` without a `stock_movements` row. The `adjust` reason is defined but never written. Phase 5's "every stock change goes through one function" therefore does not hold yet. Fix this before anything reads the ledger as a history (usage rates, suggested groceries).
+- **Manual fridge edits now go through the ledger** (#50, 2026-10-06). `add_fridge_item`, `update_fridge_item`, `delete_fridge_item` and their web forms write `adjust` movements through `applyMovement`, so Phase 5's "every stock change goes through one function" holds. Two side effects: a manual add merges into an existing item with the same food, location and expiry, and an amount edit given in another unit keeps the item's stored unit. The same PR stopped movements from naming a fridge item they had just deleted, which the `fridge_item_id` foreign key rejects.
 - **Tool count is 69, not about 40.** The listed merges all landed. Phases 2 to 6 added the food, recipe and stock tools on top.
 - **`fridgeLocations` stays in the household config type and mapper** (`src/household.ts`). It is no longer exposed through MCP or the web. It goes with the column in Phase 8.
 - **The Phase 1 layout is partial.** `src/db/`, `src/domain/`, `src/mcp/` and `src/web/` exist. Auth, OAuth, middleware, rate limiting and analytics still sit at the top of `src/`. `src/mcp.ts` is a re-export barrel. `domain/recipes.ts`, `db/nutrition.ts` and `mcp/shared.ts` are over 1,300 lines.
 - **`groupMealVariations` still groups by text,** not by the `food_id` set.
-- **Old-name leftovers:** the export object path `nutrition-mcp-export.zip`, `bun.lock`'s package name, and test fixtures. The repo URLs wait on the repo rename.
+- **Old-name leftovers** are done (#49, 2026-10-06): the export object is `foodable-export.zip` (account deletion still removes the old key), `bun.lock` is regenerated, and the test fixtures are renamed. The repo URLs wait on the repo rename.
 - **Gated by decision:** the repo rename, brand assets and accent (no logo yet, so sky stays), and the optional weekly household digest. The existing weekly digest is the nutrition-only resource.
 
 ## Where we started (2026-10-04)
