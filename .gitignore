@@ -57,3 +57,6 @@ supabase/.branches/
 /public/it/
 /public/uk/
 /public/ja/
+
+# Local page previews written by scripts/app-preview.ts
+/tmp/

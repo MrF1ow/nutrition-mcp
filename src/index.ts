@@ -11,7 +11,7 @@ import { handleMcp, closeMcpHandler } from "./mcp.js";
 import { startExportCleanup } from "./domain/export.js";
 import { registerDiscoveryRoutes } from "./discovery.js";
 import { maskIp } from "./net.js";
-import { warmWidgets } from "./widgets.js";
+import { getAppCss, warmWidgets } from "./widgets.js";
 import { clearSiteCookieHeader } from "./site-session.js";
 import { foodsRoutes } from "./web/routes/foods.js";
 import { fridgeRoutes } from "./web/routes/fridge.js";
@@ -218,8 +218,9 @@ app.get("/styles.css", async (c) => {
     return c.body(await file.text(), 200, { "Content-Type": "text/css" });
 });
 app.get("/app.css", async (c) => {
-    const file = Bun.file("./public/app.css");
-    return c.body(await file.text(), 200, { "Content-Type": "text/css" });
+    return c.body(await getAppCss(), 200, {
+        "Content-Type": "text/css; charset=utf-8",
+    });
 });
 app.get("/site.js", async (c) => {
     const file = Bun.file("./public/site.js");

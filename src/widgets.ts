@@ -155,6 +155,25 @@ export async function getWidgetHtml(key: string): Promise<string> {
     return html;
 }
 
+// The household web app's stylesheet, served at /app.css. Assembled from the
+// same shared partials as the widgets so the two surfaces cannot drift: its
+// @include markers resolve against public/widgets/src/ exactly like a
+// template's. Cached like a widget and warmed at boot.
+export const APP_CSS_SOURCE = "./public/app/app.css";
+let appCss: string | undefined;
+
+export async function getAppCss(): Promise<string> {
+    if (appCss !== undefined) return appCss;
+    const file = Bun.file(APP_CSS_SOURCE);
+    if (!(await file.exists())) {
+        throw new Error(`app stylesheet source not found: ${APP_CSS_SOURCE}`);
+    }
+    appCss = await resolveIncludes(await file.text(), APP_CSS_SOURCE, [
+        APP_CSS_SOURCE,
+    ]);
+    return appCss;
+}
+
 export type WidgetViewerChrome = {
     theme: "light" | "dark";
     accent: string;
@@ -184,10 +203,11 @@ export function withWidgetData(
     return chrome ? injectViewerAccent(seeded, chrome) : seeded;
 }
 
-// Assemble every widget once so a broken partial/marker fails fast at startup
-// rather than on a client's first tool call.
+// Assemble every widget and the app stylesheet once, so a broken partial or
+// marker fails fast at startup rather than on a client's first request.
 export async function warmWidgets(): Promise<void> {
-    await Promise.all(
-        Object.keys(WIDGET_TEMPLATES).map((key) => getWidgetHtml(key)),
-    );
+    await Promise.all([
+        ...Object.keys(WIDGET_TEMPLATES).map((key) => getWidgetHtml(key)),
+        getAppCss(),
+    ]);
 }
