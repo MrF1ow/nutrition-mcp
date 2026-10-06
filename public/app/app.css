@@ -673,3 +673,30 @@ details.more > summary > :is(h2, h3) {
 .meal-item-results {
     grid-column: 1 / -1;
 }
+
+/* ---- polish ---- */
+
+/* A control nested in its <label> (field-grid, meal items) would otherwise
+   inherit the label's bold, dimmed weight. */
+:where(.native label :is(input, select, textarea)) {
+    font-weight: 400;
+}
+
+/* Forms that are just one button sit at their natural width instead of
+   stretching across the page or card. */
+.grocery-clear-checked,
+.rotate-token,
+.recipe-delete {
+    align-self: flex-start;
+    justify-items: start;
+}
+
+/* Keep a control and its button the same height on one line. */
+.inline-form > button {
+    min-height: 44px;
+}
+.row-actions select {
+    min-height: 34px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+}
