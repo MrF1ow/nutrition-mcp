@@ -17,12 +17,15 @@ import {
 } from "./recipes.js";
 import { createGroceryStore, createMemorySettingsStore } from "./settings.js";
 import {
+    addFridgeItemAdjust,
     applyMovement,
     cookRecipe,
     createMemoryStockStore,
+    deleteFridgeItemAdjust,
     ledgerMatchesStock,
     listExpiring,
     putAwayGroceryLines,
+    updateFridgeItemQuantityAdjust,
 } from "./stock.js";
 
 const HH = "hh-1";
@@ -252,4 +255,98 @@ test("list_expiring includes items within the window, oldest first", () => {
         now,
     );
     expect(listed.map((item) => item.id)).toEqual(["soon"]);
+});
+
+test("manual add writes an adjust movement and the ledger matches stock", async () => {
+    const fridge = createMemoryFridgeStore();
+    const stock = createMemoryStockStore();
+    const foods = createMemoryFoodsStore();
+    const loc = await addLocation(fridge, HH, "Fridge");
+    const milk = await findOrCreateManualFood(foods, HH, "food", "Milk");
+    const milkFood = await updateFood(foods, HH, milk.id, { defaultUnit: "g" });
+    const added = await addFridgeItemAdjust(fridge, stock, foods, {
+        householdId: HH,
+        foodId: milk.id,
+        amount: 200,
+        unit: "g",
+        locationId: loc.id,
+        actorUserId: "u1",
+    });
+    expect(added.item?.quantity).toEqual({ amount: 200, unit: "g" });
+    expect(added.movement.reason).toBe("adjust");
+    expect(added.movement.delta).toBe(200);
+    expect(added.movement.actorUserId).toBe("u1");
+    const items = (await listFridge(fridge, HH)).items;
+    const movements = await stock.listMovements(HH, milk.id);
+    expect(ledgerMatchesStock(items, movements, milkFood)).toBe(true);
+});
+
+test("manual update writes an adjust movement and the ledger matches stock", async () => {
+    const fridge = createMemoryFridgeStore();
+    const stock = createMemoryStockStore();
+    const foods = createMemoryFoodsStore();
+    const loc = await addLocation(fridge, HH, "Fridge");
+    const eggs = await findOrCreateManualFood(foods, HH, "food", "Eggs");
+    const eggsFood = await updateFood(foods, HH, eggs.id, {
+        defaultUnit: "each",
+        gramsPerEach: 50,
+    });
+    const added = await addFridgeItemAdjust(fridge, stock, foods, {
+        householdId: HH,
+        foodId: eggs.id,
+        amount: 6,
+        unit: "each",
+        locationId: loc.id,
+    });
+    const updated = await updateFridgeItemQuantityAdjust(fridge, stock, foods, {
+        householdId: HH,
+        itemId: added.item!.id,
+        amount: 4,
+        unit: "each",
+        actorUserId: "u1",
+    });
+    expect(updated?.quantity).toEqual({ amount: 4, unit: "each" });
+    const movements = await stock.listMovements(HH, eggs.id);
+    expect(movements.every((row) => row.reason === "adjust")).toBe(true);
+    expect(movements.reduce((sum, row) => sum + row.delta, 0)).toBe(4);
+    expect(
+        ledgerMatchesStock(
+            (await listFridge(fridge, HH)).items,
+            movements,
+            eggsFood,
+        ),
+    ).toBe(true);
+});
+
+test("manual delete writes an adjust movement and the ledger matches stock", async () => {
+    const fridge = createMemoryFridgeStore();
+    const stock = createMemoryStockStore();
+    const foods = createMemoryFoodsStore();
+    const loc = await addLocation(fridge, HH, "Pantry");
+    const foil = await findOrCreateManualFood(foods, HH, "supply", "Foil");
+    const added = await addFridgeItemAdjust(fridge, stock, foods, {
+        householdId: HH,
+        foodId: foil.id,
+        amount: 2,
+        unit: "roll",
+        locationId: loc.id,
+    });
+    expect(
+        await deleteFridgeItemAdjust(fridge, stock, foods, {
+            householdId: HH,
+            itemId: added.item!.id,
+            actorUserId: "u1",
+        }),
+    ).toBe(true);
+    expect((await listFridge(fridge, HH)).items).toEqual([]);
+    const movements = await stock.listMovements(HH, foil.id);
+    expect(movements.every((row) => row.reason === "adjust")).toBe(true);
+    expect(movements.reduce((sum, row) => sum + row.delta, 0)).toBe(0);
+    expect(ledgerMatchesStock([], movements, foil)).toBe(true);
+    expect(
+        await deleteFridgeItemAdjust(fridge, stock, foods, {
+            householdId: HH,
+            itemId: added.item!.id,
+        }),
+    ).toBe(false);
 });
