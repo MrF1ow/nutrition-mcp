@@ -354,12 +354,22 @@ body {
 
 /* ---- widgets embedded in the page ---- */
 
+/* Widgets render in srcdoc iframes whose .wrap.tight adds a 12px gutter
+   (14px from 560px; base.css). Pull the frame out by the same amount so the
+   widget card's edges line up with the page's own panels. */
 .widget-frame {
     display: block;
-    width: 100%;
-    min-height: 280px;
-    margin: 0;
+    width: calc(100% + 24px);
+    min-height: 120px;
+    margin: -12px;
     border: 0;
+    background: transparent;
+}
+@media (min-width: 560px) {
+    .widget-frame {
+        width: calc(100% + 28px);
+        margin: -14px;
+    }
 }
 
 /* A row of radio or checkbox choices under one legend. */

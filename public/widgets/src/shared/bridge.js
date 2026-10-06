@@ -64,12 +64,14 @@ function initWidget(config) {
     // widget display is a user setting. render() replaces #root wholesale, so
     // the footer is re-appended after every paint. Skipped when a widget
     // deliberately renders nothing (e.g. meal-logged with no goals) so an empty
-    // widget stays empty and the host collapses it.
-    function paint(data) {
+    // widget stays empty and the host collapses it, and when withFooter is
+    // false: the household web app seeds its own data, and "just ask to update
+    // your settings" is chat copy that is wrong on a web page.
+    function paint(data, withFooter) {
         config.render(data);
         painted = true;
         const el = root();
-        if (!el || el.innerHTML.trim() === "") return;
+        if (withFooter === false || !el || el.innerHTML.trim() === "") return;
         const foot = document.createElement("div");
         foot.textContent =
             "You can enable or disable these widgets anytime — just ask to update your settings.";
@@ -326,7 +328,7 @@ function initWidget(config) {
     });
 
     if (seeded) {
-        paint(seeded);
+        paint(seeded, false);
         if (typeof config.onReady === "function") {
             try {
                 config.onReady(api);
