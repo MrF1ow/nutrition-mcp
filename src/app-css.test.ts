@@ -56,3 +56,9 @@ test("the app shell opts its main element into native control styling", () => {
         '<main class="app-main native">',
     );
 });
+
+test("page element defaults never outrank component classes", async () => {
+    const css = await getAppCss();
+    expect(css).not.toMatch(/^\.app-main (h1|h2|h3|p|a) \{/m);
+    expect(css).toContain(":where(.app-main) p {");
+});

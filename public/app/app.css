@@ -81,19 +81,21 @@ body {
     flex-direction: column;
     gap: 14px;
 }
-.app-main h1 {
+/* Element defaults for page content, at element-only specificity so any
+   class wins (.row-meta's margin-left: auto lost to `.app-main p` before). */
+:where(.app-main) h1 {
     margin: 4px 0 0;
     font-size: 24px;
     font-weight: 800;
     letter-spacing: -0.03em;
 }
-.app-main h2 {
+:where(.app-main) h2 {
     margin: 0;
     font-size: 15px;
     font-weight: 800;
     letter-spacing: -0.01em;
 }
-.app-main h3 {
+:where(.app-main) h3 {
     margin: 0;
     font-size: 11.5px;
     font-weight: 700;
@@ -101,10 +103,10 @@ body {
     letter-spacing: 0.06em;
     color: var(--text-dim);
 }
-.app-main p {
+:where(.app-main) p {
     margin: 0;
 }
-.app-main a {
+:where(.app-main) a {
     color: var(--accent);
     font-weight: 600;
     text-decoration: none;
