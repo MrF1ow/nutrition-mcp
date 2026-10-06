@@ -89,10 +89,10 @@ function lineRow(
                 return `<option value="${escapeHtml(loc.id)}"${sel}>${escapeHtml(loc.name)}</option>`;
             })
             .join("");
-        putAwayHtml = `<form class="grocery-put-away" method="post" action="/grocery/lines/${escapeHtml(line.id)}/put-away">
-<label for="put-away-loc-${escapeHtml(line.id)}">Location</label>
+        putAwayHtml = `<form class="grocery-put-away row-actions" method="post" action="/grocery/lines/${escapeHtml(line.id)}/put-away">
+<label class="visually-hidden" for="put-away-loc-${escapeHtml(line.id)}">Location</label>
 <select id="put-away-loc-${escapeHtml(line.id)}" name="location_id">${options}</select>
-<button type="submit">Put away</button>
+<button type="submit" class="btn-sm btn-primary">Put away</button>
 </form>`;
     }
     return renderGroceryLineRow({
@@ -119,9 +119,9 @@ function storeSection(
             const rows = section.lines
                 .map((line) => lineRow(line, locations))
                 .join("");
-            return `<section class="grocery-section" data-section-id="${escapeHtml(section.id)}" data-section-name="${escapeHtml(section.name)}">
+            return `<section class="grocery-section psec" data-section-id="${escapeHtml(section.id)}" data-section-name="${escapeHtml(section.name)}">
 <h3>${escapeHtml(section.name)}</h3>
-<ul class="grocery-lines">${rows}</ul>
+<ul class="grocery-lines list">${rows}</ul>
 </section>`;
         })
         .join("");
@@ -134,10 +134,11 @@ function storeSection(
     if (other) hidden.section_id = other.id;
     return `<section class="grocery-store panel" data-store-id="${escapeHtml(store.id)}">
 <h2>${escapeHtml(store.name)}</h2>
-${rules ? `<ul class="store-rule-list">${rules}</ul>` : ""}
+${rules ? `<ul class="store-rule-list muted">${rules}</ul>` : ""}
 ${sections}
+<details class="more">
+<summary><h3>Add food</h3></summary>
 ${storeSectionSelect(store)}
-<h3>Add food</h3>
 ${renderFoodPicker({
     id: pickerId,
     action: "/grocery/lines",
@@ -145,6 +146,7 @@ ${renderFoodPicker({
     hiddenFields: hidden,
     includeQuantity: true,
 })}
+</details>
 </section>`;
 }
 
@@ -157,12 +159,21 @@ export function renderGroceryPage(view: GroceryPageView): string {
           : "";
     const empty = view.stores.length === 0 ? renderEmptyGrocery() : "";
     const addStore = view.isOwner
-        ? `<form class="grocery-add-store" method="post" action="/grocery/stores">
+        ? `<details class="more"${view.stores.length === 0 ? " open" : ""}>
+<summary>Add store</summary>
+<form class="grocery-add-store" method="post" action="/grocery/stores">
 <label for="grocery_store_name">Grocery store</label>
 <input id="grocery_store_name" name="name" maxlength="80" autocomplete="off" />
-<button type="submit">Add store</button>
-</form>`
+<button type="submit" class="btn-primary">Add store</button>
+</form>
+</details>`
         : "";
+    const clearChecked =
+        view.stores.length === 0
+            ? ""
+            : `<form class="grocery-clear-checked" method="post" action="/grocery/clear-checked">
+<button type="submit" class="btn-sm">Clear checked</button>
+</form>`;
     const locations = view.locations ?? [];
     const stores = view.stores
         .map((store) => storeSection(store, locations))
@@ -171,12 +182,10 @@ export function renderGroceryPage(view: GroceryPageView): string {
         <h1>Groceries</h1>
         ${error}
         ${allergen}
-        ${addStore}
         ${empty}
-        <form class="grocery-clear-checked" method="post" action="/grocery/clear-checked">
-            <button type="submit">Clear checked</button>
-        </form>
         ${stores}
+        ${clearChecked}
+        ${addStore}
         <script>
 (function () {
     document.querySelectorAll(".grocery-store").forEach(function (store) {

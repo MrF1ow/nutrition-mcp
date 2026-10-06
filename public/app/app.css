@@ -509,3 +509,70 @@ details.more > summary > :is(h2, h3) {
     flex: 1;
     min-height: 36px;
 }
+
+/* ---- grocery ---- */
+
+.grocery-section {
+    display: grid;
+    gap: 6px;
+}
+.grocery-line-head {
+    align-items: center;
+    flex-wrap: nowrap;
+}
+.grocery-line-head .row-title {
+    flex: 1 1 auto;
+}
+.grocery-line.is-checked .grocery-line-name {
+    color: var(--text-dim);
+    text-decoration: line-through;
+}
+.store-rule-list {
+    margin: 0;
+    padding-left: 1.1em;
+}
+
+/* Round check button: a 44px target with a 24px circle drawn inside it. */
+.check-btn {
+    position: relative;
+    flex: none;
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+    margin: -10px -6px -10px -10px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+}
+.check-btn::before {
+    content: "";
+    position: absolute;
+    inset: 10px;
+    border: 1.75px solid var(--text-dim);
+    border-radius: 999px;
+}
+.check-btn:hover::before {
+    border-color: var(--text);
+}
+.check-btn[aria-pressed="true"]::before {
+    border-color: var(--accent);
+    background: var(--accent);
+}
+.check-btn[aria-pressed="true"]::after {
+    content: "";
+    position: absolute;
+    left: 19px;
+    top: 14px;
+    width: 6px;
+    height: 11px;
+    border-right: 2px solid var(--bg);
+    border-bottom: 2px solid var(--bg);
+    transform: rotate(45deg);
+}
+.check-btn:focus-visible {
+    box-shadow: none;
+}
+.check-btn:focus-visible::before {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+}

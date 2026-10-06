@@ -52,16 +52,17 @@ export function renderGroceryLineRow(opts: {
 }): string {
     const checked = opts.checked ? "true" : "false";
     const next = opts.checked ? "0" : "1";
+    const verb = opts.checked ? "Uncheck" : "Check";
     return `<li class="grocery-line${opts.checked ? " is-checked" : ""}" data-line-id="${escapeHtml(opts.id)}" data-checked="${checked}" data-kind="${opts.kind}">
-<div class="grocery-line-head">
-<p class="grocery-line-name">${escapeHtml(opts.displayName)}</p>
-<p class="grocery-line-qty">${escapeHtml(opts.quantityLabel)}</p>
-${opts.alreadyHaveHtml}
-</div>
+<div class="grocery-line-head row">
 <form class="grocery-line-check" method="post" action="/grocery/lines/${escapeHtml(opts.id)}/check">
 <input type="hidden" name="checked" value="${next}" />
-<button type="submit">${opts.checked ? "Checked" : "Check"}</button>
+<button type="submit" class="check-btn" aria-pressed="${checked}"><span class="visually-hidden">${verb} ${escapeHtml(opts.displayName)}</span></button>
 </form>
+<p class="grocery-line-name row-title">${escapeHtml(opts.displayName)}</p>
+${opts.alreadyHaveHtml}
+<p class="grocery-line-qty row-meta">${escapeHtml(opts.quantityLabel)}</p>
+</div>
 ${opts.putAwayHtml ?? ""}
 </li>`;
 }

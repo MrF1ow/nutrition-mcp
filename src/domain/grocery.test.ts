@@ -369,3 +369,62 @@ test("empty store name error re-renders groceries with the banner", () => {
     expect(html).toContain('action="/grocery/stores"');
     expect(html).not.toContain("<h3>Add supply</h3>");
 });
+
+test("grocery lines are rows with a labelled round check button", () => {
+    const html = renderGroceryPage({
+        chrome: { theme: "light" },
+        isOwner: true,
+        locations: [{ id: "l1", name: "Fridge" }],
+        stores: [
+            {
+                id: "st-1",
+                householdId: "hh-1",
+                name: "Corner",
+                sortOrder: 0,
+                rules: [],
+                sections: [
+                    {
+                        id: "sec-other",
+                        householdId: "hh-1",
+                        storeId: "st-1",
+                        name: "Other",
+                        sortOrder: 8,
+                        hidden: false,
+                        isOther: true,
+                        lines: [
+                            {
+                                id: "line-1",
+                                householdId: "hh-1",
+                                storeId: "st-1",
+                                sectionId: "sec-other",
+                                kind: "food",
+                                displayName: "Milk",
+                                quantity: { amount: 1, unit: "each" },
+                                identity: {
+                                    kind: "food",
+                                    via: "manual",
+                                    displayName: "Milk",
+                                },
+                                foodId: "f-1",
+                                checked: true,
+                                alreadyHave: null,
+                            },
+                        ],
+                    },
+                ],
+            },
+        ],
+    } as never);
+    expect(html).toContain('<ul class="grocery-lines list">');
+    expect(html).toContain(
+        '<button type="submit" class="check-btn" aria-pressed="true"><span class="visually-hidden">Uncheck Milk</span></button>',
+    );
+    expect(html).toContain('<form class="grocery-put-away row-actions"');
+    expect(html).toContain(
+        '<button type="submit" class="btn-sm btn-primary">Put away</button>',
+    );
+    expect(html).toMatch(
+        /<summary><h3>Add food<\/h3><\/summary>\s*<label for="section-st-1">/,
+    );
+    expect(html).toContain("<summary>Add store</summary>");
+});
