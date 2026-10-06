@@ -6,7 +6,7 @@ import {
     resourceMetadataUrl,
 } from "./discovery.js";
 
-const HOST = "nutrition-mcp.com";
+const HOST = "foodable.test";
 const ORIGIN = `https://${HOST}`;
 
 // These tests cover the unset / local-dev path of getBaseUrl. A process-level
@@ -157,7 +157,7 @@ test("the authenticated /mcp route does not swallow its well-known aliases", asy
 });
 
 // getBaseUrl derives everything from the request, so a preview deployment or a
-// local run must never emit nutrition-mcp.com URLs.
+// local run must never emit a hardcoded production host.
 test("discovery documents are built from the requesting host", async () => {
     const app = buildTestApp();
     const res = await app.request(

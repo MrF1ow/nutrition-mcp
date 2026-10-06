@@ -438,11 +438,19 @@ describe("timezoneFromProfile", () => {
 // from meals.csv to the .zip silently orphaned a full copy of everyone's data.
 describe("exportStoragePaths", () => {
     test("covers the archive the exporter writes", () => {
+        expect(exportArchivePath("u1")).toBe("u1/foodable-export.zip");
         expect(exportStoragePaths("u1")).toContain(exportArchivePath("u1"));
     });
 
     test("keeps the pre-ZIP meals.csv so old exports are still cleaned up", () => {
         expect(exportStoragePaths("u1")).toContain("u1/meals.csv");
+    });
+
+    test("keeps the pre-rename archive so old exports are still cleaned up", () => {
+        expect(exportStoragePaths("u1")).toContain(
+            "u1/nutrition-mcp-export.zip",
+        );
+        expect(exportArchivePath("u1")).not.toBe("u1/nutrition-mcp-export.zip");
     });
 
     test("scopes every key to the user's own folder", () => {

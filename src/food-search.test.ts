@@ -39,7 +39,7 @@ function food(
 }
 
 beforeEach(() => {
-    process.env.OFF_USER_AGENT = "nutrition-mcp-test (test@example.com)";
+    process.env.OFF_USER_AGENT = "foodable-test (test@example.com)";
 });
 
 afterEach(() => {

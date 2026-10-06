@@ -628,7 +628,7 @@ async function withTools(
     run: (call: CallTool) => Promise<void>,
 ): Promise<void> {
     const server = new McpServer(
-        { name: "nutrition-mcp-test", version: "0.0.0" },
+        { name: "foodable-test", version: "0.0.0" },
         { capabilities: { tools: {}, resources: {} } },
     );
     registerTools(server, { kind: "user", userId: "u1" }, true, alcohol);
@@ -2723,7 +2723,7 @@ describe("household PAT has no default user", () => {
         run: (call: CallTool, list: () => Promise<string[]>) => Promise<void>,
     ): Promise<void> {
         const server = new McpServer(
-            { name: "nutrition-mcp-test", version: "0.0.0" },
+            { name: "foodable-test", version: "0.0.0" },
             { capabilities: { tools: {}, resources: {} } },
         );
         registerTools(
@@ -2834,7 +2834,7 @@ describe("household person targeting", () => {
             },
         ];
         const server = new McpServer(
-            { name: "nutrition-mcp-test", version: "0.0.0" },
+            { name: "foodable-test", version: "0.0.0" },
             { capabilities: { tools: {}, resources: {} } },
         );
         registerTools(
@@ -3177,7 +3177,7 @@ describe("household config tools", () => {
             },
         ];
         const server = new McpServer(
-            { name: "nutrition-mcp-test", version: "0.0.0" },
+            { name: "foodable-test", version: "0.0.0" },
             { capabilities: { tools: {}, resources: {} } },
         );
         registerTools(
@@ -3487,7 +3487,7 @@ describe("phone-app domain MCP tools", () => {
     async function withPat(run: (call: CallTool) => Promise<void>) {
         householdMembers();
         const server = new McpServer(
-            { name: "nutrition-mcp-test", version: "0.0.0" },
+            { name: "foodable-test", version: "0.0.0" },
             { capabilities: { tools: {}, resources: {} } },
         );
         registerTools(
@@ -3523,7 +3523,7 @@ describe("phone-app domain MCP tools", () => {
     ) {
         householdMembers();
         const server = new McpServer(
-            { name: "nutrition-mcp-test", version: "0.0.0" },
+            { name: "foodable-test", version: "0.0.0" },
             { capabilities: { tools: {}, resources: {} } },
         );
         registerTools(server, { kind: "user", userId }, true, null);
@@ -4596,12 +4596,12 @@ describe("/mcp transport posture", () => {
             { pin: "2026-07-28" },
             async (client) => {
                 expect(client.getServerVersion()?.icons?.[0]?.src).toBe(
-                    "https://nutrition-mcp.com/favicon.ico",
+                    "https://foodable.test/favicon.ico",
                 );
             },
             {
                 "x-forwarded-proto": "https",
-                "x-forwarded-host": "nutrition-mcp.com",
+                "x-forwarded-host": "foodable.test",
             },
         );
     });
