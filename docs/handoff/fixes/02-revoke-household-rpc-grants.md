@@ -1,6 +1,6 @@
 # Fix 2: Revoke client roles from household RPCs
 
-Status: plan only. An implementation agent completes this branch and takes the PR out of draft.
+Status: implemented on branch (pending live apply).
 
 Source: deployment audit, 2026-10-07. Severity: **high**. Should be in the database before the deploy goes public.
 
@@ -106,6 +106,6 @@ After the owner account exists, go to Supabase **Authentication → Sign In / Pr
 
 ## Done when
 
-- [ ] `bun run db:dryrun` passes locally with the new assertions, and fails if you temporarily comment out the revoke. Try that once, then restore it.
-- [ ] `bun test`, `bun run typecheck` and `bun run format:check` are green.
-- [ ] Applied to `dapbxswqfiqvxutsobhr`, with the verification query output pasted in the PR.
+- [x] `bun run db:dryrun` passes locally with the new assertions, and fails if you temporarily comment out the revoke. Try that once, then restore it.
+- [x] `bun test`, `bun run typecheck` and `bun run format:check` are green.
+- [ ] Applied to `dapbxswqfiqvxutsobhr`, with the verification query output pasted in the PR. (not done: live Supabase deploy is owner-only per plan)

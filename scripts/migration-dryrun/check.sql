@@ -68,5 +68,18 @@ begin
             from public.fridge_locations
         );
     end if;
+
+    if has_function_privilege('anon', 'public.add_household_member(uuid,uuid,text)', 'execute')
+       or has_function_privilege('authenticated', 'public.add_household_member(uuid,uuid,text)', 'execute')
+       or has_function_privilege('anon', 'public.bootstrap_household(text,text)', 'execute') then
+        raise exception 'household RPCs are still executable by client roles';
+    end if;
+    if exists (
+        select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public' and p.prosecdef
+          and has_function_privilege('anon', p.oid, 'execute')
+    ) then
+        raise exception 'a security definer function in public is executable by anon';
+    end if;
 end
 $$;
