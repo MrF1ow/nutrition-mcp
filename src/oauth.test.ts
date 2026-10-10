@@ -1,12 +1,39 @@
-import { test, expect } from "bun:test";
+import { test, expect, mock, afterAll } from "bun:test";
 import { Hono } from "hono";
-import {
+import * as actualTokens from "./db/tokens.js";
+
+const realTokens = { ...actualTokens };
+
+const VALID_CHALLENGE = "a".repeat(43);
+const ALLOWED_REDIRECT = "http://localhost:8080/callback";
+
+let authCodeStub: actualTokens.AuthCodeData | null = null;
+
+mock.module("./db/tokens.js", () => ({
+    ...actualTokens,
+    lookupBearer: async (token: string) =>
+        token === "valid-token"
+            ? { status: "valid", kind: "user", userId: "user-1" }
+            : token === "hh-token"
+              ? { status: "valid", kind: "household", householdId: "hh-1" }
+              : { status: "invalid" },
+    consumeAuthCode: async () => authCodeStub,
+    storeToken: async () => {},
+    storeRefreshToken: async () => {},
+    registerClient: async () => {},
+}));
+afterAll(() => {
+    mock.module("./db/tokens.js", () => realTokens);
+});
+
+const {
     OAUTH_PATHS,
+    beginSiteLogin,
     createOAuthRouter,
     renderLoginPage,
     resolveApproveUser,
-} from "./oauth.js";
-import { _resetBuckets } from "./rate-limit.js";
+} = await import("./oauth.js");
+const { _resetBuckets } = await import("./rate-limit.js");
 
 // createOAuthRouter() refuses to build without these; the values are never
 // exercised by the rate-limit tests below.
@@ -18,10 +45,23 @@ process.env.OAUTH_CLIENT_SECRET ||= "test-client-secret";
 function fakeSession() {
     return {
         state: "state-xyz",
-        redirectUri: "https://client.example/callback",
+        redirectUri: ALLOWED_REDIRECT,
         clientId: "test-client-id",
         purpose: "mcp" as const,
     };
+}
+
+function authorizeUrl(redirectUri: string, overrides?: Record<string, string>) {
+    const params = new URLSearchParams({
+        response_type: "code",
+        client_id: process.env.OAUTH_CLIENT_ID!,
+        redirect_uri: redirectUri,
+        state: "state-xyz",
+        code_challenge: VALID_CHALLENGE,
+        code_challenge_method: "S256",
+        ...overrides,
+    });
+    return `/authorize?${params}`;
 }
 
 test("renderLoginPage substitutes every {{SESSION_ID}} occurrence", async () => {
@@ -31,6 +71,13 @@ test("renderLoginPage substitutes every {{SESSION_ID}} occurrence", async () => 
     expect(html).not.toContain("{{SESSION_ID}}");
     expect(html).toContain(`value="${sessionId}"`);
     expect(html).not.toContain("/authorize/google");
+});
+
+test("renderLoginPage shows MCP redirect host hint", async () => {
+    const html = await renderLoginPage("s1", fakeSession());
+    expect(html).toContain("Signing in to connect");
+    expect(html).toContain("<strong>localhost</strong>");
+    expect(html).not.toContain("{{CONNECT_HINT}}");
 });
 
 test("renderLoginPage renders the error banner only when given an error", async () => {
@@ -249,4 +296,112 @@ test("OAUTH_PATHS covers exactly the router's registered routes", () => {
     );
     expect([...registered].sort()).toEqual([...OAUTH_PATHS].sort());
     expect(Object.keys(OAUTH_METHODS).sort()).toEqual([...OAUTH_PATHS].sort());
+});
+
+// ---------- OAuth redirect allow-list and PKCE ----------
+
+test("/authorize rejects disallowed redirect_uri with 400 and no Location", async () => {
+    const { app } = buildTestApp();
+    const res = await app.request(
+        `http://localhost${authorizeUrl("https://evil.example/cb")}`,
+    );
+    expect(res.status).toBe(400);
+    expect(res.headers.get("Location")).toBeNull();
+    const body = (await res.json()) as {
+        error_description?: string;
+    };
+    expect(body.error_description).toBe("redirect_uri is not allowed");
+});
+
+test("/authorize requires code_challenge", async () => {
+    const { app } = buildTestApp();
+    const params = new URLSearchParams({
+        response_type: "code",
+        client_id: process.env.OAUTH_CLIENT_ID!,
+        redirect_uri: ALLOWED_REDIRECT,
+        state: "x",
+        code_challenge_method: "S256",
+    });
+    const res = await app.request(`http://localhost/authorize?${params}`);
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as {
+        error_description?: string;
+    };
+    expect(body.error_description).toBe("code_challenge is required");
+});
+
+test("/authorize rejects plain PKCE method", async () => {
+    const { app } = buildTestApp();
+    const res = await app.request(
+        `http://localhost${authorizeUrl(ALLOWED_REDIRECT, {
+            code_challenge_method: "plain",
+        })}`,
+    );
+    expect(res.status).toBe(400);
+});
+
+test("/register omits client_secret and validates redirect_uris", async () => {
+    const { app } = buildTestApp();
+    const ok = await app.request("http://localhost/register", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+            redirect_uris: [ALLOWED_REDIRECT],
+        }),
+    });
+    expect(ok.status).toBe(200);
+    const body = (await ok.json()) as {
+        token_endpoint_auth_method?: string;
+        client_secret?: string;
+    };
+    expect(body).not.toHaveProperty("client_secret");
+    expect(body.token_endpoint_auth_method).toBe("none");
+
+    const bad = await app.request("http://localhost/register", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+            redirect_uris: ["https://evil.example/cb"],
+        }),
+    });
+    expect(bad.status).toBe(400);
+    expect(((await bad.json()) as { error?: string }).error).toBe(
+        "invalid_redirect_uri",
+    );
+});
+
+test("/token authorization_code requires redirect_uri and code_verifier", async () => {
+    authCodeStub = {
+        code: "c",
+        redirect_uri: ALLOWED_REDIRECT,
+        user_id: "user-1",
+        code_challenge: VALID_CHALLENGE,
+    };
+    const { app } = buildTestApp();
+    const form = (fields: Record<string, string>) =>
+        app.request("http://localhost/token", {
+            method: "POST",
+            headers: { "content-type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+                grant_type: "authorization_code",
+                code: "c",
+                ...fields,
+            }),
+        });
+
+    const noRedirect = await form({ code_verifier: "v" });
+    expect(noRedirect.status).toBe(400);
+
+    const noVerifier = await form({ redirect_uri: ALLOWED_REDIRECT });
+    expect(noVerifier.status).toBe(400);
+});
+
+test("beginSiteLogin still renders login without MCP connect hint", async () => {
+    const app = new Hono();
+    app.get("/", (c) => beginSiteLogin(c));
+    const res = await app.request("http://localhost/");
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('action="/approve"');
+    expect(html).not.toContain("Signing in to connect");
 });

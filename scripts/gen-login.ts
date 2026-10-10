@@ -90,6 +90,7 @@ ${generatedBanner("scripts/gen-login.ts")}
                     <p class="auth-sub">${esc(doc.subtitle)}</p>
                 </div>
 
+                {{CONNECT_HINT}}
                 {{ERROR}}
 
                 <form method="POST" action="/approve" class="auth-form">

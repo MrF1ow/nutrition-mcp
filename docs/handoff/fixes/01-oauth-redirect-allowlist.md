@@ -113,8 +113,8 @@ Fix 4 also edits `.env.example` and the env tables in `docs/self-hosting.md`. Wh
 
 ## Done when
 
-- [ ] `bun test`, `bun run typecheck` and `bun run format:check` are green. Also run `bun run gen:all` if the login copy changed.
-- [ ] Manual: with the local server, `curl -i '/authorize?...&redirect_uri=https://evil.example/cb...'` returns 400 with no `Location` header.
-- [ ] Manual: MCP Inspector (`bun run inspect`) completes OAuth against the local server through its loopback callback.
-- [ ] After deploy: connect Claude.ai to `https://<domain>/mcp` and confirm `tools/list` loads.
-- [ ] This file's checkboxes are ticked and the PR description summarizes the result.
+- [x] `bun test`, `bun run typecheck` and `bun run format:check` are green. Also run `bun run gen:all` if the login copy changed.
+- [x] Manual: with the local server, `curl -i '/authorize?...&redirect_uri=https://evil.example/cb...'` returns 400 with no `Location` header.
+- [ ] Manual: MCP Inspector (`bun run inspect`) completes OAuth against the local server through its loopback callback. (not done: requires interactive MCP Inspector session)
+- [ ] After deploy: connect Claude.ai to `https://<domain>/mcp` and confirm `tools/list` loads. (not done: requires production deploy)
+- [ ] This file's checkboxes are ticked and the PR description summarizes the result. (not done: PR not opened in this worktree)
