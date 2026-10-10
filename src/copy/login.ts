@@ -20,6 +20,8 @@ export interface LoginDoc {
     afterConnectNote: string;
     /** One line under the card. */
     footerNote: string;
+    /** MCP OAuth login: "Signing in to connect" before the redirect hostname. */
+    signingInToConnect: string;
 }
 
 export interface LoginErrors {
@@ -41,6 +43,7 @@ export const LOGIN: LoginDoc = {
         "After successful connection in your client, save your password somewhere and close this browser tab.",
     footerNote:
         "Free and open source. Nutrition figures are estimates, not medical advice.",
+    signingInToConnect: "Signing in to connect",
 };
 
 export const LOGIN_ERRORS: LoginErrors = {

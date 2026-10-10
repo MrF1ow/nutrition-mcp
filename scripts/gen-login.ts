@@ -2,8 +2,8 @@
  * Generates public/login.html from the typed data in src/copy/login.ts.
  *
  * This is a TEMPLATE, not a final document: src/oauth.ts's renderLoginPage()
- * reads the output this writes and fills in {{SESSION_ID}} and {{ERROR}} at
- * request time. Those tokens must reach the written file untouched; nothing
+ * reads the output this writes and fills in {{SESSION_ID}}, {{CONNECT_HINT}}
+ * and {{ERROR}} at request time. Those tokens must reach the written file untouched; nothing
  * below interpolates them.
  *
  * Re-run after editing src/copy/login.ts:
@@ -90,6 +90,7 @@ ${generatedBanner("scripts/gen-login.ts")}
                     <p class="auth-sub">${esc(doc.subtitle)}</p>
                 </div>
 
+                {{CONNECT_HINT}}
                 {{ERROR}}
 
                 <form method="POST" action="/approve" class="auth-form">

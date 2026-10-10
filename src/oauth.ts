@@ -11,8 +11,13 @@ import {
 import { signUpUser, signInUser, authUserCount } from "./db/client.js";
 import { getBaseUrl } from "./url.js";
 import { rateLimitAuth } from "./middleware.js";
-import { LOGIN_ERRORS } from "./copy/login.js";
+import { LOGIN, LOGIN_ERRORS } from "./copy/login.js";
 import { mintSiteSession, siteCookieHeader } from "./site-session.js";
+import {
+    extraRedirectUris,
+    isAllowedRedirectUri,
+    isValidPkceChallenge,
+} from "./oauth-redirect.js";
 
 const SESSION_TTL_MS = 10 * 60 * 1000;
 
@@ -57,16 +62,26 @@ function escapeHtml(str: string): string {
 
 export async function renderLoginPage(
     sessionId: string,
-    _session: OAuthSession,
+    session: OAuthSession,
     error?: string,
 ): Promise<string> {
     const template = await Bun.file("./public/login.html").text();
     const errorHtml = error
         ? `<div class="error-banner">${escapeHtml(error)}</div>`
         : "";
+    let connectHint = "";
+    if (session.purpose === "mcp") {
+        try {
+            const host = new URL(session.redirectUri).hostname;
+            connectHint = `<p class="auth-note">${escapeHtml(LOGIN.signingInToConnect)} <strong>${escapeHtml(host)}</strong></p>`;
+        } catch {
+            connectHint = "";
+        }
+    }
     return template
         .replaceAll("{{SESSION_ID}}", escapeHtml(sessionId))
-        .replaceAll("{{ERROR}}", errorHtml);
+        .replaceAll("{{ERROR}}", errorHtml)
+        .replaceAll("{{CONNECT_HINT}}", connectHint);
 }
 
 async function finishAuthorization(
@@ -162,15 +177,36 @@ export function createOAuthRouter() {
 
     // Dynamic client registration (required by MCP spec)
     oauth.post("/register", async (c) => {
-        const body = await c.req.json();
+        let body: {
+            client_name?: string;
+            redirect_uris?: unknown;
+        };
+        try {
+            body = await c.req.json();
+        } catch {
+            return c.json({ error: "invalid_client_metadata" }, 400);
+        }
+
+        const extra = extraRedirectUris();
+        const redirectUris = body.redirect_uris;
+        if (
+            !Array.isArray(redirectUris) ||
+            redirectUris.length === 0 ||
+            !redirectUris.every(
+                (uri) =>
+                    typeof uri === "string" && isAllowedRedirectUri(uri, extra),
+            )
+        ) {
+            return c.json({ error: "invalid_redirect_uri" }, 400);
+        }
 
         // Fire-and-forget: track who registers
-        registerClient(body.client_name ?? null, body.redirect_uris ?? []);
+        registerClient(body.client_name ?? null, redirectUris);
 
         return c.json({
             client_id: clientId,
-            client_secret: clientSecret,
-            redirect_uris: body.redirect_uris || [],
+            token_endpoint_auth_method: "none",
+            redirect_uris: redirectUris,
         });
     });
 
@@ -181,6 +217,7 @@ export function createOAuthRouter() {
         const redirectUri = c.req.query("redirect_uri");
         const state = c.req.query("state");
         const codeChallenge = c.req.query("code_challenge");
+        const codeChallengeMethod = c.req.query("code_challenge_method");
 
         if (responseType !== "code") {
             return c.json({ error: "unsupported_response_type" }, 400);
@@ -197,6 +234,39 @@ export function createOAuthRouter() {
         }
         if (reqClientId !== clientId) {
             return c.json({ error: "invalid_client" }, 400);
+        }
+
+        const extra = extraRedirectUris();
+        if (!isAllowedRedirectUri(redirectUri, extra)) {
+            return c.json(
+                {
+                    error: "invalid_request",
+                    error_description: "redirect_uri is not allowed",
+                },
+                400,
+            );
+        }
+
+        if (!codeChallenge) {
+            return c.json(
+                {
+                    error: "invalid_request",
+                    error_description: "code_challenge is required",
+                },
+                400,
+            );
+        }
+        if (codeChallengeMethod !== "S256") {
+            return c.json(
+                {
+                    error: "invalid_request",
+                    error_description: "code_challenge_method must be S256",
+                },
+                400,
+            );
+        }
+        if (!isValidPkceChallenge(codeChallenge)) {
+            return c.json({ error: "invalid_request" }, 400);
         }
 
         cleanExpiredSessions();
@@ -314,30 +384,32 @@ export function createOAuthRouter() {
             return c.json({ error: "invalid_grant" }, 400);
         }
 
-        // Validate redirect_uri
-        if (redirectUri && redirectUri !== authCodeData.redirect_uri) {
+        if (!redirectUri) {
+            return c.json({ error: "invalid_request" }, 400);
+        }
+        if (redirectUri !== authCodeData.redirect_uri) {
             return c.json({ error: "invalid_grant" }, 400);
         }
 
-        // Validate PKCE
-        if (authCodeData.code_challenge) {
-            if (!codeVerifier) {
-                return c.json(
-                    {
-                        error: "invalid_request",
-                        error_description: "code_verifier required",
-                    },
-                    400,
-                );
-            }
-            const hash = base64URLEncode(
-                Buffer.from(
-                    crypto.createHash("sha256").update(codeVerifier).digest(),
-                ),
+        if (!authCodeData.code_challenge) {
+            return c.json({ error: "invalid_grant" }, 400);
+        }
+        if (!codeVerifier) {
+            return c.json(
+                {
+                    error: "invalid_request",
+                    error_description: "code_verifier required",
+                },
+                400,
             );
-            if (hash !== authCodeData.code_challenge) {
-                return c.json({ error: "invalid_grant" }, 400);
-            }
+        }
+        const hash = base64URLEncode(
+            Buffer.from(
+                crypto.createHash("sha256").update(codeVerifier).digest(),
+            ),
+        );
+        if (hash !== authCodeData.code_challenge) {
+            return c.json({ error: "invalid_grant" }, 400);
         }
 
         // Issue tokens linked to the authenticated user

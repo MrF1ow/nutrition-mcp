@@ -62,16 +62,17 @@ A self-hosted instance that only exposes the database, without GoTrue and PostgR
 
 ## Environment variables
 
-| Variable              | Required     | Purpose                                                            |
-| --------------------- | ------------ | ------------------------------------------------------------------ |
-| `SUPABASE_URL`        | yes          | Supabase API origin (cloud or self-hosted)                         |
-| `SUPABASE_SECRET_KEY` | yes          | Service role secret                                                |
-| `OAUTH_CLIENT_ID`     | yes          | MCP OAuth client id (`bun run generate-oauth-creds`)               |
-| `OAUTH_CLIENT_SECRET` | yes          | MCP OAuth client secret, also the site-session HMAC                |
-| `OFF_USER_AGENT`      | for barcodes | Open Food Facts User-Agent, `Foodable (you@example.com)`           |
-| `PORT`                | no           | Listen port, default `8080`                                        |
-| `PUBLIC_ORIGIN`       | production   | Canonical public origin, `https://foodable.example.com`            |
-| `ALLOWED_ORIGINS`     | no           | Extra CORS origins, comma-separated. Localhost is already allowed. |
+| Variable                | Required     | Purpose                                                                          |
+| ----------------------- | ------------ | -------------------------------------------------------------------------------- |
+| `SUPABASE_URL`          | yes          | Supabase API origin (cloud or self-hosted)                                       |
+| `SUPABASE_SECRET_KEY`   | yes          | Service role secret                                                              |
+| `OAUTH_CLIENT_ID`       | yes          | MCP OAuth client id (`bun run generate-oauth-creds`)                             |
+| `OAUTH_CLIENT_SECRET`   | yes          | MCP OAuth client secret, also the site-session HMAC                              |
+| `OFF_USER_AGENT`        | for barcodes | Open Food Facts User-Agent, `Foodable (you@example.com)`                         |
+| `PORT`                  | no           | Listen port, default `8080`                                                      |
+| `PUBLIC_ORIGIN`         | production   | Canonical public origin, `https://foodable.example.com`                          |
+| `ALLOWED_ORIGINS`       | no           | Extra CORS origins, comma-separated. Localhost is already allowed.               |
+| `ALLOWED_REDIRECT_URIS` | no           | Extra OAuth redirect URIs (comma-separated), exact match after URL normalization |
 
 `PUBLIC_ORIGIN` is how the server stays host-agnostic. When it is set, `getBaseUrl` in `src/url.ts` returns that origin and **ignores** `X-Forwarded-Host` / `X-Forwarded-Proto`. OAuth metadata (`/.well-known/oauth-authorization-server`), the `/authorize` URLs inside it, the 401 `resource_metadata` challenge, and the MCP icon URL all stay on your origin even if a client sends a different forwarded host.
 
@@ -99,20 +100,31 @@ server {
 
 With `PUBLIC_ORIGIN=https://foodable.example.com` the advertised OAuth `/authorize` base URL stays that origin even if a request forges `X-Forwarded-Host`. Docker is `Dockerfile` in the repo root (`bun --smol src/index.ts` on port 8080).
 
+### Which AI clients can connect
+
+MCP OAuth redirect URIs are allow-listed. These callbacks work without extra configuration:
+
+- Claude (web, Desktop, mobile, Cowork): `https://claude.ai/api/mcp/auth_callback` and `https://claude.com/api/mcp/auth_callback`
+- ChatGPT connectors: `https://chatgpt.com/connector/oauth/<callback_id>` and the legacy `https://chatgpt.com/connector_platform_oauth_redirect`
+- Local clients (Claude Code, MCP Inspector, other loopback agents): `http://localhost`, `http://127.0.0.1`, or `http://[::1]` on any port and path
+
+To allow another callback (for example a self-hosted bot), add its exact redirect URI to `ALLOWED_REDIRECT_URIS`.
+
 ## Railway
 
 `railway.toml` at the repo root builds from the `Dockerfile` (`builder = "DOCKERFILE"`, `dockerfilePath = "Dockerfile"`) and health-checks `GET /health` (`healthcheckTimeout` 60, `restartPolicyType` `ON_FAILURE`). Committing it creates nothing on Railway. Create the project and a service from the GitHub repo yourself; Railway then picks the file up on every deploy.
 
 Set the same variables as `.env.example` on the service:
 
-| Variable              | Required                | Purpose                                                        |
-| --------------------- | ----------------------- | -------------------------------------------------------------- |
-| `SUPABASE_URL`        | yes                     | Supabase API origin (cloud or self-hosted)                     |
-| `SUPABASE_SECRET_KEY` | yes                     | Service role secret                                            |
-| `OAUTH_CLIENT_ID`     | yes                     | MCP OAuth client id (`bun run generate-oauth-creds`)           |
-| `OAUTH_CLIENT_SECRET` | yes                     | MCP OAuth client secret, also the site-session HMAC            |
-| `OFF_USER_AGENT`      | for barcodes            | Open Food Facts User-Agent, `Foodable (you@example.com)`       |
-| `PUBLIC_ORIGIN`       | after the domain exists | Generated Railway domain, `https://….up.railway.app`, no slash |
+| Variable                | Required                | Purpose                                                        |
+| ----------------------- | ----------------------- | -------------------------------------------------------------- |
+| `SUPABASE_URL`          | yes                     | Supabase API origin (cloud or self-hosted)                     |
+| `SUPABASE_SECRET_KEY`   | yes                     | Service role secret                                            |
+| `OAUTH_CLIENT_ID`       | yes                     | MCP OAuth client id (`bun run generate-oauth-creds`)           |
+| `OAUTH_CLIENT_SECRET`   | yes                     | MCP OAuth client secret, also the site-session HMAC            |
+| `OFF_USER_AGENT`        | for barcodes            | Open Food Facts User-Agent, `Foodable (you@example.com)`       |
+| `PUBLIC_ORIGIN`         | after the domain exists | Generated Railway domain, `https://….up.railway.app`, no slash |
+| `ALLOWED_REDIRECT_URIS` | no                      | Extra OAuth redirect URIs (comma-separated)                    |
 
 Do **not** set `PORT`. Railway injects it, and the app reads it.
 

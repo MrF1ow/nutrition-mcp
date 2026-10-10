@@ -182,10 +182,13 @@ describe("runtime surfaces that stay", () => {
     });
 
     test("GET /authorize with a valid OAuth query returns login HTML", async () => {
+        const challenge = "a".repeat(43);
         const r = await app.request(
             `http://x/authorize?response_type=code&client_id=${encodeURIComponent(
                 process.env.OAUTH_CLIENT_ID!,
-            )}&redirect_uri=https://example.com/cb&state=xyz`,
+            )}&redirect_uri=${encodeURIComponent(
+                "http://localhost:8080/cb",
+            )}&state=xyz&code_challenge=${challenge}&code_challenge_method=S256`,
         );
         expect(r.status).toBe(200);
         const html = await r.text();
