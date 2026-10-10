@@ -136,7 +136,7 @@ Generate a domain in the service's networking settings, set `PUBLIC_ORIGIN` to t
 
 ## First-user flow
 
-This is the closed-household lifecycle already in the tree (`docs/handoff/closed-household-plan.md`). One deploy, one Supabase project, one household.
+One deploy, one Supabase project, one household.
 
 1. Open the site at `/` (or complete MCP OAuth at `/authorize`). There is no Google button. The first visit, while Auth is empty, is email and password.
 2. That first successful `/approve` **signs up** the first Auth user. After any Auth user exists, `/approve` only signs in. A second email is refused (`signup_closed`); a wrong password does not fall through to sign-up.

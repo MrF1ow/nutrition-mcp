@@ -14,7 +14,7 @@ The goal is one cohesive system. Buying, storing, cooking, and eating are steps 
 | **Recipes**   | Household recipes, portions, and remainder lines onto the grocery list     |
 | **Settings**  | Household members, appearance, timezone, and shared preferences            |
 
-Every pillar is meant to refer to the same foods. That shared catalog is still being built; the nutrition stack (meals, insights, widgets, goals, import, export) already works.
+Every pillar is meant to refer to the same foods. That shared catalog is the household `foods` table: fridge items, grocery lines, recipe ingredients and food-backed meals all point at it, and the stock ledger ties putting groceries away, cooking and eating back to the fridge.
 
 ## Self-hosting
 

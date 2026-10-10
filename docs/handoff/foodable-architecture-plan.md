@@ -1,47 +1,43 @@
 # Foodable architecture plan
 
-Status: Phases 0 to 7 are merged (`3687f53`, PRs #31 to #44). Phase 8 is not started. As of 2026-10-05, all 39 migrations are applied to the new Supabase project (`dapbxswqfiqvxutsobhr`), and on 2026-10-06 the live schema was checked identical to them; the household is not live on Railway yet. Written 2026-10-04 from a full walkthrough of the codebase at `47da66f`. Status and checkboxes updated 2026-10-05 after launch prep on `main`.
+Status: Phases 0 to 7 are merged (`3687f53`, PRs #31 to #44), plus the unified styling (#52, #53) and the deployment-audit fixes (#55 to #58). Phase 8 is not started. All 40 migrations are applied to the new Supabase project (`dapbxswqfiqvxutsobhr`); the household is not live on Railway yet. Written 2026-10-04 from a full walkthrough of the codebase at `47da66f`. Status updated 2026-10-10.
 
 Foodable is a self-hosted MCP platform for one household. People use it through their AI agents and a small web app. It has five pillars: Fridge, Groceries, Nutrition, Recipes, and Settings. It is a fork of `akutishevsky/nutrition-mcp`. The fork is personal and open source. It is not a public hosted service. The deploy target and the domain are not decided yet.
 
 The goal is one cohesive system. Every pillar refers to the same foods. Buying, storing, cooking, and eating are steps of one loop, not four separate trackers.
 
-## Status at handoff (2026-10-05)
+## Status at handoff (2026-10-10)
 
-`main` passes 1062 tests, `bun run typecheck` and `bun run format:check`. A checked box below means the code is on `main` and was checked against it. It does not mean the item has run in production for the household.
+`main` passes 1098 tests, `bun run typecheck` and `bun run format:check`. A checked box below means the code is on `main` and was checked against it. It does not mean the item has run in production for the household.
 
-**Launch progress (2026-10-05).** The user chose to start fresh on a new Supabase project hosted on Railway, with no data carried over. Follow `docs/handoff/foodable-launch-handoff.md` for the step list.
+**Launch progress.** The user chose to start fresh on a new Supabase project hosted on Railway, with no data carried over. `docs/deploy-checklist.md` is the go-live list and `docs/handoff/foodable-launch-handoff.md` holds the detail.
 
-| Step                                                                                                                                                                  | Status                                                     |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| Preflight at `ee7f06f` (tests, typecheck, format:check, gen:all, db dry run)                                                                                          | Done                                                       |
-| New Supabase project `dapbxswqfiqvxutsobhr` (`us-east-1`, name Foodable): 39 migrations, 31 `public` tables, `exports` bucket, email/password auth, confirm email off | Done; no data copied; old project and old server untouched |
-| Local smoke against that project (`/health`, sign-in page, OAuth on `127.0.0.1`, `PUBLIC_ORIGIN` unset); server then stopped                                          | Done; not running                                          |
-| Live schema checked against the 39 committed files (2026-10-06): applied SQL identical, no schema drift                                                               | Done                                                       |
-| Ledger gap (#50), old-name leftovers (#49), `railway.toml` (#48)                                                                                                      | Merged 2026-10-06                                          |
-| Railway service, variables, `PUBLIC_ORIGIN`, household sign-in, AI clients, walk, retire old deploy                                                                   | Not done                                                   |
-| Phase 8                                                                                                                                                               | Not started                                                |
+| Step                                                                                                         | Status                                                     |
+| ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------- |
+| Preflight at `ee7f06f` (tests, typecheck, format:check, gen:all, db dry run)                                 | Done                                                       |
+| New Supabase project `dapbxswqfiqvxutsobhr` (`us-east-1`): 31 `public` tables, `exports` bucket, email auth  | Done; no data copied; old project and old server untouched |
+| Local smoke against that project (`/health`, sign-in page, OAuth on `127.0.0.1`, `PUBLIC_ORIGIN` unset)      | Done; not running                                          |
+| Live schema checked against the 39 committed files (2026-10-06): no drift                                    | Done                                                       |
+| Ledger gap (#50), old-name leftovers (#49), `railway.toml` (#48)                                             | Merged 2026-10-06                                          |
+| One design system for widgets, app and login; one green accent (#52, #53)                                    | Merged                                                     |
+| Audit fixes: OAuth allow-list + PKCE (#55), RPC grants (#56), MCP admin tools removed (#57), hardening (#58) | Merged 2026-10-10; #56 migration applied live (40 total)   |
+| Docker build, Railway service, variables, `PUBLIC_ORIGIN`, household sign-in, AI clients, walk, retire old   | Not done                                                   |
+| Phase 8                                                                                                      | Not started                                                |
 
-Deploy day is still ahead. Repo name `MrF1ow/nutrition-mcp`, sky accent, and version `0.1.0` stay until gated decisions say otherwise.
+Deploy day is still ahead. Repo name `MrF1ow/nutrition-mcp` and version `0.1.0` stay until gated decisions say otherwise.
 
-**Before production (in-place upgrade):** superseded on 2026-10-05 by the fresh-start path above. The list below was the in-place upgrade path and is kept for reference.
-
-1. Back up: a dashboard backup or `pg_dump`, plus `export_all_data` for each member.
-2. `bun run db:dryrun --data prod-data.sql` against a data-only dump of production. See `docs/self-hosting.md`, "Upgrading an existing deploy".
-3. `supabase db push` applies nine pending migrations. Three are the Phase 0 drops (`20261004230000` to `20261004230200`). Six are Phases 2 to 6 (`20261005010000` to `20261005040000`). Then deploy `main`. The code expects the new tables, so it must not ship first.
-4. Walk the live checks in each phase's Verify list: catalog, units, food-backed meals, put away, cook, eat, discard, and export.
-
-The pre-push dry run caught two bugs in the unapplied migrations, and both were fixed in place. The backfill copied `food_cache` macros into the per-100 g columns even when Open Food Facts reported them per serving. The fridge-locations copy hit the unique key when a household's array repeated a name. `scripts/migration-dryrun/` holds the fixture that pins both.
+Before the fresh start was chosen, the pre-push dry run caught two bugs in the then-unapplied migrations, and both were fixed in place. The backfill copied `food_cache` macros into the per-100 g columns even when Open Food Facts reported them per serving. The fridge-locations copy hit the unique key when a household's array repeated a name. `scripts/migration-dryrun/` holds the fixture that pins both.
 
 **Open items and deviations:**
 
 - **Manual fridge edits now go through the ledger** (#50, 2026-10-06). `add_fridge_item`, `update_fridge_item`, `delete_fridge_item` and their web forms write `adjust` movements through `applyMovement`, so Phase 5's "every stock change goes through one function" holds. Two side effects: a manual add merges into an existing item with the same food, location and expiry, and an amount edit given in another unit keeps the item's stored unit. The same PR stopped movements from naming a fridge item they had just deleted, which the `fridge_item_id` foreign key rejects.
-- **Tool count is 69, not about 40** (67 since 2026-10, membership and token tools moved to the web app only). The listed merges all landed. Phases 2 to 6 added the food, recipe and stock tools on top.
+- **Tool count is 67, not about 40.** The listed merges all landed, and Phases 2 to 6 added the food, recipe and stock tools on top (69). #57 then removed `add_household_member` and `rotate_household_token`: membership and the bot token are managed only in the web app, Settings → Household.
 - **`fridgeLocations` stays in the household config type and mapper** (`src/household.ts`). It is no longer exposed through MCP or the web. It goes with the column in Phase 8.
 - **The Phase 1 layout is partial.** `src/db/`, `src/domain/`, `src/mcp/` and `src/web/` exist. Auth, OAuth, middleware, rate limiting and analytics still sit at the top of `src/`. `src/mcp.ts` is a re-export barrel. `domain/recipes.ts`, `db/nutrition.ts` and `mcp/shared.ts` are over 1,300 lines.
 - **`groupMealVariations` still groups by text,** not by the `food_id` set.
 - **Old-name leftovers** are done (#49, 2026-10-06): the export object is `foodable-export.zip` (account deletion still removes the old key), `bun.lock` is regenerated, and the test fixtures are renamed. The repo URLs wait on the repo rename.
-- **Gated by decision:** the repo rename, brand assets and accent (no logo yet, so sky stays), and the optional weekly household digest. The existing weekly digest is the nutrition-only resource.
+- **Dead leftovers waiting on Phase 8:** `profiles.accent_swatch` is no longer read or written by the app since #52, but stays in the table and the `Profile` type. `bootstrap_household` has no callers in `src/` since closed-household PR-4 (`20260920142021_drop_bootstrap_join.sql`). `comingSoonPage` in `src/app/shell.ts` is only referenced by tests.
+- **Gated by decision:** the repo rename, brand assets (no logo yet), and the optional weekly household digest. The existing weekly digest is the nutrition-only resource.
 
 ## Where we started (2026-10-04)
 
@@ -107,7 +103,7 @@ The logos exist but are not in the repo yet. Drop them in `public/brand/`. Neede
 - [ ] `favicon.ico` containing 16, 32, and 48 px. This is also the MCP server icon (`/favicon.ico` is advertised as the icon URL).
 - [ ] `apple-touch-icon.png` at 180 px.
 - [ ] `icon-192.png` and `icon-512.png`, if the web app should become installable later (manifest is out of scope here).
-- [ ] A brand accent hex. Decide whether it replaces `sky` as the default swatch in `ACCENT_SWATCHES` (`src/app/shell.ts`) and the widget tokens (`public/widgets/src/shared/tokens.css`).
+- [x] A brand accent. _Superseded by #52: the swatch picker and `ACCENT_SWATCHES` are gone, and the one accent is the widget green in `public/widgets/src/shared/tokens.css`. Revisit only if a logo color demands it._
 - [x] Delete `public/og.png`. There are no public pages to share.
 
 ### Remove upstream leftovers
@@ -119,7 +115,7 @@ The logos exist but are not in the repo yet. Drop them in `public/brand/`. Neede
 - [x] Remove `src/alt-pages.test.ts` if it only pins removed marketing behavior.
 - [x] Trim `src/public-site.test.ts` to what still matters: the login template and `/` returning the app or login.
 - [x] Remove registry publishing: `server.json` and `.github/workflows/publish-mcp.yml`. Keep `ci.yml`.
-- [x] Decide on Google Fonts. Recommendation: self-host the three families under `public/fonts/` or switch to a system stack. Either way the CSP loses its third-party font and style hosts.
+- [x] Decide on Google Fonts. Recommendation: self-host the three families under `public/fonts/` or switch to a system stack. Either way the CSP loses its third-party font and style hosts. _Fonts were self-hosted in Phase 0, then deleted with the marketing CSS in #53. The app and login use the system stack._
 - [x] Decide on protocol-era analytics. Recommendation: drop `protocol_era` and `client_name` from `tool_analytics`, and keep the plain per-tool duration and outcome rows. They are cheap and useful for a personal deploy. Keep the dual-era `/mcp` endpoint itself. It is the SDK default and costs nothing.
 - [x] Decide on i18n. **Recommendation: English only.** That deletes `src/copy/*.{de,es,fr,it,ja,nl,pl,uk}.ts`, `public/{locale}/`, `LOCALES` and the locale switcher, `set_language`, and `profiles.locale` reads. The widget `@i18n` marker would inline the English dictionary only. The new app pages are English-only already. If someone in the household needs another language, keep the machinery and keep just that one locale.
 - [x] Keep the CSV meal importer (`import.ts`, `csv.ts`, `import-meals` widget). It is how history comes in from MyFitnessPal, Cronometer, and similar apps.
@@ -128,7 +124,7 @@ The logos exist but are not in the repo yet. Drop them in `public/brand/`. Neede
 
 - [x] Add optional `PUBLIC_ORIGIN` to `.env.example`. When set, `getBaseUrl` in `src/url.ts` returns it and ignores `X-Forwarded-*`. Today `X-Forwarded-Host` is trusted unconditionally. Without a proxy that strips it, a client can steer the OAuth metadata URLs. When unset, keep current behavior for local dev.
 - [x] Strip the DigitalOcean, 512 MB, and auto-deploy commentary from `Dockerfile`. Keep `--smol`.
-- [x] Add a `docs/self-hosting.md` covering Supabase cloud vs self-hosted Supabase, migrations (`supabase db push`), the env vars, a reverse proxy example, and the first-user flow from `closed-household-plan.md`.
+- [x] Add a `docs/self-hosting.md` covering Supabase cloud vs self-hosted Supabase, migrations (`supabase db push`), the env vars, a reverse proxy example, and the first-user flow (its source plan, `closed-household-plan.md`, was fully implemented and later deleted).
 - [x] Rewrite `CLAUDE.md`. Delete "Deploying" (DigitalOcean), "Publishing to the registry", the i18n sections that no longer apply, and the `tool_analytics` legacy-retirement paragraph. Add a section on the architecture rules in this plan.
 
 ### Verify
@@ -435,18 +431,19 @@ Run only after Phases 2 to 7 have been live and stable for a while, with a backu
 - [ ] Set `fridge_items.food_id`, `grocery_lines.food_id`, and `recipe_ingredients.food_id` to `not null`.
 - [ ] Drop `households.fridge_locations`.
 - [ ] Delete `food-identity.ts`'s `ManualRef` and `householdManualId`, and any code path still writing `identity`.
-- [ ] Drop `bootstrap_household` if `closed-household-plan.md` PR-4 has not already replaced it.
+- [ ] Drop `bootstrap_household`. Closed-household PR-4 already removed its join-as-member behavior, and nothing in `src/` calls it.
+- [ ] Drop `profiles.accent_swatch`, and the field from the `Profile` type and `upsertProfile` (`src/db/profiles.ts`).
 
 ---
 
-## Decisions still open
+## Decisions
 
-| Decision                               | Recommendation                                                        | Blocks                 |
-| -------------------------------------- | --------------------------------------------------------------------- | ---------------------- |
-| i18n: keep any non-English locale?     | English only                                                          | Phase 0                |
-| Fonts: self-host vs system stack       | Self-host the current three                                           | Phase 0                |
-| Brand accent: replace `sky` default?   | Yes, once the logo color is known                                     | Phase 0 brand          |
-| Starting version                       | `0.1.0`                                                               | Phase 0                |
-| Hosting target                         | Any Docker host plus Supabase. `PUBLIC_ORIGIN` keeps it host-agnostic | Not blocking           |
-| Supabase cloud vs self-hosted Supabase | Cloud first, document self-hosted                                     | `docs/self-hosting.md` |
-| Rename Grocery to Shopping list        | Defer. Rename copy only, keep table names                             | Not blocking           |
+| Decision                               | Outcome                                                                 |
+| -------------------------------------- | ----------------------------------------------------------------------- |
+| i18n: keep any non-English locale?     | English only (Phase 0)                                                  |
+| Fonts: self-host vs system stack       | System stack; the self-hosted fonts were deleted in #53                 |
+| Brand accent                           | One widget-green accent everywhere (#52); no logo yet                   |
+| Starting version                       | `0.1.0`                                                                 |
+| Hosting target                         | Railway for now, Supabase cloud; `PUBLIC_ORIGIN` keeps it host-agnostic |
+| Supabase cloud vs self-hosted Supabase | Cloud first, self-hosted documented in `docs/self-hosting.md`           |
+| Rename Grocery to Shopping list        | **Still open.** Defer; rename copy only, keep table names               |

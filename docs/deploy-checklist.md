@@ -1,8 +1,13 @@
 # Deploy checklist
 
-Use this on deploy day after the deploy-hardening fixes are on `main`. See `docs/handoff/foodable-launch-handoff.md` for step-by-step detail rather than duplicating it here.
+Use this on deploy day. The deployment-audit fixes (#55 to #58) are on `main`, and the #56 migration is already applied to `dapbxswqfiqvxutsobhr`. See `docs/handoff/foodable-launch-handoff.md` for step-by-step detail rather than duplicating it here.
 
 Setting `SESSION_SECRET` on an existing deploy logs everyone out of the web app once (MCP tokens are unaffected).
+
+## Before deploy day (local)
+
+- [ ] `docker build -t foodable .` succeeds on the pinned `oven/bun:1.4.2` image, and `docker run --env-file .env -p 8080:8080 foodable` answers `GET /health` with `ok`. Not yet run anywhere.
+- [ ] With the local server up, `bun run inspect` (MCP Inspector) completes OAuth through its loopback callback and lists 67 tools.
 
 ## Supabase
 
@@ -10,6 +15,16 @@ Setting `SESSION_SECRET` on an existing deploy logs everyone out of the web app 
 - [ ] Authentication → Sign In / Providers: email + password on, "Confirm email" off.
 - [ ] Leave "Allow new users to sign up" **on** until the owner has signed up (step under Railway). Then turn it **off**.
       Members are created with the admin API, which ignores this toggle.
+- [ ] SQL editor: no security-definer function in `public` is executable by a client role. Every row must be `f` / `f`:
+
+    ```sql
+    select p.proname,
+           has_function_privilege('anon', p.oid, 'execute') as anon,
+           has_function_privilege('authenticated', p.oid, 'execute') as authenticated
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.prosecdef order by 1;
+    ```
+
 - [ ] Optional: Pro plan, so the project never pauses (free projects pause after 7 days idle).
 
 ## Railway
@@ -28,7 +43,8 @@ Setting `SESSION_SECRET` on an existing deploy logs everyone out of the web app 
 
 - [ ] Settings → Household: add each person (name, email or username, password). Hand them the login yourself.
 - [ ] Each person: Claude.ai → Settings → Connectors → Add custom connector → `https://<domain>/mcp`, then sign in.
-      Same URL in ChatGPT and Claude Code. Remove any old nutrition-mcp connector.
+      Same URL in ChatGPT and Claude Code. Confirm `tools/list` loads. Remove any old nutrition-mcp connector.
+- [ ] As a member (not the owner), adding a person and rotating the token in Settings → Household are both refused.
 - [ ] Bots: Settings → Household → rotate the token, copy it once, then configure
       `Authorization: Bearer nt_hh_…` against `https://<domain>/mcp`. The bot passes `user_id` for the person it acts for.
 - [ ] Run the walk in `docs/handoff/foodable-launch-handoff.md`, step 5 (`tools/list` returns 67 tools).
