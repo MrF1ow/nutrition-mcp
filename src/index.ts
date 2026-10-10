@@ -128,7 +128,7 @@ app.use(
 // {"error":"internal_server_error"} 500 ("This MCP handler has been closed").
 // A 500 reads to a connector as a tool failure; 503 + Retry-After reads as
 // "this instance is going away, come back" — which is the truth, and on a
-// DigitalOcean deploy (SIGTERM) that window hits real users.
+// on a deploy (SIGTERM) that window hits real users.
 // Registered after CORS so the refusal still carries Allow-Origin (a browser
 // client sees the 503 rather than an opaque CORS error) and is still access
 // logged. OPTIONS preflights never reach it: cors() answers those itself.

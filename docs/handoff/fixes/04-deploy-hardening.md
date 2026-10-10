@@ -122,7 +122,7 @@ Merge Fixes 1–3 first. Fix 2's migration must be pushed before the URL is publ
 
 ## Done when
 
-- [ ] `bun test`, `bun run typecheck` and `bun run format:check` are green, and CI runs on the pinned Bun version.
-- [ ] `docker build .` succeeds locally on the pinned image, and the container answers `/health`.
-- [ ] Local boot without `SESSION_SECRET` logs the one-time warning. Boot with it does not.
-- [ ] `docs/deploy-checklist.md` exists and is linked.
+- [x] `bun test`, `bun run typecheck` and `bun run format:check` are green, and CI runs on the pinned Bun version (`1.4.2` in `.github/workflows/ci.yml` and `Dockerfile`).
+- [ ] `docker build .` succeeds locally on the pinned image, and the container answers `/health`. (not done: Docker API permission denied in agent environment)
+- [x] Local boot without `SESSION_SECRET` logs the one-time warning. Boot with it does not.
+- [x] `docs/deploy-checklist.md` exists and is linked.

@@ -32,8 +32,10 @@ import {
     getBanState,
 } from "./rate-limit.js";
 
-// Best-effort client IP for rate limiting. Behind DigitalOcean's proxy the real
-// IP is the first entry of x-forwarded-for; fall back to x-real-ip. "unknown"
+// Best-effort client IP for rate limiting. Behind Railway's edge the first
+// x-forwarded-for entry is the connecting IP (Railway strips client-supplied
+// values). On a proxy that appends instead, the header is spoofable — treat the
+// first hop accordingly if you move hosts. Fall back to x-real-ip. "unknown"
 // only applies when no proxy header is present (e.g. direct local requests), in
 // which case those callers share a single bucket — acceptable since production
 // always sits behind the proxy.
