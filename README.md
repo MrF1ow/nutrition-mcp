@@ -29,7 +29,7 @@ supabase db push       # after `supabase link --project-ref <ref>`
 bun src/index.ts       # http://localhost:8080
 ```
 
-`bun run generate-oauth-creds` prints `OAUTH_CLIENT_ID` and `OAUTH_CLIENT_SECRET`. Open Food Facts barcode lookup needs `OFF_USER_AGENT` in the form `Foodable (you@example.com)`.
+`bun run generate-oauth-creds` prints `OAUTH_CLIENT_ID`, `OAUTH_CLIENT_SECRET`, and `SESSION_SECRET` (site cookie signing). Open Food Facts barcode lookup needs `OFF_USER_AGENT` in the form `Foodable (you@example.com)`.
 
 ## Connecting an agent
 

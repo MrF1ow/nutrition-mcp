@@ -2,6 +2,8 @@
 
 Written 2026-10-05. For an agent with access to GitHub, Supabase, and Railway. It takes Foodable from "merged" to "live for the household", starting with an empty database.
 
+**Deploy day:** follow [deploy-checklist.md](../deploy-checklist.md) for the ordered go-live checklist.
+
 Read `CLAUDE.md` and `docs/handoff/foodable-architecture-plan.md` (its "Status at handoff" section) first. This file does not repeat them.
 
 ## Status (2026-10-06)
@@ -124,14 +126,15 @@ Against the new project, with env vars set locally and `PUBLIC_ORIGIN` unset:
 - [ ] Create a Railway project, then a service from the GitHub repo on `main`.
 - [ ] Set the service variables. Generate fresh OAuth credentials with `bun run generate-oauth-creds`. Do not reuse the old deploy's values.
 
-    | Variable              | Value                                                     |
-    | --------------------- | --------------------------------------------------------- |
-    | `SUPABASE_URL`        | new project URL                                           |
-    | `SUPABASE_SECRET_KEY` | new project service role secret                           |
-    | `OAUTH_CLIENT_ID`     | fresh, from `generate-oauth-creds`                        |
-    | `OAUTH_CLIENT_SECRET` | fresh, from `generate-oauth-creds`; also signs the cookie |
-    | `OFF_USER_AGENT`      | `Foodable (<contact email>)`                              |
-    | `PUBLIC_ORIGIN`       | `https://<railway domain>`, set after the next step       |
+    | Variable              | Value                                               |
+    | --------------------- | --------------------------------------------------- |
+    | `SUPABASE_URL`        | new project URL                                     |
+    | `SUPABASE_SECRET_KEY` | new project service role secret                     |
+    | `OAUTH_CLIENT_ID`     | fresh, from `generate-oauth-creds`                  |
+    | `OAUTH_CLIENT_SECRET` | fresh, from `generate-oauth-creds`                  |
+    | `SESSION_SECRET`      | fresh, from `generate-oauth-creds` (site cookie)    |
+    | `OFF_USER_AGENT`      | `Foodable (<contact email>)`                        |
+    | `PUBLIC_ORIGIN`       | `https://<railway domain>`, set after the next step |
 
     Do **not** set `PORT`. Railway injects it, and the app reads it. `ALLOWED_ORIGINS` is not needed.
 

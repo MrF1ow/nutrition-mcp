@@ -2,13 +2,36 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 export const SITE_COOKIE = "nm_site";
 const TTL_SECONDS = 30 * 24 * 60 * 60;
+const MIN_SESSION_SECRET_LEN = 32;
+
+let sessionSecretFallbackWarned = false;
+
+/** Test-only: reset the one-time fallback warning flag. */
+export function resetSessionSecretWarningForTest(): void {
+    sessionSecretFallbackWarned = false;
+}
 
 function sessionSecret(): string {
-    const secret = process.env.OAUTH_CLIENT_SECRET;
-    if (!secret) {
+    const session = process.env.SESSION_SECRET;
+    if (session) {
+        if (session.length < MIN_SESSION_SECRET_LEN) {
+            throw new Error(
+                `SESSION_SECRET must be at least ${MIN_SESSION_SECRET_LEN} characters`,
+            );
+        }
+        return session;
+    }
+    const oauth = process.env.OAUTH_CLIENT_SECRET;
+    if (!oauth) {
         throw new Error("OAUTH_CLIENT_SECRET is required for site sessions");
     }
-    return secret;
+    if (!sessionSecretFallbackWarned) {
+        sessionSecretFallbackWarned = true;
+        console.warn(
+            "[config] SESSION_SECRET is unset; signing site sessions with OAUTH_CLIENT_SECRET",
+        );
+    }
+    return oauth;
 }
 
 function sign(payload: string): string {
