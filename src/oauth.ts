@@ -11,14 +11,13 @@ import {
 import { signUpUser, signInUser, authUserCount } from "./db/client.js";
 import { getBaseUrl } from "./url.js";
 import { rateLimitAuth } from "./middleware.js";
-import { LOGIN_ERRORS } from "./copy/login.js";
+import { LOGIN, LOGIN_ERRORS } from "./copy/login.js";
 import { mintSiteSession, siteCookieHeader } from "./site-session.js";
 import {
     extraRedirectUris,
     isAllowedRedirectUri,
     isValidPkceChallenge,
 } from "./oauth-redirect.js";
-import { LOGIN } from "./copy/login.js";
 
 const SESSION_TTL_MS = 10 * 60 * 1000;
 
