@@ -5,20 +5,12 @@ import {
     householdConfigToWire,
     mergeHouseholdConfig,
     parseHouseholdConfigPatch,
-    parseMemberInput,
 } from "../../household.js";
-import {
-    generateHouseholdToken,
-    hashHouseholdToken,
-    householdTokenHashHex,
-} from "../../household-token.js";
 import { deleteAllUserData } from "../../db/nutrition.js";
 import {
     listHouseholdMembers,
-    addHouseholdMemberForHousehold,
     getHouseholdConfig,
     updateHouseholdConfig,
-    rotateHouseholdMcpToken,
 } from "../../db/household.js";
 import {
     DELETED_ACCOUNT_ANALYTICS_ID,
@@ -86,64 +78,6 @@ export function registerHouseholdTools(server: McpServer, ctx: ToolContext) {
                             },
                         ],
                         structuredContent: { members: payload },
-                    };
-                },
-                analytics,
-            );
-        },
-    );
-
-    const ADD_HOUSEHOLD_MEMBER_OUTPUT_SCHEMA = z.object({
-        user_id: z.string(),
-        display_name: z.string(),
-        role: z.literal("member"),
-    });
-
-    server.registerTool(
-        "add_household_member",
-        {
-            title: "Add Household Member",
-            description:
-                "Create an Auth login and household_members row. Pass display_name, password, and either email or username. Username becomes {username}@household.invalid. Only the household owner or the household bot may call this. The new row is always role member. Returns user_id for later person tools. Does not send invite email.",
-            annotations: {
-                readOnlyHint: false,
-                destructiveHint: false,
-                idempotentHint: false,
-                openWorldHint: false,
-            },
-            inputSchema: z.object({
-                display_name: z.string(),
-                password: z.string(),
-                email: z.string().optional(),
-                username: z.string().optional(),
-            }),
-            outputSchema: ADD_HOUSEHOLD_MEMBER_OUTPUT_SCHEMA,
-        },
-        async (args) => {
-            return withAnalytics(
-                "add_household_member",
-                async () => {
-                    const parsed = parseMemberInput(args);
-                    if (!parsed.ok) throw new Error(parsed.error);
-                    const householdId = await callerOwnerHouseholdId();
-                    const added = await addHouseholdMemberForHousehold(
-                        householdId,
-                        parsed.value,
-                    );
-                    if (!added.ok) throw new Error(added.error);
-                    const payload = {
-                        user_id: added.userId,
-                        display_name: parsed.value.displayName,
-                        role: "member" as const,
-                    };
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: `Added ${payload.display_name} (${payload.role}) ${payload.user_id}`,
-                            },
-                        ],
-                        structuredContent: payload,
                     };
                 },
                 analytics,
@@ -265,54 +199,6 @@ export function registerHouseholdTools(server: McpServer, ctx: ToolContext) {
                             },
                         ],
                         structuredContent: config,
-                    };
-                },
-                analytics,
-            );
-        },
-    );
-
-    const ROTATE_HOUSEHOLD_TOKEN_OUTPUT_SCHEMA = z.object({
-        token: z.string(),
-        issued_at: z.string(),
-    });
-
-    server.registerTool(
-        "rotate_household_token",
-        {
-            title: "Rotate Household Token",
-            description:
-                "Issue a new household bot token (prefix nt_hh_). The plaintext is returned once; only its SHA-256 hash is stored. Only the household owner may rotate. A household PAT may rotate and invalidates itself.",
-            annotations: {
-                readOnlyHint: false,
-                destructiveHint: false,
-                idempotentHint: false,
-                openWorldHint: false,
-            },
-            outputSchema: ROTATE_HOUSEHOLD_TOKEN_OUTPUT_SCHEMA,
-        },
-        async () => {
-            return withAnalytics(
-                "rotate_household_token",
-                async () => {
-                    const householdId = await callerOwnerHouseholdId();
-                    const issuedBy = auth.kind === "user" ? auth.userId : null;
-                    const token = generateHouseholdToken();
-                    const issued_at = await rotateHouseholdMcpToken({
-                        householdId,
-                        tokenHashHex: householdTokenHashHex(
-                            hashHouseholdToken(token),
-                        ),
-                        issuedBy,
-                    });
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: `Household bot token (shown once):\n${token}`,
-                            },
-                        ],
-                        structuredContent: { token, issued_at },
                     };
                 },
                 analytics,

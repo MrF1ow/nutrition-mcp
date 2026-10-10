@@ -39,7 +39,7 @@ Read `CLAUDE.md` and `docs/handoff/foodable-architecture-plan.md` (its "Status a
 ## Where the code is
 
 - Phases 0 to 7 are merged. `bun test` passes 1057 tests (after `bun run gen:all`). `bun run typecheck` and `bun run format:check` are clean. CI is green.
-- `tools/list` returns 69 tools.
+- `tools/list` returns 67 tools.
 - There are 39 migrations. They were applied in order to an empty Postgres (with Supabase stubs) on 2026-10-05. All 39 applied, and the result has 31 tables in `public`.
 - The app is Railway-ready as is:
     - It binds `0.0.0.0` on `PORT`, which Railway injects.
@@ -174,7 +174,7 @@ This is Cursor's end-to-end walk, run on the live site with two members. Capture
     - The ZIP holds `meals.csv`, `meal_items.csv`, `water.csv`, `weight.csv`, `goals.csv`, `profile.csv` and `README.txt`.
     - `meal_items.csv` is keyed by `meal_id`, has a `timezone` column, and keeps its header with zero rows.
 - [ ] **Agent surface.**
-    - `tools/list` returns 69 tools.
+    - `tools/list` returns 67 tools.
     - `get_meals`, `get_water`, `get_weight`, `get_fridge`, `get_household_rules` and `set_household_rules` exist. The old split names are gone.
     - `list_grocery_lines` and `get_fridge` render their cards in a widget-capable client.
 - [ ] **Barcode.** `lookup_barcode` on a real product returns data, which proves `OFF_USER_AGENT` is set.

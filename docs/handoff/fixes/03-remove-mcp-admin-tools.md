@@ -1,6 +1,6 @@
 # Fix 3: Remove membership and token tools from the MCP
 
-Status: plan only. An implementation agent completes this branch and takes the PR out of draft.
+Status: implemented on branch `fix/remove-mcp-admin-tools`.
 
 Source: deployment audit, 2026-10-07. Owner decision, 2026-10-10: adding people and rotating the bot token are manual, owner-only actions in the web app. The MCP should not be able to do either.
 
@@ -55,7 +55,7 @@ Fix 4 edits `docs/self-hosting.md` and `docs/handoff/foodable-launch-handoff.md`
 
 ## Done when
 
-- [ ] `bun test`, `bun run typecheck` and `bun run format:check` are green.
-- [ ] `tools/list` returns 67 names, matching the snapshot. Check with `bun run inspect` against a local server, or through the existing snapshot test.
-- [ ] Manual: as the owner, add a member and rotate the token in the web app, and both still work. As a member, both are refused.
-- [ ] This file's checkboxes are ticked.
+- [x] `bun test`, `bun run typecheck` and `bun run format:check` are green.
+- [x] `tools/list` returns 67 names, matching the snapshot. Check with `bun run inspect` against a local server, or through the existing snapshot test.
+- [ ] Manual: as the owner, add a member and rotate the token in the web app, and both still work. As a member, both are refused. (not done: no browser/manual session in this agent run; web paths covered by `authenticated dashboard HTTP` tests in `src/mcp.test.ts`.)
+- [x] This file's checkboxes are ticked.

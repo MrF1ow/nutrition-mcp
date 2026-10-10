@@ -125,7 +125,7 @@ This is the closed-household lifecycle already in the tree (`docs/handoff/closed
 1. Open the site at `/` (or complete MCP OAuth at `/authorize`). There is no Google button. The first visit, while Auth is empty, is email and password.
 2. That first successful `/approve` **signs up** the first Auth user. After any Auth user exists, `/approve` only signs in. A second email is refused (`signup_closed`); a wrong password does not fall through to sign-up.
 3. The first user is not in a household yet. `/` shows **Create household** (household name and your name) instead of the app. Submit it. That RPC creates the singleton household and the caller as **owner**. A second create fails.
-4. Later people exist only when the owner adds them. The owner uses **Settings → Household** (`/settings/household`) or the MCP tool `add_household_member` (email or username plus password). Members sign in with those credentials. They cannot rotate the household token or add people.
+4. Later people exist only when the owner adds them. Members and the household bot token are managed only in **Settings → Household** (`/settings/household`) — add people there (email or username plus password). Members sign in with those credentials. They cannot rotate the household token or add people.
 5. Public registration stays closed. There is no invite link, no Google identity provider, and no auto-join if someone finds the URL. `POST /register` is MCP client registration, not a user sign-up path.
 
 Connect an agent at `https://your-host/mcp` with the household account.
