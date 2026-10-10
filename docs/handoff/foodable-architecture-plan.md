@@ -36,7 +36,7 @@ The pre-push dry run caught two bugs in the unapplied migrations, and both were 
 **Open items and deviations:**
 
 - **Manual fridge edits now go through the ledger** (#50, 2026-10-06). `add_fridge_item`, `update_fridge_item`, `delete_fridge_item` and their web forms write `adjust` movements through `applyMovement`, so Phase 5's "every stock change goes through one function" holds. Two side effects: a manual add merges into an existing item with the same food, location and expiry, and an amount edit given in another unit keeps the item's stored unit. The same PR stopped movements from naming a fridge item they had just deleted, which the `fridge_item_id` foreign key rejects.
-- **Tool count is 69, not about 40.** The listed merges all landed. Phases 2 to 6 added the food, recipe and stock tools on top.
+- **Tool count is 69, not about 40** (67 since 2026-10, membership and token tools moved to the web app only). The listed merges all landed. Phases 2 to 6 added the food, recipe and stock tools on top.
 - **`fridgeLocations` stays in the household config type and mapper** (`src/household.ts`). It is no longer exposed through MCP or the web. It goes with the column in Phase 8.
 - **The Phase 1 layout is partial.** `src/db/`, `src/domain/`, `src/mcp/` and `src/web/` exist. Auth, OAuth, middleware, rate limiting and analytics still sit at the top of `src/`. `src/mcp.ts` is a re-export barrel. `domain/recipes.ts`, `db/nutrition.ts` and `mcp/shared.ts` are over 1,300 lines.
 - **`groupMealVariations` still groups by text,** not by the `food_id` set.

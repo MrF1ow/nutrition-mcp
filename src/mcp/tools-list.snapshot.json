@@ -63,9 +63,7 @@
     "upsert_food",
     "merge_foods",
     "list_members",
-    "add_household_member",
     "get_household_config",
     "update_household_config",
-    "rotate_household_token",
     "delete_account"
 ]

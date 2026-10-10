@@ -349,25 +349,6 @@ const TOOLS_BASE: ToolIdentity[] = [
         hasPhotoHint: false,
     },
     {
-        name: "add_household_member",
-        category: "settings-account",
-        badges: ["setting"],
-        params: [
-            { name: "display_name", required: true },
-            { name: "password", required: true },
-            { name: "email", required: false },
-            { name: "username", required: false },
-        ],
-        hasPhotoHint: false,
-    },
-    {
-        name: "rotate_household_token",
-        category: "settings-account",
-        badges: ["setting"],
-        params: [],
-        hasPhotoHint: false,
-    },
-    {
         name: "get_household_config",
         category: "settings-account",
         badges: ["view"],
@@ -765,8 +746,6 @@ const TOOLS_BASE: ToolIdentity[] = [
 
 export const HOUSEHOLD_SCOPED_TOOL_NAMES = [
     "list_members",
-    "add_household_member",
-    "rotate_household_token",
     "get_household_config",
     "update_household_config",
     "get_fridge",

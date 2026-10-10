@@ -2757,14 +2757,14 @@ describe("household PAT has no default user", () => {
         }
     }
 
-    test("tools/list still advertises person tools and rotate_household_token", async () => {
+    test("tools/list still advertises person tools but not membership admin tools", async () => {
         await withHousehold(async (_call, list) => {
             const names = await list();
             expect(names).toContain("log_meal");
             expect(names).toContain("get_profile");
-            expect(names).toContain("rotate_household_token");
+            expect(names).not.toContain("rotate_household_token");
             expect(names).toContain("list_members");
-            expect(names).toContain("add_household_member");
+            expect(names).not.toContain("add_household_member");
             expect(names).toContain("get_household_config");
             expect(names).toContain("update_household_config");
             expect(names).not.toContain("update_fridge_locations");
@@ -2796,17 +2796,27 @@ describe("household PAT has no default user", () => {
         });
     });
 
-    test("rotate_household_token returns a nt_hh_ token once", async () => {
+    test("removed membership admin tools are not callable on a household PAT", async () => {
         await withHousehold(async (call) => {
-            const r = await call("rotate_household_token");
-            expect(r.isError).toBeFalsy();
-            const token = r.structuredContent?.token as string;
-            expect(token.startsWith(HOUSEHOLD_TOKEN_PREFIX)).toBe(true);
-            expect(textOf(r)).toContain(token);
-            expect(db.tokenRotations).toHaveLength(1);
-            expect(db.tokenRotations[0]!.householdId).toBe("hh-1");
-            expect(db.tokenRotations[0]!.issuedBy).toBeNull();
-            expect(db.tokenRotations[0]!.tokenHashHex).toHaveLength(64);
+            for (const name of [
+                "rotate_household_token",
+                "add_household_member",
+            ]) {
+                await expect(
+                    call(
+                        name,
+                        name === "add_household_member"
+                            ? {
+                                  display_name: "Sam",
+                                  username: "sam",
+                                  password: "password1",
+                              }
+                            : {},
+                    ),
+                ).rejects.toThrow(/not found/);
+            }
+            expect(db.tokenRotations).toHaveLength(0);
+            expect(db.addedLogins).toHaveLength(0);
         });
     });
 });
@@ -3101,63 +3111,6 @@ describe("household person targeting", () => {
             const r = await call("list_members");
             expect(r.isError).toBe(true);
             expect(textOf(r)).toContain("not a household member");
-        });
-    });
-
-    test("PAT add_household_member for username sam returns a member uuid", async () => {
-        await withHousehold(async (call) => {
-            const r = await call("add_household_member", {
-                display_name: "Sam",
-                username: "sam",
-                password: "password1",
-            });
-            expect(r.isError).toBeFalsy();
-            expect(r.structuredContent).toEqual({
-                user_id: "55555555-5555-4555-8555-555555555555",
-                display_name: "Sam",
-                role: "member",
-            });
-            const listed = await call("list_members");
-            expect(listed.structuredContent?.members).toEqual(
-                expect.arrayContaining([
-                    {
-                        user_id: "55555555-5555-4555-8555-555555555555",
-                        display_name: "Sam",
-                        role: "member",
-                    },
-                ]),
-            );
-            const meal = await call("log_meal", {
-                description: "toast",
-                meal_type: "breakfast",
-                calories: 100,
-                protein_g: 4,
-                carbs_g: 18,
-                fat_g: 1,
-                user_id: "55555555-5555-4555-8555-555555555555",
-            });
-            expect(meal.isError).toBeFalsy();
-            expect(db.inserted[0]!.user_id).toBe(
-                "55555555-5555-4555-8555-555555555555",
-            );
-        });
-    });
-
-    test("PAT add_household_member duplicate username is an error", async () => {
-        await withHousehold(async (call) => {
-            const first = await call("add_household_member", {
-                display_name: "Sam",
-                username: "sam",
-                password: "password1",
-            });
-            expect(first.isError).toBeFalsy();
-            const second = await call("add_household_member", {
-                display_name: "Sam Two",
-                username: "sam",
-                password: "password1",
-            });
-            expect(second.isError).toBe(true);
-            expect(textOf(second)).toContain("already in use");
         });
     });
 });
@@ -3972,67 +3925,20 @@ describe("phone-app domain MCP tools", () => {
     });
 });
 
-describe("rotate_household_token from member OAuth", () => {
-    test("only the owner may rotate", async () => {
+describe("removed membership admin MCP tools", () => {
+    test("owner OAuth cannot call rotate_household_token or add_household_member", async () => {
         await withTools(null, async (call) => {
-            const r = await call("rotate_household_token");
-            expect(r.isError).toBeFalsy();
-            expect(db.membershipReads).toEqual(["u1"]);
-            expect(db.tokenRotations[0]!.issuedBy).toBe("u1");
-            expect(
-                (r.structuredContent?.token as string).startsWith(
-                    HOUSEHOLD_TOKEN_PREFIX,
-                ),
-            ).toBe(true);
-        });
-    });
-
-    test("a member is refused", async () => {
-        db.members = [
-            {
-                householdId: "hh-1",
-                userId: "u1",
-                role: "member",
-                displayName: "U1",
-            },
-        ];
-        await withTools(null, async (call) => {
-            const r = await call("rotate_household_token");
-            expect(r.isError).toBe(true);
-            expect(textOf(r)).toContain("owner");
+            await expect(call("rotate_household_token")).rejects.toThrow(
+                /not found/,
+            );
+            await expect(
+                call("add_household_member", {
+                    display_name: "Sam",
+                    username: "sam",
+                    password: "password1",
+                }),
+            ).rejects.toThrow(/not found/);
             expect(db.tokenRotations).toHaveLength(0);
-        });
-    });
-
-    test("a non-member is refused", async () => {
-        db.members = [];
-        await withTools(null, async (call) => {
-            const r = await call("rotate_household_token");
-            expect(r.isError).toBe(true);
-            expect(textOf(r)).toContain("not a household member");
-            expect(db.tokenRotations).toHaveLength(0);
-        });
-    });
-});
-
-describe("add_household_member from member OAuth", () => {
-    test("a member is refused", async () => {
-        db.members = [
-            {
-                householdId: "hh-1",
-                userId: "u1",
-                role: "member",
-                displayName: "U1",
-            },
-        ];
-        await withTools(null, async (call) => {
-            const r = await call("add_household_member", {
-                display_name: "Sam",
-                username: "sam",
-                password: "password1",
-            });
-            expect(r.isError).toBe(true);
-            expect(textOf(r)).toContain("owner");
             expect(db.addedLogins).toHaveLength(0);
         });
     });
@@ -4167,7 +4073,10 @@ describe("household PAT over HTTP has no default userId", () => {
                 const { tools } = await client.listTools();
                 expect(
                     tools.some((t) => t.name === "rotate_household_token"),
-                ).toBe(true);
+                ).toBe(false);
+                expect(
+                    tools.some((t) => t.name === "add_household_member"),
+                ).toBe(false);
                 expect(tools.some((t) => t.name === "list_members")).toBe(true);
                 expect(tools.some((t) => t.name === "log_meal")).toBe(true);
             });
@@ -4919,6 +4828,36 @@ describe("authenticated dashboard HTTP", () => {
         expect(r.status).toBe(403);
         expect(db.members.map((m) => m.displayName)).toEqual(["Alice", "Bob"]);
         expect(db.addedLogins).toEqual([]);
+    });
+
+    test("POST /settings/household/rotate-token as owner issues a token once", async () => {
+        const r = await siteApp.request(
+            "http://x/settings/household/rotate-token",
+            {
+                method: "POST",
+                headers: { cookie: cookieFor(alice) },
+            },
+        );
+        expect(r.status).toBe(200);
+        const html = await r.text();
+        expect(html).toContain("Household bot token (shown once):");
+        expect(html).toContain(HOUSEHOLD_TOKEN_PREFIX);
+        expect(db.tokenRotations).toHaveLength(1);
+        expect(db.tokenRotations[0]!.householdId).toBe("hh-1");
+        expect(db.tokenRotations[0]!.issuedBy).toBe(alice);
+        expect(db.tokenRotations[0]!.tokenHashHex).toHaveLength(64);
+    });
+
+    test("POST /settings/household/rotate-token as a member is 403", async () => {
+        const r = await siteApp.request(
+            "http://x/settings/household/rotate-token",
+            {
+                method: "POST",
+                headers: { cookie: cookieFor(bob) },
+            },
+        );
+        expect(r.status).toBe(403);
+        expect(db.tokenRotations).toHaveLength(0);
     });
 
     test("POST /settings/household with a short password stays on the page", async () => {
