@@ -134,7 +134,7 @@ Follow `docs/self-hosting.md`, "First-user flow".
 
 - [ ] The owner opens `/`, signs up with email and password, then submits **Create household**.
 - [ ] In Supabase, turn **Allow new users to sign up** off. Members are created through the admin API, which ignores it.
-- [ ] A second sign-up email at `/` is refused (`signup_closed`).
+- [ ] A second sign-up email at `/` is refused ("Wrong email, username or password.").
 - [ ] The owner adds the second person in **Settings → Household** (`/settings/household`). That person signs in.
 - [ ] Connect each person's AI client to `https://<domain>/mcp` and complete OAuth. Remove any old Foodable or nutrition-mcp connection from those clients, because it points at the old deploy.
 

@@ -247,6 +247,9 @@ const db = {
     rowIds: new Set<string>(),
     analyticsRows: [] as Record<string, unknown>[],
     accountWipes: 0,
+    // Who deleteAllUserData erased, in order.
+    wipedUsers: [] as string[],
+    ownershipTransfers: [] as { from: string; to: string }[],
     profileReads: [] as string[],
     membershipReads: [] as string[],
     members: [] as actualHousehold.HouseholdMembership[],
@@ -285,8 +288,11 @@ mock.module("./db/client.js", () => ({
 
 mock.module("./db/nutrition.js", () => ({
     ...actualNutrition,
-    deleteAllUserData: async () => {
+    deleteAllUserData: async (userId: string) => {
         db.accountWipes += 1;
+        db.wipedUsers.push(userId);
+        // The real auth delete cascades the membership row away.
+        db.members = db.members.filter((member) => member.userId !== userId);
     },
     getNutritionGoals: async () => db.goals,
     getMealsByDate: async () => db.meals,
@@ -486,6 +492,22 @@ mock.module("./db/household.js", () => ({
         db.household = structuredClone(config);
         return structuredClone(db.household);
     },
+    transferHouseholdOwnership: async (
+        householdId: string,
+        fromUserId: string,
+        toUserId: string,
+    ) => {
+        db.ownershipTransfers.push({ from: fromUserId, to: toUserId });
+        db.members = db.members.map((member) =>
+            member.householdId !== householdId
+                ? member
+                : member.userId === fromUserId
+                  ? { ...member, role: "member" }
+                  : member.userId === toUserId
+                    ? { ...member, role: "owner" }
+                    : member,
+        );
+    },
     rotateHouseholdMcpToken: async (args: {
         householdId: string;
         tokenHashHex: string;
@@ -581,6 +603,8 @@ beforeEach(() => {
     db.rowIds = new Set<string>();
     db.analyticsRows = [];
     db.accountWipes = 0;
+    db.wipedUsers = [];
+    db.ownershipTransfers = [];
     db.profileReads = [];
     db.membershipReads = [];
     db.addedLogins = [];
@@ -4846,6 +4870,106 @@ describe("authenticated dashboard HTTP", () => {
         expect(db.tokenRotations[0]!.householdId).toBe("hh-1");
         expect(db.tokenRotations[0]!.issuedBy).toBe(alice);
         expect(db.tokenRotations[0]!.tokenHashHex).toHaveLength(64);
+    });
+
+    function postForm(path: string, userId: string, body = "") {
+        return siteApp.request(`http://x${path}`, {
+            method: "POST",
+            headers: {
+                cookie: cookieFor(userId),
+                "content-type": "application/x-www-form-urlencoded",
+            },
+            body,
+        });
+    }
+
+    test("the owner can make another member the owner", async () => {
+        const r = await postForm(
+            `/settings/household/members/${bob}/make-owner`,
+            alice,
+        );
+        expect(r.status).toBe(302);
+        expect(r.headers.get("location")).toBe("/settings/household");
+        expect(db.ownershipTransfers).toEqual([{ from: alice, to: bob }]);
+        expect(
+            db.members.map((m) => `${m.displayName}:${m.role}`).sort(),
+        ).toEqual(["Alice:member", "Bob:owner"]);
+    });
+
+    test("a member cannot take or hand out ownership", async () => {
+        const r = await postForm(
+            `/settings/household/members/${bob}/make-owner`,
+            bob,
+        );
+        expect(r.status).toBe(403);
+        expect(db.ownershipTransfers).toEqual([]);
+    });
+
+    test("ownership cannot go to someone outside the household", async () => {
+        const r = await postForm(
+            `/settings/household/members/${outsider}/make-owner`,
+            alice,
+        );
+        expect(r.status).toBe(400);
+        expect(await r.text()).toContain(
+            "That person is not in this household.",
+        );
+        expect(db.ownershipTransfers).toEqual([]);
+    });
+
+    test("the owner removes a member after confirming", async () => {
+        const r = await postForm(
+            `/settings/household/members/${bob}/remove`,
+            alice,
+            "confirm=yes",
+        );
+        expect(r.status).toBe(302);
+        expect(r.headers.get("location")).toBe("/settings/household");
+        expect(db.wipedUsers).toEqual([bob]);
+        expect(db.members.map((m) => m.displayName)).toEqual(["Alice"]);
+    });
+
+    test("removing a member without the confirm box erases nothing", async () => {
+        const r = await postForm(
+            `/settings/household/members/${bob}/remove`,
+            alice,
+        );
+        expect(r.status).toBe(400);
+        expect(await r.text()).toContain(
+            "Tick the box to confirm removing Bob.",
+        );
+        expect(db.wipedUsers).toEqual([]);
+    });
+
+    test("the owner cannot remove themselves", async () => {
+        const r = await postForm(
+            `/settings/household/members/${alice}/remove`,
+            alice,
+            "confirm=yes",
+        );
+        expect(r.status).toBe(400);
+        expect(await r.text()).toContain("You can't remove yourself.");
+        expect(db.wipedUsers).toEqual([]);
+    });
+
+    test("a member cannot remove anyone", async () => {
+        const r = await postForm(
+            `/settings/household/members/${alice}/remove`,
+            bob,
+            "confirm=yes",
+        );
+        expect(r.status).toBe(403);
+        expect(db.wipedUsers).toEqual([]);
+    });
+
+    test("removing someone outside the household erases nothing", async () => {
+        const r = await postForm(
+            `/settings/household/members/${outsider}/remove`,
+            alice,
+            "confirm=yes",
+        );
+        expect(r.status).toBe(400);
+        expect(db.wipedUsers).toEqual([]);
     });
 
     test("POST /settings/household/rotate-token as a member is 403", async () => {

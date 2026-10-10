@@ -57,6 +57,27 @@ ${banner}
 </details>`;
 }
 
+// Owner-only controls on another person's row. Removal erases their login and
+// personal history, so it needs a ticked box (checked again on the server)
+// rather than a single click.
+function memberActionsHtml(member: HouseholdMember): string {
+    const id = escapeHtml(member.userId);
+    const name = escapeHtml(member.displayName);
+    return `<div class="row-actions">
+<details class="more">
+<summary>Manage</summary>
+<form method="post" action="/settings/household/members/${id}/make-owner" class="make-owner">
+<p class="muted">${name} becomes the owner. You stay in the household as a member and lose the owner settings.</p>
+<button type="submit" class="btn-primary">Make ${name} the owner</button>
+</form>
+<form method="post" action="/settings/household/members/${id}/remove" class="remove-member">
+<label><input type="checkbox" name="confirm" value="yes" required /> Delete ${name}'s login and their meals, water, weight and goals. This can't be undone.</label>
+<button type="submit" class="btn-danger">Remove ${name}</button>
+</form>
+</details>
+</div>`;
+}
+
 function sectionRow(section: GrocerySection, canEdit: boolean): string {
     if (!canEdit) {
         return `<li class="store-section">${escapeHtml(section.name)}</li>`;
@@ -167,10 +188,13 @@ export function renderHouseholdSettingsPage(
         ? `<p class="token-once">Household bot token (shown once): <code>${escapeHtml(view.issuedToken)}</code></p>`
         : "";
     const members = view.members
-        .map(
-            (member) =>
-                `<li class="household-member" data-role="${escapeHtml(member.role)}"><div class="row"><span class="row-title">${escapeHtml(member.displayName)}</span><span class="row-meta">${escapeHtml(member.role)}</span></div></li>`,
-        )
+        .map((member) => {
+            const actions =
+                view.isOwner && member.role !== "owner"
+                    ? memberActionsHtml(member)
+                    : "";
+            return `<li class="household-member" data-role="${escapeHtml(member.role)}"><div class="row"><span class="row-title">${escapeHtml(member.displayName)}</span><span class="row-meta">${escapeHtml(member.role)}</span></div>${actions}</li>`;
+        })
         .join("");
     const householdCard = view.isOwner
         ? `<form method="post" action="/settings/household/name" class="household-name inline-form">

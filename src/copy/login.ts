@@ -25,20 +25,28 @@ export interface LoginDoc {
 }
 
 export interface LoginErrors {
-    signupClosed: string;
+    /** Sign-in refused because the login or password is wrong. Also what a
+     * stranger sees once the owner exists: accounts are created by the owner
+     * in Settings → Household, so there is no separate "sign-up closed" case
+     * worth telling apart from a typo. */
+    invalidCredentials: string;
+    /** Supabase could not answer (outage, timeout, rate limit). Kept apart
+     * from invalidCredentials so a right password is never blamed. */
+    signInUnavailable: string;
 }
 
 export const LOGIN: LoginDoc = {
     title: "Foodable",
     subtitle: "Sign in to connect",
-    emailLabel: "Email",
+    emailLabel: "Email or username",
     passwordLabel: "Password",
     continueButton: "Continue",
     consentNote:
         "By continuing you confirm you're at least 16 and agree to the {terms} and {privacy}.",
     termsLinkText: "Terms of Service",
     privacyLinkText: "Privacy Policy",
-    newHereNote: "Sign in with the email and password for this household.",
+    newHereNote:
+        "Sign in with the email or username and password the household owner gave you.",
     afterConnectNote:
         "After successful connection in your client, save your password somewhere and close this browser tab.",
     footerNote:
@@ -47,5 +55,6 @@ export const LOGIN: LoginDoc = {
 };
 
 export const LOGIN_ERRORS: LoginErrors = {
-    signupClosed: "Sign-up is closed. Sign in with an existing account.",
+    invalidCredentials: "Wrong email, username or password.",
+    signInUnavailable: "Couldn't sign in right now. Try again in a minute.",
 };

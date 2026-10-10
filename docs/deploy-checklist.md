@@ -37,14 +37,16 @@ Setting `SESSION_SECRET` on an existing deploy logs everyone out of the web app 
 - [ ] `curl https://<domain>/health` → `ok`. `/.well-known/oauth-authorization-server` shows `https://<domain>` URLs.
 - [ ] **Immediately** open `https://<domain>/`, sign up as the owner, and create the household.
       While Auth is empty, the first visitor becomes the owner. Do not share the URL before this.
-- [ ] Supabase: turn "Allow new users to sign up" **off**. Confirm a new email at `/` gets `signup_closed`.
+- [ ] Supabase: turn "Allow new users to sign up" **off**. Confirm a new email at `/` gets "Wrong email, username or password."
 
 ## Members and bots
 
 - [ ] Settings → Household: add each person (name, email or username, password). Hand them the login yourself.
 - [ ] Each person: Claude.ai → Settings → Connectors → Add custom connector → `https://<domain>/mcp`, then sign in.
       Same URL in ChatGPT and Claude Code. Confirm `tools/list` loads. Remove any old nutrition-mcp connector.
+- [ ] A username member signs in by typing just the username.
 - [ ] As a member (not the owner), adding a person and rotating the token in Settings → Household are both refused.
+- [ ] Optional: as the owner, hand ownership to a member and back (Settings → Household → Manage).
 - [ ] Bots: Settings → Household → rotate the token, copy it once, then configure
       `Authorization: Bearer nt_hh_…` against `https://<domain>/mcp`. The bot passes `user_id` for the person it acts for.
 - [ ] Run the walk in `docs/handoff/foodable-launch-handoff.md`, step 5 (`tools/list` returns 67 tools).

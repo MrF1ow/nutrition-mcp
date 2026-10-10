@@ -44,6 +44,20 @@ export function getSupabase(): SupabaseClient {
 
 // ---------- Auth ----------
 
+// Carries Supabase's HTTP status and error code so the login page can tell a
+// wrong password (400 / invalid_credentials) from Supabase being unreachable,
+// timed out or rate limited.
+export class SignInError extends Error {
+    constructor(
+        message: string,
+        readonly status: number | undefined,
+        readonly code: string | undefined,
+    ) {
+        super(message);
+        this.name = "SignInError";
+    }
+}
+
 export async function signUpUser(
     email: string,
     password: string,
@@ -68,7 +82,7 @@ export async function signInUser(
         password,
     });
 
-    if (error) throw new Error(error.message);
+    if (error) throw new SignInError(error.message, error.status, error.code);
     return data.user.id;
 }
 
