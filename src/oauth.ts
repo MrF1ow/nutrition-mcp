@@ -119,15 +119,24 @@ async function finishAuthorization(
     return c.redirect(redirectUrl.toString());
 }
 
-// A sign-in failure the person can fix by retyping: Supabase answers 400 with
-// invalid_credentials for a wrong password or an unknown login. Anything else
-// (no status from a timeout or network failure, 429, 5xx) is not their fault
-// and must not be reported as a wrong password.
-export function isCredentialsFailure(err: unknown): boolean {
-    if (!(err instanceof Error)) return false;
+// Why a sign-in failed, as far as the login page should say.
+// - "credentials": Supabase's invalid_credentials (wrong password or unknown
+//   login). A 400 with no code is read the same way, for older Auth servers.
+// - "account": any other 4xx with a code (email_not_confirmed, user_banned).
+//   Retyping will not help, so Supabase's own message is shown.
+// - "unavailable": no status (timeout, network), 429 or 5xx. Not the person's
+//   fault, so it must never read as a wrong password.
+export type SignInFailure = "credentials" | "account" | "unavailable";
+
+export function classifySignInFailure(err: unknown): SignInFailure {
+    if (!(err instanceof Error)) return "unavailable";
     const { status, code } = err as { status?: number; code?: string };
-    if (code === "invalid_credentials") return true;
-    return status === 400;
+    if (code === "invalid_credentials") return "credentials";
+    if (status === 400 && !code) return "credentials";
+    if (status != null && status >= 400 && status < 500 && status !== 429) {
+        return code ? "account" : "credentials";
+    }
+    return "unavailable";
 }
 
 export async function resolveApproveUser(args: {
@@ -151,9 +160,15 @@ export async function resolveApproveUser(args: {
     try {
         return await args.signInUser(args.email, args.password);
     } catch (err) {
-        if (isCredentialsFailure(err)) {
+        const failure = classifySignInFailure(err);
+        if (failure === "credentials") {
             console.warn("[auth] sign-in refused: invalid credentials");
             throw new Error(args.messages.invalidCredentials);
+        }
+        if (failure === "account") {
+            const { code } = err as { code?: string };
+            console.warn(`[auth] sign-in refused: ${JSON.stringify(code)}`);
+            throw err as Error;
         }
         console.error(
             `[auth] sign-in unavailable: ${JSON.stringify(err instanceof Error ? err.message : String(err))}`,

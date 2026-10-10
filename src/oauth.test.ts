@@ -32,7 +32,7 @@ const {
     createOAuthRouter,
     renderLoginPage,
     resolveApproveUser,
-    isCredentialsFailure,
+    classifySignInFailure,
 } = await import("./oauth.js");
 const { _resetBuckets } = await import("./rate-limit.js");
 
@@ -209,14 +209,50 @@ for (const [label, err] of [
     });
 }
 
-test("isCredentialsFailure only matches a Supabase 400", () => {
-    expect(isCredentialsFailure(supabaseError(400))).toBe(true);
+test("classifySignInFailure separates typos, account states and outages", () => {
     expect(
-        isCredentialsFailure(supabaseError(undefined, "invalid_credentials")),
-    ).toBe(true);
-    expect(isCredentialsFailure(supabaseError(503))).toBe(false);
-    expect(isCredentialsFailure(new Error("network down"))).toBe(false);
-    expect(isCredentialsFailure("nope")).toBe(false);
+        classifySignInFailure(supabaseError(400, "invalid_credentials")),
+    ).toBe("credentials");
+    expect(classifySignInFailure(supabaseError(400))).toBe("credentials");
+    // An unconfirmed email is not a wrong password and not an outage.
+    expect(
+        classifySignInFailure(supabaseError(400, "email_not_confirmed")),
+    ).toBe("account");
+    expect(classifySignInFailure(supabaseError(403, "user_banned"))).toBe(
+        "account",
+    );
+    expect(
+        classifySignInFailure(supabaseError(429, "over_request_rate_limit")),
+    ).toBe("unavailable");
+    expect(classifySignInFailure(supabaseError(503))).toBe("unavailable");
+    expect(classifySignInFailure(new Error("network down"))).toBe(
+        "unavailable",
+    );
+    expect(classifySignInFailure("nope")).toBe("unavailable");
+});
+
+test("an account-state refusal shows Supabase's own message", async () => {
+    const originalWarn = console.warn;
+    console.warn = () => {};
+    try {
+        await expect(
+            resolveApproveUser({
+                email: "sam@example.com",
+                password: "right-password",
+                authUserCount: async () => 1,
+                signInUser: async () => {
+                    throw Object.assign(new Error("Email not confirmed"), {
+                        status: 400,
+                        code: "email_not_confirmed",
+                    });
+                },
+                signUpUser: async () => "should-not-create",
+                messages: MESSAGES,
+            }),
+        ).rejects.toThrow("Email not confirmed");
+    } finally {
+        console.warn = originalWarn;
+    }
 });
 
 test("existing users still sign in after signup closes", async () => {
