@@ -6,43 +6,40 @@ Written 2026-10-05. For an agent with access to GitHub, Supabase, and Railway. I
 
 Read `CLAUDE.md` and `docs/handoff/foodable-architecture-plan.md` (its "Status at handoff" section) first. This file does not repeat them.
 
-## Status (2026-10-06)
+## Status (2026-10-10)
 
 **Done**
 
 - Preflight was green at `ee7f06f`: `bun test`, `bun run typecheck`, `bun run format:check`, `bun run gen:all`, and `bun run db:dryrun` all passed.
-- A new empty Supabase project exists: ref `dapbxswqfiqvxutsobhr`, region `us-east-1`, name **Foodable**. All 39 migrations are applied there. `public` has 31 tables. The `exports` storage bucket exists. Email and password sign-in is enabled; confirmation email is off (mailer autoconfirm). No data was copied from the old project. The old Supabase project and the old server were not touched.
+- A new empty Supabase project exists: ref `dapbxswqfiqvxutsobhr`, region `us-east-1`, name **Foodable**. The 39 migrations of 2026-10-05 were applied there, giving 31 `public` tables and the `exports` storage bucket. Email and password sign-in is enabled; confirmation email is off (mailer autoconfirm). No data was copied from the old project. The old Supabase project and the old server were not touched.
 - Local server checks on an agent machine against that project passed: `GET /health` returned `ok`, `GET /` served the Foodable sign-in page, and OAuth discovery URLs used host `127.0.0.1` with `PUBLIC_ORIGIN` unset. The server was then stopped (port 8080); it is **not** still running.
-- 2026-10-06: the live schema was checked against the repo. The SQL applied to the project is identical to all 39 committed migration files, and its `public` schema (columns, constraints, indexes, RLS, policies, function bodies, triggers, grants) and storage buckets match a clean local build of those files. No drift.
-- 2026-10-06: the fridge ledger gap (#50), the old-name leftovers (#49) and `railway.toml` with a Railway section in `docs/self-hosting.md` (#48) are merged. None of them adds a migration.
+- 2026-10-06: the live schema was checked against the repo. The SQL applied to the project was identical to the 39 committed migration files, with no drift.
+- 2026-10-06: the fridge ledger gap (#50), the old-name leftovers (#49) and `railway.toml` with a Railway section in `docs/self-hosting.md` (#48) are merged.
+- 2026-10-06: the household app and login moved onto the widget design system (#52, #53). There is now one green accent; the sky accent and the marketing CSS, `site.js` and fonts are gone.
+- 2026-10-10: the deployment-audit fixes are merged. #55 adds the OAuth redirect allow-list and required PKCE. #56 revokes `anon` / `authenticated` from the household RPCs, and its migration is applied live, so the project now has **40 migrations**. #57 removes the MCP `add_household_member` / `rotate_household_token` tools (67 tools; membership and the bot token are web-only). #58 adds `SESSION_SECRET`, a Supabase fetch timeout, Bun pinned to 1.4.2, and `docs/deploy-checklist.md`.
 
 **Not done**
 
 - The two-person household sign-in (step 4) has not been done. The project is no longer empty, though. On 2026-10-05 one Auth user signed up, created a household named "Flow" as owner, and logged two test meals of "Milk". Keep it if that account is the intended owner. Otherwise wipe Auth and the `public` data before step 4, because only the first sign-up is allowed.
+- The Docker image has not been built locally, and MCP Inspector OAuth has not been run against the new allow-list. Both are in the deploy checklist.
 - The end-to-end walk (step 5) has not been done.
 - Railway was not created. DNS was not changed. Phase 8 has not started.
 
-**Unchanged gates:** repo name `MrF1ow/nutrition-mcp`, sky accent, version `0.1.0`.
+**Unchanged gates:** repo name `MrF1ow/nutrition-mcp`, version `0.1.0`, no logo yet.
 
-**Deploy day is still ahead.** Remaining work, in order:
-
-1. Create the Railway service.
-2. Set its variables.
-3. Set `PUBLIC_ORIGIN` from the generated domain.
-4. Connect the AI clients.
-5. Retire the old Supabase project and the old server (with explicit user confirmation).
+**Deploy day is still ahead.** Follow [deploy-checklist.md](../deploy-checklist.md). This file keeps the detail behind it: the Railway variables (step 3), the walk (step 5) and retiring the old deploy (step 6).
 
 ## Decisions already made
 
 - **Start fresh.** Delete every user's data. Nothing is migrated, exported, or restored from the current deploy. A new Supabase project replaces the old one.
 - **Host on Railway** for now, from the repo's `Dockerfile`. Supabase cloud stays the database, Auth, and storage.
-- **Unchanged gates.** The repo stays `MrF1ow/nutrition-mcp`. The sky accent stays until a logo exists. The version stays `0.1.0`. Phase 8 waits until this deploy has run for a while.
+- **Unchanged gates.** The repo stays `MrF1ow/nutrition-mcp`. No logo until one exists. The version stays `0.1.0`. Phase 8 waits until this deploy has run for a while.
 
 ## Where the code is
 
-- Phases 0 to 7 are merged. `bun test` passes 1057 tests (after `bun run gen:all`). `bun run typecheck` and `bun run format:check` are clean. CI is green.
+- Phases 0 to 7 and the audit fixes are merged. `bun test` passes 1098 tests (after `bun run gen:all`, 2026-10-10). `bun run typecheck` and `bun run format:check` are clean. CI is green.
 - `tools/list` returns 67 tools.
-- There are 39 migrations. They were applied in order to an empty Postgres (with Supabase stubs) on 2026-10-05. All 39 applied, and the result has 31 tables in `public`.
+- There are 40 migrations, all applied to `dapbxswqfiqvxutsobhr`. `bun run db:dryrun` applies them in order to an empty Postgres (with Supabase stubs).
 - The app is Railway-ready as is:
     - It binds `0.0.0.0` on `PORT`, which Railway injects.
     - `/health` returns `ok`.
@@ -87,9 +84,9 @@ Why a new project and not `supabase db reset --linked`: a remote reset only rebu
 
     ```bash
     bunx supabase link --project-ref dapbxswqfiqvxutsobhr
-    bunx supabase db push --dry-run   # must list all 39 migrations
+    bunx supabase db push --dry-run   # listed all 39 migrations on 2026-10-05
     bunx supabase db push
-    bunx supabase migration list      # local and remote columns match, 39 rows
+    bunx supabase migration list      # local and remote columns match (40 rows since #56)
     ```
 
 - [x] Verify the result in the SQL editor:
@@ -108,21 +105,7 @@ Against the new project, with env vars set locally and `PUBLIC_ORIGIN` unset:
 
 ## 3. Railway
 
-- [ ] Add `railway.toml` at the repo root in a small PR, so the deploy config lives with the code:
-
-    ```toml
-    [build]
-    builder = "DOCKERFILE"
-    dockerfilePath = "Dockerfile"
-
-    [deploy]
-    healthcheckPath = "/health"
-    healthcheckTimeout = 60
-    restartPolicyType = "ON_FAILURE"
-    ```
-
-    Railway detects the root `Dockerfile` without this, but the healthcheck keeps a broken boot from taking traffic. Merge it before creating the service, or redeploy after.
-
+- [x] `railway.toml` is at the repo root (#48): it builds from the `Dockerfile` and health-checks `GET /health`, so a broken boot never takes traffic.
 - [ ] Create a Railway project, then a service from the GitHub repo on `main`.
 - [ ] Set the service variables. Generate fresh OAuth credentials with `bun run generate-oauth-creds`. Do not reuse the old deploy's values.
 
@@ -150,6 +133,7 @@ Against the new project, with env vars set locally and `PUBLIC_ORIGIN` unset:
 Follow `docs/self-hosting.md`, "First-user flow".
 
 - [ ] The owner opens `/`, signs up with email and password, then submits **Create household**.
+- [ ] In Supabase, turn **Allow new users to sign up** off. Members are created through the admin API, which ignores it.
 - [ ] A second sign-up email at `/` is refused (`signup_closed`).
 - [ ] The owner adds the second person in **Settings → Household** (`/settings/household`). That person signs in.
 - [ ] Connect each person's AI client to `https://<domain>/mcp` and complete OAuth. Remove any old Foodable or nutrition-mcp connection from those clients, because it points at the old deploy.
@@ -194,8 +178,7 @@ The decision is to delete all old user data. Confirm with the user once, right b
 
 ## 7. Repo follow-up (after launch)
 
-- [x] `docs/handoff/foodable-architecture-plan.md`: "Status at handoff" updated on 2026-10-05 with preflight, the new Supabase project ref, local smoke, and what remains before deploy day. Walk result stays unchecked until step 5 runs.
-- [ ] `docs/self-hosting.md`: add a short Railway section, with the `railway.toml` above, the variables, "do not set `PORT`", and `PUBLIC_ORIGIN` from the generated domain. Belongs in the Railway config pull request (with `railway.toml`); that PR does not create the Railway service.
+- [ ] Update the status sections here and in `docs/handoff/foodable-architecture-plan.md` with the deploy date, the Railway domain and the walk result.
 - [ ] Update the memory or notes the user keeps on hosting: Railway, chosen 2026-10-05, "for now". (After Railway exists.)
 
 ## 8. After launch, in order
@@ -203,7 +186,7 @@ The decision is to delete all old user data. Confirm with the user once, right b
 1. ~~**Ledger gap.**~~ Done in #50 (2026-10-06).
 2. ~~**Old-name leftovers.**~~ Done in #49 (2026-10-06). Repo URLs still wait on the repo rename.
 3. **Phase 8 (contract)** once the deploy has run stably, after a fresh backup. With a fresh start there is no legacy `identity` data to worry about, only rows written since launch.
-4. **Gated items** when the user decides: the repo rename, the logo and brand accent, and the optional weekly household digest.
+4. **Gated items** when the user decides: the repo rename, the logo, and the optional weekly household digest.
 
 ## Notes on `db:dryrun` from here
 

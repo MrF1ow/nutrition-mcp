@@ -91,7 +91,7 @@ A second marker, `/*@inlinets src/domain/csv.ts@*/`, transpiles a TypeScript mod
 
 UI copy is English only. A third assembly marker, `/*@i18n@*/` (`src/widgets.ts`), inlines `WIDGET_STRINGS` (`src/copy/widgets.ts`) as a `JSON.stringify`'d `const` — plain data only. It sits once per template, immediately before `/*@include shared/i18n.js@*/`, because `src/widgets.test.ts` requires every `@include`d partial's full text to appear verbatim in the assembled HTML, and the assembler's marker regexes match plain text. `shared/i18n.js` still calls `pickLocale` / `setLocale`; the server always sends `structuredContent.locale` as `"en"` (`WIDGET_LOCALE` in `src/routes.ts`). There is no `set_language` tool.
 
-**Every widget except `component-gallery` (dev-only, unreachable by any client) is fully wired end-to-end.** `nutrition-summary`, `goal-progress`, `meal-logged`, `trends`, `weight-trends`, and `import-meals` each call `setLocale(pickLocale(structuredContent.locale, hostContext.locale))` from `render()` (or, for `import-meals`, from the `initWidget` config's outer `render(data)` callback) and have their own `WidgetStrings` namespace (`goalProgress`, `mealLogged`, `trends`, `weightTrends`, `importMeals`) alongside `macros`/`nutritionSummary`. Two deliberate non-translations, not gaps: `import-meals`'s `diagnosticsBlock()` copy-paste support-email dump stays operator-facing English, and `api.updateModelContext`'s finished-import summary stays English (model-facing text like every tool's `content`, not UI).
+**Every widget except `component-gallery` (dev-only, unreachable by any client) is fully wired end-to-end.** `nutrition-summary`, `goal-progress`, `meal-logged`, `trends`, `weight-trends`, and `import-meals` each call `setLocale(pickLocale(structuredContent.locale, hostContext.locale))` from `render()` (or, for `import-meals`, from the `initWidget` config's outer `render(data)` callback) and have their own `WidgetStrings` namespace (`goalProgress`, `mealLogged`, `trends`, `weightTrends`, `importMeals`) alongside `macros`/`nutritionSummary`. Two deliberate non-translations, not gaps: `import-meals`'s `diagnosticsBlock()` copy-paste diagnostics dump stays operator-facing English (it carries no support address since #51; a household deploy has no support inbox), and `api.updateModelContext`'s finished-import summary stays English (model-facing text like every tool's `content`, not UI).
 
 **`bun run harness`** is the local host simulator (`scripts/widget-harness.ts`). It mimics a strict host — validates the `ui/initialize` shape, withholds the tool result until `ui/notifications/initialized`, starts the iframe at 130px, applies the sandbox CSP — and additionally answers app-initiated `tools/call`, sends host→app requests, and executes the real `bulk_import_meals` against an in-memory store. Query flags reproduce host behaviour: `?serverTools=0`, `?tools=0`, `?delay=3000`, `?maxHeight=600`, `?fail=1`.
 
@@ -160,7 +160,7 @@ Invariants worth keeping:
 - **Every CSV pairs each timestamp with a `timezone` column** naming the zone it is rendered in, exactly as the meal export always has. An offset-less wall clock with nothing beside it silently re-resolves against whatever timezone the account has later — that was #97.
 - **Every builder emits its header even with zero rows**, and `goals.csv` / `profile.csv` are header-only when the record is null. A file that vanishes when a table is empty makes the archive shape unpredictable for anything reading it.
 - **`meals.csv` is byte-identical to `buildMealsCsv`**, whose headers are the importer's column aliases. It is the only file with a way back in; renaming a column there for looks breaks a re-import silently.
-- **Alcohol is not gated on `alcohol_tracking_enabled`.** The opt-in governs display, not the export — the privacy page promises the export always includes what was logged. It looks like a missing check, so the code says why.
+- **Alcohol is not gated on `alcohol_tracking_enabled`.** The opt-in governs display, not the export — the archive is meant to be a complete copy of what was logged, and withholding rows the user later hid would break that. It looks like a missing check, so the code says why.
 - **`exportAllData` derives tz and weight unit from one `getProfile` row.** The `getUserTimezone` / `getPreferredWeightUnit` wrappers are each their own `select * from profiles`, so chaining them multiplies one query by the number of preferences read.
 - **`getAllMeals` / `getAllWater` / `getAllWeight` reconcile against an exact count and throw when short.** PostgREST caps rows at 1000 by default, which truncated an export once already (#66); a loud failure beats a quiet partial backup.
 
@@ -182,7 +182,7 @@ Static assets served: `/app.css` (assembled, see "Household app styling"), `/fav
 
 Re-run `bun run gen:all` after editing login copy, `site-partials.ts` or `gen-login.ts`. The generated file is still a template: `{{SESSION_ID}}` and `{{ERROR}}` are filled per request.
 
-The first-user / closed-household flow is documented in `docs/self-hosting.md` and `docs/handoff/closed-household-plan.md`.
+The first-user / closed-household flow is documented in `docs/self-hosting.md` ("First-user flow"). Deploy-day steps are in `docs/deploy-checklist.md`.
 
 ---
 
