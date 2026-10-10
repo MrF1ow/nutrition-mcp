@@ -20,8 +20,9 @@
     "type": "module",
     "private": true,
     "devDependencies": {
-        "@modelcontextprotocol/client": "^2.0.0",
-        "@types/bun": "latest"
+        "@modelcontextprotocol/client": "^2.2.0",
+        "@types/bun": "latest",
+        "prettier": "^3.9.6"
     },
     "peerDependencies": {
         "typescript": "^5.9.3"
@@ -45,7 +46,6 @@
         "@modelcontextprotocol/server": "^2.0.0",
         "@supabase/supabase-js": "^2.116.0",
         "hono": "^4.13.7",
-        "prettier": "^3.9.6",
         "zod": "^4.5.4"
     }
 }
