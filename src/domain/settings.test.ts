@@ -124,6 +124,20 @@ test("owner household page has add-member form on /settings/household only", () 
     expect(html).toContain("Alice");
     expect(html).toContain("Bob");
     expect(html).not.toContain('action="/add-household-member"');
+    // Manage controls on Bob's row only: the owner never manages themselves.
+    expect(html).toContain(
+        `action="/settings/household/members/${bob.userId}/make-owner"`,
+    );
+    expect(html).toContain(
+        `action="/settings/household/members/${bob.userId}/remove"`,
+    );
+    expect(html).not.toContain(
+        `/settings/household/members/${alice.userId}/remove`,
+    );
+    expect(html).not.toContain(
+        `/settings/household/members/${alice.userId}/make-owner`,
+    );
+    expect(html).toContain('name="confirm" value="yes" required');
 });
 
 test("member household page is read-only without add-member", () => {
@@ -143,6 +157,8 @@ test("member household page is read-only without add-member", () => {
     expect(html).not.toContain('action="/settings/household"');
     expect(html).not.toContain("Add household member");
     expect(html).not.toContain('action="/settings/household/stores"');
+    expect(html).not.toContain("/make-owner");
+    expect(html).not.toContain("/remove");
 });
 
 test("household settings groups owner tools into cards and disclosures", () => {

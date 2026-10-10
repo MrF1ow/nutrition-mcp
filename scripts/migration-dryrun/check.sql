@@ -81,5 +81,58 @@ begin
     ) then
         raise exception 'a security definer function in public is executable by anon';
     end if;
+
+    -- Ownership transfer and promotion. Each case runs in a subtransaction that
+    -- ends in a sentinel exception, so the fixture is left exactly as it was.
+    begin
+        perform public.transfer_household_ownership(
+            '11111111-1111-1111-1111-111111111111',
+            '00000000-0000-0000-0000-0000000000a1',
+            '00000000-0000-0000-0000-0000000000b2');
+        if (select string_agg(display_name || ':' || role, ',' order by display_name)
+            from public.household_members) <> 'A:member,B:owner' then
+            raise exception 'transfer did not swap owner and member';
+        end if;
+        raise exception 'dryrun-rollback';
+    exception when raise_exception then
+        if sqlerrm <> 'dryrun-rollback' then raise; end if;
+    end;
+
+    begin
+        perform public.transfer_household_ownership(
+            '11111111-1111-1111-1111-111111111111',
+            '00000000-0000-0000-0000-0000000000b2',
+            '00000000-0000-0000-0000-0000000000a1');
+        raise exception 'a member was allowed to transfer ownership';
+    exception when raise_exception then
+        if sqlerrm <> 'only the household owner may transfer ownership' then raise; end if;
+    end;
+
+    begin
+        -- C joined last but holds the oldest Auth account, so C inherits.
+        insert into auth.users (id, email, created_at) values
+            ('00000000-0000-0000-0000-0000000000c3', 'c@example.com', now() - interval '1 year');
+        insert into public.household_members (household_id, user_id, role, display_name) values
+            ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-0000000000c3', 'member', 'C');
+        delete from auth.users where id = '00000000-0000-0000-0000-0000000000a1';
+        if (select display_name from public.household_members where role = 'owner') is distinct from 'C' then
+            raise exception 'owner leaving did not promote the oldest account: %',
+                (select display_name from public.household_members where role = 'owner');
+        end if;
+        raise exception 'dryrun-rollback';
+    exception when raise_exception then
+        if sqlerrm <> 'dryrun-rollback' then raise; end if;
+    end;
+
+    begin
+        -- A member leaving never changes who owns the household.
+        delete from public.household_members where user_id = '00000000-0000-0000-0000-0000000000b2';
+        if (select display_name from public.household_members where role = 'owner') is distinct from 'A' then
+            raise exception 'a member leaving changed the owner';
+        end if;
+        raise exception 'dryrun-rollback';
+    exception when raise_exception then
+        if sqlerrm <> 'dryrun-rollback' then raise; end if;
+    end;
 end
 $$;

@@ -16,6 +16,7 @@ import {
     siteMember,
 } from "../middleware.js";
 import {
+    checkManagedMember,
     HouseholdAlreadyExistsError,
     parseMemberInput,
 } from "../../household.js";
@@ -41,10 +42,13 @@ import {
     addHouseholdMemberForHousehold,
     createHouseholdForCaller,
     getHouseholdConfig,
+    getHouseholdMembership,
     rotateHouseholdMcpToken,
+    transferHouseholdOwnership,
     updateHouseholdConfig,
     updateMemberDisplayName,
 } from "../../db/household.js";
+import { deleteAllUserData } from "../../db/nutrition.js";
 import { upsertProfile } from "../../db/profiles.js";
 import { liveRulesStore } from "../../db/rules.js";
 import { liveSettingsStore } from "../../db/settings.js";
@@ -215,6 +219,79 @@ settingsRoutes.post(
             issuedToken: token,
         });
         return c.html(page.html, 200);
+    },
+);
+
+settingsRoutes.post(
+    "/settings/household/members/:userId/make-owner",
+    requireOwner,
+    async (c) => {
+        const userId = c.get("userId");
+        const owner = siteMember(c);
+        const target = await getHouseholdMembership(
+            c.req.param("userId"),
+            owner.householdId,
+        );
+        const check = checkManagedMember(owner, target, "transfer");
+        if (!check.ok) {
+            const page = await householdFormError(
+                userId,
+                new Error(check.error),
+            );
+            return c.html(page.html, page.status);
+        }
+        try {
+            await transferHouseholdOwnership(
+                owner.householdId,
+                owner.userId,
+                check.target.userId,
+            );
+        } catch (err) {
+            const page = await householdFormError(userId, err);
+            return c.html(page.html, page.status);
+        }
+        return c.redirect("/settings/household");
+    },
+);
+
+// Removing a person erases their login, tokens and personal nutrition history
+// through the same path as delete_account. Shared household data (fridge,
+// grocery, recipes, foods) stays.
+settingsRoutes.post(
+    "/settings/household/members/:userId/remove",
+    requireOwner,
+    async (c) => {
+        const userId = c.get("userId");
+        const owner = siteMember(c);
+        const body = await c.req.parseBody();
+        const target = await getHouseholdMembership(
+            c.req.param("userId"),
+            owner.householdId,
+        );
+        const check = checkManagedMember(owner, target, "remove");
+        if (!check.ok) {
+            const page = await householdFormError(
+                userId,
+                new Error(check.error),
+            );
+            return c.html(page.html, page.status);
+        }
+        if (formText(body, "confirm") !== "yes") {
+            const page = await householdFormError(
+                userId,
+                new Error(
+                    `Tick the box to confirm removing ${check.target.displayName}.`,
+                ),
+            );
+            return c.html(page.html, page.status);
+        }
+        try {
+            await deleteAllUserData(check.target.userId);
+        } catch (err) {
+            const page = await householdFormError(userId, err);
+            return c.html(page.html, page.status);
+        }
+        return c.redirect("/settings/household");
     },
 );
 

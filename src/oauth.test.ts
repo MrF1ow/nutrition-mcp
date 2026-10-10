@@ -32,6 +32,7 @@ const {
     createOAuthRouter,
     renderLoginPage,
     resolveApproveUser,
+    classifySignInFailure,
 } = await import("./oauth.js");
 const { _resetBuckets } = await import("./rate-limit.js");
 
@@ -132,14 +133,26 @@ test("first Auth user may sign up after a failed sign-in", async () => {
             expect(password).toBe("secret12");
             return "11111111-1111-4111-8111-111111111111";
         },
-        signupClosedMessage:
-            "Sign-up is closed. Sign in with an existing account.",
+        messages: MESSAGES,
     });
     expect(userId).toBe("11111111-1111-4111-8111-111111111111");
     expect(signUps).toBe(1);
 });
 
-test("a second signup is refused, including a wrong-password sign-in", async () => {
+const MESSAGES = {
+    invalidCredentials: "Wrong email, username or password.",
+    signInUnavailable: "Couldn't sign in right now. Try again in a minute.",
+};
+
+// Shaped like the SignInError src/db/client.ts throws for a Supabase refusal.
+function supabaseError(status: number | undefined, code?: string): Error {
+    return Object.assign(new Error("Invalid login credentials"), {
+        status,
+        code,
+    });
+}
+
+test("a wrong password after the owner exists says so and never signs up", async () => {
     let signUps = 0;
     const warns: string[] = [];
     const originalWarn = console.warn;
@@ -153,23 +166,93 @@ test("a second signup is refused, including a wrong-password sign-in", async () 
                 password: "wrong-password",
                 authUserCount: async () => 1,
                 signInUser: async () => {
-                    throw new Error("Invalid login credentials");
+                    throw supabaseError(400, "invalid_credentials");
                 },
                 signUpUser: async () => {
                     signUps += 1;
                     return "should-not-create";
                 },
-                signupClosedMessage:
-                    "Sign-up is closed. Sign in with an existing account.",
+                messages: MESSAGES,
             }),
-        ).rejects.toThrow(
-            "Sign-up is closed. Sign in with an existing account.",
-        );
+        ).rejects.toThrow(MESSAGES.invalidCredentials);
     } finally {
         console.warn = originalWarn;
     }
     expect(signUps).toBe(0);
-    expect(warns).toContain("signup_closed");
+    expect(warns).toContain("[auth] sign-in refused: invalid credentials");
+});
+
+for (const [label, err] of [
+    ["a timeout with no status", supabaseError(undefined)],
+    ["a rate limit", supabaseError(429, "over_request_rate_limit")],
+    ["a Supabase 500", supabaseError(500, "unexpected_failure")],
+] as const) {
+    test(`${label} is not reported as a wrong password`, async () => {
+        const originalError = console.error;
+        console.error = () => {};
+        try {
+            await expect(
+                resolveApproveUser({
+                    email: "founder@example.com",
+                    password: "right-password",
+                    authUserCount: async () => 1,
+                    signInUser: async () => {
+                        throw err;
+                    },
+                    signUpUser: async () => "should-not-create",
+                    messages: MESSAGES,
+                }),
+            ).rejects.toThrow(MESSAGES.signInUnavailable);
+        } finally {
+            console.error = originalError;
+        }
+    });
+}
+
+test("classifySignInFailure separates typos, account states and outages", () => {
+    expect(
+        classifySignInFailure(supabaseError(400, "invalid_credentials")),
+    ).toBe("credentials");
+    expect(classifySignInFailure(supabaseError(400))).toBe("credentials");
+    // An unconfirmed email is not a wrong password and not an outage.
+    expect(
+        classifySignInFailure(supabaseError(400, "email_not_confirmed")),
+    ).toBe("account");
+    expect(classifySignInFailure(supabaseError(403, "user_banned"))).toBe(
+        "account",
+    );
+    expect(
+        classifySignInFailure(supabaseError(429, "over_request_rate_limit")),
+    ).toBe("unavailable");
+    expect(classifySignInFailure(supabaseError(503))).toBe("unavailable");
+    expect(classifySignInFailure(new Error("network down"))).toBe(
+        "unavailable",
+    );
+    expect(classifySignInFailure("nope")).toBe("unavailable");
+});
+
+test("an account-state refusal shows Supabase's own message", async () => {
+    const originalWarn = console.warn;
+    console.warn = () => {};
+    try {
+        await expect(
+            resolveApproveUser({
+                email: "sam@example.com",
+                password: "right-password",
+                authUserCount: async () => 1,
+                signInUser: async () => {
+                    throw Object.assign(new Error("Email not confirmed"), {
+                        status: 400,
+                        code: "email_not_confirmed",
+                    });
+                },
+                signUpUser: async () => "should-not-create",
+                messages: MESSAGES,
+            }),
+        ).rejects.toThrow("Email not confirmed");
+    } finally {
+        console.warn = originalWarn;
+    }
 });
 
 test("existing users still sign in after signup closes", async () => {
@@ -183,8 +266,7 @@ test("existing users still sign in after signup closes", async () => {
             signUps += 1;
             return "should-not-create";
         },
-        signupClosedMessage:
-            "Sign-up is closed. Sign in with an existing account.",
+        messages: MESSAGES,
     });
     expect(userId).toBe("11111111-1111-4111-8111-111111111111");
     expect(signUps).toBe(0);
@@ -403,5 +485,9 @@ test("beginSiteLogin still renders login without MCP connect hint", async () => 
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain('action="/approve"');
+    // One field takes an email or a username, so it cannot be type="email"
+    // (the browser would refuse a bare username before it reached /approve).
+    expect(html).toContain('<input type="text" id="email" name="email"');
+    expect(html).toContain("Email or username");
     expect(html).not.toContain("Signing in to connect");
 });

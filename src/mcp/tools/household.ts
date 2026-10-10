@@ -211,7 +211,7 @@ export function registerHouseholdTools(server: McpServer, ctx: ToolContext) {
         {
             title: "Delete Account",
             description:
-                "Permanently delete the user's account and all associated data (meals, tokens, auth). This action is irreversible. Always confirm with the user before calling this tool.",
+                "Permanently delete the user's account and all associated data (meals, tokens, auth). This action is irreversible. Always confirm with the user before calling this tool. Shared household data (fridge, grocery, recipes, foods) stays. If the user owns the household, ownership passes to the member with the oldest account; mention that before confirming, and suggest they hand ownership to someone in Settings → Household first if they prefer.",
             annotations: {
                 readOnlyHint: false,
                 destructiveHint: true,

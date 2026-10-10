@@ -279,3 +279,21 @@ export async function updateMemberDisplayName(
         throw new Error(`Failed to update display name: ${error.message}`);
     }
 }
+
+// Hands the owner role to another member in one transaction. The database
+// re-checks that `fromUserId` is the owner and `toUserId` a member, so a stale
+// page cannot move ownership it no longer holds.
+export async function transferHouseholdOwnership(
+    householdId: string,
+    fromUserId: string,
+    toUserId: string,
+): Promise<void> {
+    const { error } = await getSupabase().rpc("transfer_household_ownership", {
+        p_household_id: householdId,
+        p_from_user_id: fromUserId,
+        p_to_user_id: toUserId,
+    });
+    if (error) {
+        throw new Error(`Failed to transfer ownership: ${error.message}`);
+    }
+}

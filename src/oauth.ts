@@ -13,6 +13,7 @@ import { getBaseUrl } from "./url.js";
 import { rateLimitAuth } from "./middleware.js";
 import { LOGIN, LOGIN_ERRORS } from "./copy/login.js";
 import { mintSiteSession, siteCookieHeader } from "./site-session.js";
+import { authEmailForSignIn } from "./household.js";
 import {
     extraRedirectUris,
     isAllowedRedirectUri,
@@ -118,13 +119,33 @@ async function finishAuthorization(
     return c.redirect(redirectUrl.toString());
 }
 
+// Why a sign-in failed, as far as the login page should say.
+// - "credentials": Supabase's invalid_credentials (wrong password or unknown
+//   login). A 400 with no code is read the same way, for older Auth servers.
+// - "account": any other 4xx with a code (email_not_confirmed, user_banned).
+//   Retyping will not help, so Supabase's own message is shown.
+// - "unavailable": no status (timeout, network), 429 or 5xx. Not the person's
+//   fault, so it must never read as a wrong password.
+export type SignInFailure = "credentials" | "account" | "unavailable";
+
+export function classifySignInFailure(err: unknown): SignInFailure {
+    if (!(err instanceof Error)) return "unavailable";
+    const { status, code } = err as { status?: number; code?: string };
+    if (code === "invalid_credentials") return "credentials";
+    if (status === 400 && !code) return "credentials";
+    if (status != null && status >= 400 && status < 500 && status !== 429) {
+        return code ? "account" : "credentials";
+    }
+    return "unavailable";
+}
+
 export async function resolveApproveUser(args: {
     email: string;
     password: string;
     authUserCount: () => Promise<number>;
     signInUser: (email: string, password: string) => Promise<string>;
     signUpUser: (email: string, password: string) => Promise<string>;
-    signupClosedMessage: string;
+    messages: { invalidCredentials: string; signInUnavailable: string };
 }): Promise<string> {
     const count = await args.authUserCount();
     if (count === 0) {
@@ -134,11 +155,25 @@ export async function resolveApproveUser(args: {
             return await args.signUpUser(args.email, args.password);
         }
     }
+    // Once the owner exists, accounts are only created in Settings →
+    // Household, so a failed sign-in never falls through to sign-up.
     try {
         return await args.signInUser(args.email, args.password);
-    } catch {
-        console.warn("signup_closed");
-        throw new Error(args.signupClosedMessage);
+    } catch (err) {
+        const failure = classifySignInFailure(err);
+        if (failure === "credentials") {
+            console.warn("[auth] sign-in refused: invalid credentials");
+            throw new Error(args.messages.invalidCredentials);
+        }
+        if (failure === "account") {
+            const { code } = err as { code?: string };
+            console.warn(`[auth] sign-in refused: ${JSON.stringify(code)}`);
+            throw err as Error;
+        }
+        console.error(
+            `[auth] sign-in unavailable: ${JSON.stringify(err instanceof Error ? err.message : String(err))}`,
+        );
+        throw new Error(args.messages.signInUnavailable);
     }
 }
 
@@ -292,7 +327,7 @@ export function createOAuthRouter() {
     oauth.post("/approve", async (c) => {
         const body = await c.req.parseBody();
         const sessionId = body.session_id as string;
-        const email = (body.email as string)?.trim().toLowerCase();
+        const email = authEmailForSignIn(String(body.email ?? ""));
         const password = body.password as string;
 
         if (!sessionId || !email || !password) {
@@ -313,7 +348,7 @@ export function createOAuthRouter() {
                 authUserCount,
                 signInUser,
                 signUpUser,
-                signupClosedMessage: LOGIN_ERRORS.signupClosed,
+                messages: LOGIN_ERRORS,
             });
         } catch (err: unknown) {
             const message =

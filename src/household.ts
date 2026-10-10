@@ -229,6 +229,37 @@ export function requireOwner(
     return { ok: true, member: check.member };
 }
 
+export type ManagedMemberAction = "transfer" | "remove";
+
+export type ManagedMemberResult =
+    { ok: true; target: HouseholdMember } | { ok: false; error: string };
+
+/** The owner acting on another person: hand them ownership or remove them.
+ * The database enforces the same rules (transfer_household_ownership); this
+ * is what turns a bad request into a readable message before it gets there. */
+export function checkManagedMember(
+    owner: HouseholdMember,
+    target: HouseholdMember | null | undefined,
+    action: ManagedMemberAction,
+): ManagedMemberResult {
+    if (owner.role !== "owner") {
+        return { ok: false, error: "Only the household owner can do that." };
+    }
+    if (target == null || target.householdId !== owner.householdId) {
+        return { ok: false, error: "That person is not in this household." };
+    }
+    if (target.userId === owner.userId) {
+        return {
+            ok: false,
+            error:
+                action === "transfer"
+                    ? "You are already the owner."
+                    : "You can't remove yourself. Make someone else the owner first.",
+        };
+    }
+    return { ok: true, target };
+}
+
 export type ResolveActorError = "missing_target" | "oauth_mismatch";
 
 export type ActorIntent = "read" | "write";
@@ -666,6 +697,17 @@ const USERNAME_RE = /^[a-z0-9][a-z0-9._-]{1,30}$/;
 export function authEmailForLogin(login: LoginIdentifier): string {
     if (login.kind === "email") return login.email;
     return `${login.username}@household.invalid`;
+}
+
+/** What the login form's one "Email or username" field signs in as. A bare
+ * username maps to the same Auth email `authEmailForLogin` created it under;
+ * anything with an `@` is an email and passes through. */
+export function authEmailForSignIn(raw: string): string {
+    const value = raw.trim().toLowerCase();
+    if (!value.includes("@") && USERNAME_RE.test(value)) {
+        return authEmailForLogin({ kind: "username", username: value });
+    }
+    return value;
 }
 
 function parseEmailLogin(raw: string): ParseResult<LoginIdentifier> {

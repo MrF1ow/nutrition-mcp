@@ -1354,6 +1354,18 @@ export async function deleteAllUserData(userId: string): Promise<void> {
     if (exportErr)
         throw new Error(`Failed to delete exports: ${exportErr.message}`);
 
+    // recipe_portions.user_id carries no foreign key, so the auth delete below
+    // would leave these rows behind. The recipes themselves are household
+    // data and stay.
+    const { error: portionsErr } = await sb
+        .from("recipe_portions")
+        .delete()
+        .eq("user_id", userId);
+    if (portionsErr)
+        throw new Error(
+            `Failed to delete recipe portions: ${portionsErr.message}`,
+        );
+
     const { error: mealsErr } = await sb
         .from("meals")
         .delete()

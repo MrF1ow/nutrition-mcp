@@ -96,7 +96,7 @@ ${generatedBanner("scripts/gen-login.ts")}
                 <form method="POST" action="/approve" class="auth-form">
                     <input type="hidden" name="session_id" value="{{SESSION_ID}}" />
                     <label for="email">${esc(doc.emailLabel)}</label>
-                    <input type="email" id="email" name="email" required autocomplete="email" />
+                    <input type="text" id="email" name="email" required autocomplete="username" autocapitalize="none" spellcheck="false" />
                     <label for="password">${esc(doc.passwordLabel)}</label>
                     <input type="password" id="password" name="password" required minlength="6" autocomplete="current-password" />
                     <button type="submit" name="action" value="login" class="btn-primary">${esc(doc.continueButton)}</button>
